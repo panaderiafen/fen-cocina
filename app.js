@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.3.0
+//  fën · Cocina — la app de las jefas  v0.4.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -17,13 +17,16 @@
 //  se elaboran la semana anterior (Masas), con tandas según la amasadora, y Hoy con las masas del día.
 //  v0.3.0 (P2b): Bitácora de Bollería (inventario, masas elaboradas y descongeladas, formado y horneado),
 //  stock congelado que sale de ella, avance contra la meta y cierre del viernes para imprimir.
+//  v0.4.0 (P3): Panadería y Bollería crean y editan recetas (editor.js): cada cambio es una propuesta
+//  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 // ═══════════════════════════════════════════════
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.3.0';
-import * as M from './modelo.js?v=0.3.0';
-import * as B from './bolleria.js?v=0.3.0';
+} from './firebase.js?v=0.4.0';
+import * as M from './modelo.js?v=0.4.0';
+import * as B from './bolleria.js?v=0.4.0';
+import * as ED from './editor.js?v=0.4.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -45,7 +48,7 @@ const E = {
   usuario: null, area: null, persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
-  metas: {}, diasArea: {}, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7),
+  metas: {}, diasArea: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7),
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -126,7 +129,7 @@ onAuthStateChanged(auth, async u => {
 });
 
 function entrarArea(area) {
-  E.area = area;
+  E.area = area; E.recetaVista = null; E.cantidadVista = null; E.buscar = '';
   document.body.dataset.area = area;
   $('area-icono').innerHTML = ic(AREAS[area].icono);
   $('area-nombre').textContent = AREAS[area].nombre;
@@ -214,7 +217,7 @@ function escuchar(clave, ref, cb, alFallar) {
     if (/permission-denied/.test(err.code || '')) avisar('Este equipo perdió el permiso para leer. Pide a Administración que revise la cuenta del área.', true);
   });
 }
-function pararEscuchas() { Object.values(E.escuchas).forEach(f => { try { f(); } catch (e) {} }); E.escuchas = {}; E.planes = {}; E.dias = {}; E.metas = {}; E.cargado = {}; }
+function pararEscuchas() { Object.values(E.escuchas).forEach(f => { try { f(); } catch (e) {} }); E.escuchas = {}; E.planes = {}; E.dias = {}; E.metas = {}; E.propuestas = {}; E.solicitudes = {}; E.editor = null; E.cargado = {}; }
 function iniciarEscuchas() {
   pararEscuchas();
   escuchar('recetas', collection(db, 'recetas'), sn => { E.recetas = sn.docs.map(d => ({ id: d.id, ...d.data() })); E.cargado.recetas = true; repintar(); });
@@ -224,6 +227,11 @@ function iniciarEscuchas() {
     E.personas = sn.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.activa !== false); E.cargado.personas = true;
     if (!$('v-pin').classList.contains('oculto')) pintarPin();
   });
+  // Recetas propuestas y materias primas pedidas (las áreas que editan recetas)
+  if (ED.AREAS_EDITAN.includes(E.area)) {
+    escuchar('propuestas', query(collection(db, 'propuestas'), where('area', '==', E.area)), sn => { E.propuestas = {}; sn.docs.forEach(d => { const x = d.data(); E.propuestas[x.pid] = { ...x, id: x.pid }; }); E.cargado.propuestas = true; ED.alCambiarPropuestas(); repintar(); });
+    escuchar('solicitudes', query(collection(db, 'solicitudes'), where('area', '==', E.area)), sn => { E.solicitudes = {}; sn.docs.forEach(d => { const x = d.data(); E.solicitudes[x.id] = x; }); repintar(); });
+  }
   // Bollería: todos sus días (la bitácora de cada uno arma el stock congelado)
   if (E.area === 'BOL') escuchar('diasArea', query(collection(db, 'dias'), where('area', '==', E.area)), sn => {
     E.diasArea = {}; sn.docs.forEach(d => { const x = d.data(); if (x.fecha) E.diasArea[x.fecha] = x; }); E.cargado.diasArea = true; repintar();
@@ -307,7 +315,8 @@ function pintar() {
   $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas'
     : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
     : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
-  main.innerHTML = v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : E.area === 'BOL' ? vistaHoyBol() : vistaHoy();
+  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : E.area === 'BOL' ? vistaHoyBol() : vistaHoy();
+  if (v === 'recetas' && E.editor) ED.actualizarCalculos();
   if (guardado && $(guardado.id)) {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
     if (el.dataset.celda || el.dataset.num) el.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(el.value));
@@ -945,12 +954,13 @@ function vistaRecetas() {
   const q = E.buscar.trim().toLowerCase();
   const lista = E.recetas.filter(r => r.area === E.area && (!q || r.nombre.toLowerCase().includes(q)))
     .sort((a, b) => (a.estado === 'consolidada' ? 0 : 1) - (b.estado === 'consolidada' ? 0 : 1) || a.nombre.localeCompare(b.nombre, 'es'));
-  return `${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
+  return `${ED.vistaPropuestas()}${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
     <div class="campo"><label for="buscar-receta">Buscar</label><input id="buscar-receta" value="${esc(E.buscar)}" placeholder="Nombre de la receta" autocomplete="off"></div>
+    ${ED.AREAS_EDITAN.includes(E.area) ? '<h2 class="titulo">Recetas</h2>' : ''}
     <div class="lista-recetas">${lista.map(r => `<button type="button" class="item-receta" data-receta="${esc(r.id)}">
         <b>${esc(r.nombre)}</b>
         <small>${r.tipo === 'sub_receta' ? 'Sub receta · ' : ''}rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}</small>
-        ${r.estado !== 'consolidada' ? `<span class="estado">${esc(ESTADOS[r.estado] || r.estado || 'Sin estado')}</span>` : ''}
+        ${r.estado !== 'consolidada' ? `<span class="estado">${esc(ESTADOS[r.estado] || r.estado || 'Sin estado')}</span>` : ED.propuestaAbierta(r.id) ? '<span class="estado">Con cambios propuestos</span>' : ''}
       </button>`).join('') || '<p class="ayuda">No hay recetas con ese nombre.</p>'}</div>`;
 }
 function detalleReceta(r) {
@@ -958,7 +968,8 @@ function detalleReceta(r) {
   const cant = E.cantidadVista ?? M.porciones(r), e = M.escalar(r, cant, null, ctx()), esPan = E.area === 'PAN';
   const pasos = (r.pasos || []).filter(Boolean);
   return `<div class="nav-fecha"><button type="button" class="btn-flecha" data-volver="1" aria-label="Volver a la lista">${ic('izq')}</button><h2>${esc(r.nombre)}</h2>
-      ${r.estado !== 'consolidada' ? `<span class="estado">${esc(ESTADOS[r.estado] || r.estado || '')}</span>` : ''}</div>
+      ${r.estado !== 'consolidada' ? `<span class="estado">${esc(ESTADOS[r.estado] || r.estado || '')}</span>` : ''}
+      ${ED.AREAS_EDITAN.includes(E.area) && r.area === E.area ? `<button type="button" class="btn-sec" data-ed-editar="${esc(r.id)}">${ic('libro')}${ED.propuestaAbierta(r.id) ? 'Ver la propuesta abierta' : 'Editar (nueva versión)'}</button>` : ''}</div>
     <div class="caja">
       <div class="campo" style="max-width:260px"><label for="cant-receta">Cantidad (${r.unidad === 'g' ? 'gramos' : 'unidades'})</label><input id="cant-receta" inputmode="decimal" value="${esc(M.unidades(cant))}"></div>
       <span class="ayuda">La receta base rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}${esPan && M.panadero(r).ajustable ? ` con ${M.gramos(M.panadero(r).harina)} de harina` : ''}.</span>
@@ -972,6 +983,7 @@ function detalleReceta(r) {
 $('principal').addEventListener('click', async ev => {
   const b = ev.target.closest('button'); if (!b) return;
   const ds = b.dataset;
+  if (ED.alClick(b)) return;
   if (ds.dia) { E.fecha = ds.dia === 'hoy' ? M.hoyTxt() : M.sumarDias(E.fecha, Number(ds.dia)); pintar(); return; }
   if (ds.metaSem) { E.lunesMeta = ds.metaSem === 'prox' ? M.sumarDias(M.lunesDe(M.hoyTxt()), 7) : M.sumarDias(E.lunesMeta, Number(ds.metaSem)); pintar(); return; }
   if (ds.repartir) {
@@ -1016,6 +1028,7 @@ $('principal').addEventListener('click', async ev => {
 });
 $('principal').addEventListener('input', ev => {
   const t = ev.target;
+  if (ED.alInput(t)) return;
   if (t.dataset.celda) {
     const k = t.id; clearTimeout(tiempos[k]);
     t.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(t.value));   // se marca al tiro si no es un número
@@ -1146,6 +1159,7 @@ function dialogoAjuste(rid) {
         <label><input type="radio" name="vig" value="dia" ${vigencia === 'dia' ? 'checked' : ''}>Solo el ${esc(M.fechaCorta(f))}</label>
         <label><input type="radio" name="vig" value="seguir" ${vigencia === 'seguir' ? 'checked' : ''}>Desde el ${esc(M.fechaCorta(f))}, hasta que lo quite (por ejemplo, mientras dure esta harina)</label>
       </fieldset>
+      ${vig ? `<p class="ayuda">¿Esta harina llegó para quedarse? <button type="button" class="btn-link" data-llevar="1">Llevar el ajuste a la receta</button> (la envía a revisión; el ajuste sigue mientras se aprueba).</p>` : ''}
       <div class="dlg-pie">${vig ? '<button type="button" class="btn-sec izq" data-quitar="1">Quitar ajuste</button>' : ''}<button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Guardar ajuste</button></div>
     </form>`;
   const marcar = () => {
@@ -1172,6 +1186,14 @@ function dialogoAjuste(rid) {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.cerrar) { d.close(); return; }
     if (b.dataset.mantener) { if (sugerida) { harina = sugerida; $('aj-harina').value = enCampo(sugerida); marcar(); } return; }
+    if (b.dataset.llevar) {
+      const abierta = ED.propuestaAbierta(rid);
+      if (abierta && !confirm(`Ya hay una propuesta abierta de ${r.nombre} (${ED.ESTADOS_P[abierta.estado] || abierta.estado}). ¿Reemplazarla por este ajuste?`)) return;
+      if (abierta) ED.anular(abierta.pid, 'Reemplazada por el ajuste de harina/agua');
+      d.close();
+      ED.crear(ED.desdeAjuste(r, harina, { ...pct }), { recetaId: rid, origen: 'ajuste', estado: 'en_revision', abrir: false, comentario: `Desde el ajuste de harina/agua del ${M.fechaCorta(f)}` });
+      return;
+    }
     const ref = doc(db, 'ajustes', `${E.area}_${rid}`);
     const periodos = ((doc0 && doc0.periodos) || []).map(x => ({ ...x }));
     const terminarDesde = lista => lista.filter(x => x.desde < f).map(x => (!x.hasta || x.hasta >= f) ? { ...x, hasta: M.sumarDias(f, -1) } : x);
@@ -1195,3 +1217,6 @@ function dialogoAjuste(rid) {
 }
 // Se guardan hasta 30 períodos (los más viejos que ya terminaron se van primero)
 function recortar(lista) { return lista.slice(-30); }
+
+// El formulario de recetas (editor.js) usa estas piezas de la app
+ED.configurar({ E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx, AREAS });

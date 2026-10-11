@@ -1,6 +1,6 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.1.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.2.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
@@ -9,6 +9,9 @@ rules_version = '2';
 //    costos no se guardan en esta base), y escribe solo lo de su área: planes, el día
 //    (hechos, notas, tandas), los ajustes de harina/agua y las metas de Bollería.
 //  · v1.1.0: colección metas (Bollería: metas semanales y masas a elaborar).
+//  · v1.2.0: propuestas de recetas (la jefa propone; solo Administración aprueba o devuelve)
+//    y solicitudes de materias primas (la jefa pide; Administración resuelve); versiones anteriores
+//    de las recetas (solo Administración).
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -64,6 +67,34 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Propuestas de recetas: propuestas/{AREA}_{id}. La jefa escribe borrador, en prueba, en revisión o anulada;
+    // "devuelta", "aprobando" y "aprobada" las pone Administración.
+    match /propuestas/{id} {
+      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow list: if admin() || (deArea() && resource.data.area == miArea());
+      allow create: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+        && request.resource.data.estado in ['borrador', 'en_prueba', 'en_revision']);
+      // En revisión no se cambian los datos (solo retirarla o anularla); "aprobando" (mientras Administración
+      // la aprueba), aprobada y anulada ya no se tocan.
+      allow update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+        && !(resource.data.estado in ['aprobando', 'aprobada', 'anulada'])
+        && request.resource.data.estado in ['borrador', 'en_prueba', 'en_revision', 'devuelta', 'anulada']
+        && (request.resource.data.estado != 'devuelta' || resource.data.estado == 'devuelta')
+        && (resource.data.estado != 'en_revision' || (request.resource.data.datos == resource.data.datos
+            && request.resource.data.estado in ['en_revision', 'borrador', 'anulada'])));
+      allow delete: if false;
+    }
+
+    // Materias primas pedidas: solicitudes/{AREA}_{id}. La jefa solo crea (pendiente); Administración resuelve.
+    match /solicitudes/{id} {
+      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow list: if admin() || (deArea() && resource.data.area == miArea());
+      allow create: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+        && request.resource.data.estado == 'pendiente' && texto(request.resource.data.nombre, 80));
+      allow update: if admin();
+      allow delete: if false;
+    }
+
     // Ajustes de harina/agua por receta: ajustes/{AREA}_{recetaId} (períodos; el último que cubre un día vale)
     match /ajustes/{id} {
       allow get: if admin() || (deArea() && idDeMiArea(id));
@@ -72,6 +103,9 @@ service cloud.firestore {
         && texto(request.resource.data.recetaId, 60) && request.resource.data.periodos is list && request.resource.data.periodos.size() <= 30);
       allow delete: if false;
     }
+
+    // Versiones anteriores de las recetas (las guarda Sistema Fën al aprobar un cambio)
+    match /versiones/{id} { allow read, write: if admin(); }
 
     // Registro de la copia desde la planilla (solo Sistema Fën)
     match /migracion/{id} { allow read, write: if admin(); }

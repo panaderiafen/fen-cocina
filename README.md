@@ -1,6 +1,6 @@
-# fën · Cocina · v0.3.0
+# fën · Cocina · v0.4.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 y v0.3.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.4.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,40 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.4.0 · Recetas: formulario, propuestas y aprobación (P3)
+**Qué cambia:**
+- **GitHub (fen-cocina):** nuevo `editor.js`; cambian `app.js`, `bolleria.js`, `modelo.js`, `index.html`, `config.js`, `estilos.css` y `README.md`.
+- **Reglas v1.2.0** (`firestore-produccion.rules`): consola de Firebase de fen-produccion → Firestore → Reglas → pegar → **Publicar**.
+- **Script de Producción v2.4.0** y **Sistema Fën v0.33.0**, que traen la aprobación.
+
+**Orden de instalación:** 1) reglas v1.2.0 · 2) script v2.4.0 (con implementación nueva) · 3) Sistema Fën v0.33.0 · 4) Cocina v0.4.0.
+
+**Desde ahora, Panadería y Bollería crean y cambian recetas solo en Cocina.** Pastelería y Cafetería siguen con el formulario de la app actual hasta su etapa (P4).
+
+**En Cocina → Recetas** (Panadería y Bollería):
+- **Nueva receta** y **Editar (nueva versión)** en una receta vigente. Cada cambio es una **propuesta**: la receta vigente **no cambia** y sigue en la planificación hasta que la apruebes.
+- **Formulario:**
+  - nombre, tipo (receta o sub receta), rinde (unidades o gramos);
+  - ingredientes: se buscan entre las materias primas y sub recetas habilitadas para el área;
+  - una sub receta que rinde unidades se pone en unidades (0,05 masa = 80 g);
+  - Panadería: % panadero en vivo, y se puede escribir el % o los gramos;
+  - Bollería: clasificación (producto, masa base/empaste/poolish, relleno), peso de 1 unidad, "se planifica en Masas", "se congela" y unidades por caja;
+  - insumos (envases), pasos y notas internas.
+  - **Lo escrito se guarda solo.** Sin costos: la jefa no ve precios.
+- **Estados:** Borrador → **En prueba** → **Enviar a revisión**. "Retirar de revisión" la devuelve a borrador. "Anular" la deja en el registro.
+  - En revisión, sus datos no se pueden cambiar.
+  - **Devuelta**: muestra tu comentario y se corrige.
+  - Las recetas en prueba **no** entran a la planificación ni a las metas (como hoy).
+- **Falta una materia prima:** se pide una nueva (nombre, si es ingrediente o insumo, cómo se compra) o que se habilite una de otra área. Te llega a Sistema Fën y, cuando la resuelves, aparece para elegirla.
+- **Panadería · "Llevar el ajuste a la receta"**, en el modal de harina/agua cuando hay un ajuste guardado: envía a revisión la receta con esos % y esa harina. El ajuste sigue valiendo mientras la apruebas.
+
+**Lista de verificación v0.4.0**
+- [ ] Reglas v1.2.0 publicadas · script v2.4.0 (ping) · Sistema Fën v0.33.0 · abajo dice **Cocina v0.4.0**.
+- [ ] Bollería → Recetas → Nueva receta → enviar a revisión → aparece en Sistema Fën → Producción → **Desde Cocina** con su costo.
+- [ ] Aprobarla → aparece en Recetas y en Metas de Bollería; en la planilla queda como consolidada.
+- [ ] Devolver otra con un comentario → la jefa lo ve y la puede corregir.
+- [ ] Pedir una materia prima → crearla en Sistema Fën con su precio → aparece para elegirla en Cocina.
 
 ## Novedades v0.3.0 · Bitácora de Bollería (P2b)
 **Qué cambia en GitHub (fen-cocina):** `app.js`, `bolleria.js`, `modelo.js`, `index.html`, `config.js`, `estilos.css` y `README.md`. **Las reglas no cambian** (v1.1.0) y Sistema Fën tampoco (v0.32.0).
@@ -134,7 +168,7 @@ Cómo reconoce las recetas:
 
 **Recetas:** las del área, con su estado; detalle escalado a la cantidad que se quiera, con los pasos.
 
-**Llevar el ajuste a la receta** llega en P3, con el formulario de recetas nuevo y las aprobaciones en Sistema Fën.
+**Llevar el ajuste a la receta**: desde v0.4.0.
 
 ## Entrada
 1. **Autorizar el equipo** (una vez, lo haces tú): la cuenta del área (correo y contraseña de Firebase).
@@ -146,10 +180,10 @@ Quién entra a cada área sigue saliendo de la app actual (Administración → S
 
 ## Archivos y dónde va cada uno
 ```
-index.html, app.js, modelo.js, bolleria.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
+index.html, app.js, modelo.js, bolleria.js, editor.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
 config.js                          → GitHub, raíz (lleva el firebaseConfig de fen-produccion)
 README.md                          → GitHub, raíz
-firestore-produccion.rules (v1.1.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
+firestore-produccion.rules (v1.2.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
 ```
 
 ## Instalación (una vez)
@@ -158,7 +192,7 @@ firestore-produccion.rules (v1.1.0) → consola de Firebase de fen-produccion �
 3. **admins:** Firestore → Datos → Iniciar colección `admins` → ID del documento = **tu UID** → campo `ok` (booleano) `true`.
 4. **config.js:** pega tu firebaseConfig (o mándamelo y lo dejo puesto).
 5. **Script de Producción v2.3.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
-6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.3.0**.
+6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.4.0**.
 7. En la tablet de Panadería, abre la dirección, autoriza con la cuenta de Panadería y prueba el PIN.
 
 ## Lista de verificación v0.1.1 y v0.1.2
