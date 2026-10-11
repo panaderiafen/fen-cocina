@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF8F5">
+<title>Cocina · Fën</title>
+<link rel="icon" href="logo-fen.png?v=0.1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilos.css?v=0.1.0">
+<script src="config.js?v=0.1.0"></script>
+</head>
+<body>
+<div id="cargando" class="cargando">Abriendo…</div>
+
+<!-- Autorizar el equipo (una vez, con la cuenta del área) -->
+<section id="v-autorizar" class="pantalla-centro oculto" aria-labelledby="t-autorizar">
+  <div class="marca"><img class="logo" src="logo-fen.png?v=0.1.0" alt="Fën"><span>Cocina</span></div>
+  <form id="form-autorizar" class="tarjeta form-centro">
+    <h1 id="t-autorizar">Autorizar este equipo</h1>
+    <p class="ayuda">Lo hace Administración una sola vez, con la cuenta del área (Panadería, Bollería, Pastelería o Cafetería). Después cada persona entra con su PIN.</p>
+    <div class="campo"><label for="a-correo">Cuenta del área</label><input id="a-correo" type="email" autocomplete="username" required></div>
+    <div class="campo"><label for="a-clave">Contraseña</label><input id="a-clave" type="password" autocomplete="current-password" required></div>
+    <div class="error" id="a-error" role="alert"></div>
+    <button class="btn" id="a-btn" type="submit">Autorizar</button>
+  </form>
+</section>
+
+<!-- Quién trabaja (PIN de Asistencia) -->
+<section id="v-pin" class="pantalla-centro oculto" aria-labelledby="t-pin"></section>
+
+<div id="app" class="oculto">
+  <header class="barra">
+    <div class="barra-area">
+      <span class="area-icono" id="area-icono" aria-hidden="true"></span>
+      <div class="barra-titulo"><b id="area-nombre"></b><span id="barra-sub"></span></div>
+    </div>
+    <div class="barra-der">
+      <span id="estado-red" class="estado-red" aria-live="polite"></span>
+      <button type="button" class="btn-persona" id="btn-persona"></button>
+    </div>
+  </header>
+  <nav class="secciones" id="secciones" aria-label="Secciones"></nav>
+  <main id="principal"></main>
+  <footer class="pie">
+    <span id="pie-version"></span>
+    <button type="button" class="btn-link" id="btn-salir-equipo">Quitar autorización de este equipo</button>
+  </footer>
+</div>
+<dialog id="dialogo" class="dialogo"></dialog>
+<div id="flotante" class="flotante oculto" role="status" aria-live="polite"></div>
+<script type="module" src="app.js?v=0.1.0"></script>
+</body>
+</html>

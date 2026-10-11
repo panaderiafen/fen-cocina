@@ -1,0 +1,69 @@
+rules_version = '2';
+// ═══════════════════════════════════════════════
+//  Reglas de fen-produccion  v1.0.0  (Cocina + Sistema Fën)
+//  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
+//
+//  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
+//  · Cada área tiene UNA cuenta (cuentas/{uid} = { area: 'PAN' | 'BOL' | 'PAS' | 'CAF' }),
+//    con la que se autoriza la tablet. Lee recetas y materias primas (sin costos: los
+//    costos no se guardan en esta base), y escribe solo lo de su área: planes, el día
+//    (hechos, notas, tandas) y los ajustes de harina/agua.
+//  · Nadie borra: lo que tiene historia no se elimina.
+// ═══════════════════════════════════════════════
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function dentro() { return request.auth != null; }
+    function admin() { return dentro() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function cuenta() { return get(/databases/$(database)/documents/cuentas/$(request.auth.uid)).data; }
+    function deArea() { return dentro() && exists(/databases/$(database)/documents/cuentas/$(request.auth.uid)); }
+    function miArea() { return cuenta().area; }
+    // El documento es de mi área (id "PAN_…" y campo area = PAN). Para listar (consultas) se
+    // exige filtrar por area: las reglas no pueden revisar el id en una consulta.
+    function idDeMiArea(id) { return id.matches('^' + miArea() + '_.+'); }
+    function areaDeDatos(d) { return d.area == miArea(); }
+    function texto(v, max) { return v is string && v.size() <= max; }
+
+    match /admins/{uid} { allow read: if dentro() && request.auth.uid == uid; allow write: if false; }
+    match /cuentas/{uid} { allow read: if dentro() && (request.auth.uid == uid || admin()); allow write: if admin(); }
+
+    // Personas que entran con PIN (nombre, correo y áreas; el PIN lo revisa Asistencia)
+    match /personas/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
+
+    // Recetas y materias primas: las cambia Administración (y más adelante las jefas con versiones)
+    match /recetas/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
+    match /mps/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
+
+    // Configuración: config/{AREA} (masa madre, poolish, capacidades). La jefa lee la suya.
+    match /config/{id} { allow read: if admin() || (deArea() && id == miArea()); allow write: if admin(); }
+
+    // Plan semanal: planes/{AREA}_{lunes}. Cada celda se guarda por separado.
+    match /planes/{id} {
+      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow list: if admin() || (deArea() && resource.data.area == miArea());
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+        && request.resource.data.lunes is string && request.resource.data.filas is map);
+      allow delete: if false;
+    }
+
+    // El día: dias/{AREA}_{fecha} (hechos, notas, tandas)
+    match /dias/{id} {
+      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow list: if admin() || (deArea() && resource.data.area == miArea());
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+        && request.resource.data.fecha is string);
+      allow delete: if false;
+    }
+
+    // Ajustes de harina/agua por receta: ajustes/{AREA}_{recetaId} (períodos; el último que cubre un día vale)
+    match /ajustes/{id} {
+      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow list: if admin() || (deArea() && resource.data.area == miArea());
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+        && texto(request.resource.data.recetaId, 60) && request.resource.data.periodos is list && request.resource.data.periodos.size() <= 30);
+      allow delete: if false;
+    }
+
+    // Registro de la copia desde la planilla (solo Sistema Fën)
+    match /migracion/{id} { allow read, write: if admin(); }
+  }
+}
