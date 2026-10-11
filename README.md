@@ -1,6 +1,6 @@
-# fën · Cocina · v0.8.0
+# fën · Cocina · v0.9.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.8.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.9.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,25 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.9.0 · conteo de bodega compartido entre áreas
+**Qué cambia:**
+- **GitHub (fen-cocina):** `app.js`, `estilos.css`, `firestore-produccion.rules`, `README.md` y los demás `.js` (solo versión).
+- **Reglas v1.6.0:** colección `conteosmp`, con el último conteo de cada materia prima. La escribe el área que cuenta y la leen todas.
+- **Sistema Fën v0.40.0:** la diferencia del conteo dice qué puede ser.
+
+**En Bodega:**
+- En la lista de críticas, cada una dice cuándo se contó por última vez, qué área y quién la contó, y cuánto había.
+- En **Conteo de bodega**, al lado de cada materia prima aparece el último conteo.
+- Si **otra área ya la contó hoy**, aparece un aviso en color: "Panadería ya la contó hoy a las 08:10: si la cuentan de nuevo, vale la última".
+- Si se anula un conteo que era el último, deja de aparecer como último.
+- El conteo que vale es siempre el más reciente, sea de la área que sea. La diferencia con lo que decía la cuenta se ve en Sistema Fën.
+
+**Orden:** reglas v1.6.0 → Sistema Fën v0.40.0 → Cocina v0.9.0.
+
+**Lista de verificación v0.9.0**
+- [ ] Abajo dice **Cocina v0.9.0**.
+- [ ] Contar una materia prima en un área. En otra área, en Bodega, aparece "Contada hoy … · (área) · …". Al abrir Conteo de bodega se ve el aviso.
 
 ## Novedades v0.8.0 · Cafetería crea sus recetas; su consumo entra a la bodega
 **Qué cambia:**

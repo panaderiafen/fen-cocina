@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.8.0
+//  fën · Cocina — la app de las jefas  v0.9.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,8 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.9.0: al contar la bodega se ve quién contó cada materia prima la última vez, y avisa si otra área ya la
+//  contó hoy (conteosmp/{mpId}, reglas v1.6.0).
 //  v0.8.0: Cafetería crea y edita sus recetas aquí (como las otras áreas) y su consumo entra a la bodega
 //  (lo vendido en la caja + el café de la bitácora de turno; lo calcula Sistema Fën).
 //  v0.7.0 (P5): Bodega en las cuatro áreas: "Llegó mercadería" y "Conteo de bodega" de las materias primas
@@ -35,12 +37,12 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.8.0';
-import * as M from './modelo.js?v=0.8.0';
-import * as B from './bolleria.js?v=0.8.0';
-import * as ED from './editor.js?v=0.8.0';
-import * as R from './registros.js?v=0.8.0';
-import * as K from './consumo.js?v=0.8.0';
+} from './firebase.js?v=0.9.0';
+import * as M from './modelo.js?v=0.9.0';
+import * as B from './bolleria.js?v=0.9.0';
+import * as ED from './editor.js?v=0.9.0';
+import * as R from './registros.js?v=0.9.0';
+import * as K from './consumo.js?v=0.9.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -64,7 +66,7 @@ const E = {
   usuario: null, area: null, areas: [], persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
-  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7), periodoMerma: 'semana', periodoTurno: 'hoy', stockmp: {},
+  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7), periodoMerma: 'semana', periodoTurno: 'hoy', stockmp: {}, conteosmp: {},
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -295,6 +297,8 @@ function iniciarEscuchas() {
   escuchar('config', doc(db, 'config', E.area), sn => { E.config = sn.exists() ? sn.data() : {}; E.cargado.config = true; repintar(); });
   escuchar('stockmp', collection(db, 'stockmp'), sn => { E.stockmp = {}; sn.docs.forEach(d => { E.stockmp[d.id] = d.data(); }); E.cargado.stockmp = true; repintar(); },
     () => { E.stockmp = {}; E.cargado.stockmp = true; repintar(); return 'silencio'; });   // sin las reglas v1.5.0: se usa lo de la planilla (sin avisar)
+  escuchar('conteosmp', collection(db, 'conteosmp'), sn => { E.conteosmp = {}; sn.docs.forEach(d => { E.conteosmp[d.id] = d.data(); }); repintar(); },
+    () => { E.conteosmp = {}; return 'silencio'; });   // sin las reglas v1.6.0: el conteo funciona igual, sin el aviso
   escuchar('personas', collection(db, 'personas'), sn => {
     E.personas = sn.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.activa !== false); E.cargado.personas = true;
     if (!$('v-pin').classList.contains('oculto')) pintarPin();
@@ -1174,6 +1178,9 @@ $('principal').addEventListener('click', async ev => {
     const [campo, fecha, id] = ds.anularReg.split('|');
     if (!confirm('¿Anular esta anotación? Queda en el registro como anulada y deja de contar.')) return;
     guardarSinEsperar(guardarDia(fecha, { [campo]: { [id]: { anulado: { por: quien(), en: ahoraIso() } } }, registrosPendientes: true }), 'Anotación anulada.');
+    const b0 = campo === 'bodega' ? (((E.diasArea[fecha] || {}).bodega) || {})[id] : null;
+    if (b0 && b0.tipo === 'conteo' && E.conteosmp[b0.mp] && E.conteosmp[b0.mp].id === id && E.conteosmp[b0.mp].area === E.area)
+      guardarSinEsperar(setDoc(doc(db, 'conteosmp', b0.mp), { area: E.area, mp: b0.mp, fecha: E.conteosmp[b0.mp].fecha, cantidad: E.conteosmp[b0.mp].cantidad, anulado: true }, { merge: true }));
     programarRegistros();
     return;
   }
@@ -1586,7 +1593,8 @@ function vistaBodega() {
   const fila = m => {
     const c = K.control(m, E.stockmp[m.id]), e = est(m);
     const txt = !e ? 'Sin calcular todavía' : !e.contado ? 'Falta un conteo' : `${K.texto(e.stock, c.unidad)}${e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : ''}`;
-    return `<div class="fila sub"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}</span><span class="${e && (e.bajoAhora || e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
+    const uc = ultimoConteo(m.id);
+    return `<div class="fila sub"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${e && (e.bajoAhora || e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
   };
   const calculado = cr.map(est).filter(Boolean).map(e => e.en).sort().pop();
   return `
@@ -1606,10 +1614,22 @@ function vistaBodega() {
       `${a.nota ? esc(a.nota) + ' · ' : ''}${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin llegadas ni conteos.</p>'}
     ${avisoCopia()}`;
 }
+// Último conteo de una materia prima (de cualquier área): { texto, hoyOtra }
+function ultimoConteo(mpId) {
+  const c = E.conteosmp[mpId]; if (!c || c.anulado || !c.fecha) return null;
+  const hoy = M.hoyTxt(), area = AREAS[c.area] ? AREAS[c.area].nombre : c.area;
+  return {
+    texto: `${c.fecha === hoy ? 'hoy' : M.fechaCorta(c.fecha)} ${horaDe(c.en)} · ${area}${c.por ? ' (' + c.por + ')' : ''} · ${K.texto(c.cantidad, c.unidad)}`,
+    hoyOtra: c.fecha === hoy && c.area !== E.area ? `${area} ya la contó hoy a las ${horaDe(c.en)}` : ''
+  };
+}
 function dialogoBodega(tipo) {
   const d = $('dialogo'), cr = criticas(), conteo = tipo === 'conteo';
   if (!cr.length) { avisar('Administración todavía no marca materias primas críticas (Sistema Fën → Producción → Bodega).', true); return; }
-  const campo = m => { const u = K.unidadMp(m); return `<div class="fila-aj"><label for="bo-${esc(m.id)}">${esc(m.nombre)}${!ED.habilitada(m, E.area) ? '<small>De otra área</small>' : ''}</label><input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off"><span class="gr">${K.unidadEntrada(u)}</span></div>`; };
+  const campo = m => {
+    const u = K.unidadMp(m), uc = conteo ? ultimoConteo(m.id) : null;
+    const notas = [!ED.habilitada(m, E.area) ? 'De otra área' : '', uc ? 'Último conteo: ' + uc.texto : ''].filter(Boolean);
+    return `<div class="fila-aj"><label for="bo-${esc(m.id)}">${esc(m.nombre)}${notas.map(n => `<small>${esc(n)}</small>`).join('')}${uc && uc.hoyOtra ? `<small class="txt-ojo" data-ya-contada="${esc(m.id)}">${esc(uc.hoyOtra)}: si la cuentan de nuevo, vale la última.</small>` : ''}</label><input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off"><span class="gr">${K.unidadEntrada(u)}</span></div>`; };
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>${conteo ? 'Conteo de bodega' : 'Llegó mercadería'} · hoy</h2>
       <p class="ayuda">${conteo ? 'Cuenten lo que hay ahora de cada una (en kg, litros o unidades). Las que no cuenten, déjenlas vacías. El conteo reemplaza lo que decía la cuenta desde este momento.' : 'Escriban lo que llegó (en kg, litros o unidades). Lo demás, vacío.'}</p>
@@ -1636,7 +1656,10 @@ function dialogoBodega(tipo) {
     }
     if (!Object.keys(entradas).length) { $('bo-error').textContent = conteo ? 'Escribe al menos un conteo.' : 'Escribe lo que llegó.'; return; }
     d.close();
-    guardarSinEsperar(guardarDia(M.hoyTxt(), { bodega: entradas, registrosPendientes: true }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
+    const hoy = M.hoyTxt();
+    guardarSinEsperar(guardarDia(hoy, { bodega: entradas, registrosPendientes: true }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
+    // El último conteo de cada una, para que lo vean las otras áreas
+    if (conteo) Object.entries(entradas).forEach(([id, a]) => guardarSinEsperar(setDoc(doc(db, 'conteosmp', a.mp), { mp: a.mp, nombre: a.nombre, area: E.area, fecha: hoy, id, cantidad: a.cantidad, unidad: a.unidad, por: a.por, en: a.en, anulado: false })));
     programarRegistros();
   };
 }

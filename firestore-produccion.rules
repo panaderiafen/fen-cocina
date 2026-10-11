@@ -1,6 +1,6 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.5.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.6.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
@@ -18,6 +18,8 @@ rules_version = '2';
 //    "area" es la principal; "areas" (opcional) suma las otras. En cada área ve y cambia lo mismo que su cuenta propia.
 //  · v1.5.0: stockmp/{mpId} (qué materias primas llevan stock, su mínimo y cómo están): lo escribe
 //    Administración; las áreas lo leen. Las llegadas y conteos de la bodega van en el día del área (dias).
+//  · v1.6.0: conteosmp/{mpId} = el último conteo de bodega de cada materia prima (área, quién, cuándo, cuánto),
+//    para que las otras áreas lo vean al contar. Lo escribe el área que cuenta (con su área) y Administración.
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -47,6 +49,13 @@ service cloud.firestore {
     match /mps/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
     // Bodega: materias primas con stock (críticas), su mínimo y el último cálculo de Sistema Fën
     match /stockmp/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
+    // Último conteo de cada materia prima (bodega común: lo ven todas las áreas)
+    match /conteosmp/{id} {
+      allow read: if admin() || deArea();
+      allow create, update: if admin() || (deArea() && tengo(request.resource.data.area) && request.resource.data.cantidad is number
+        && request.resource.data.fecha is string && texto(request.resource.data.mp, 60));
+      allow delete: if false;
+    }
 
     // Configuración: config/{AREA} (masa madre, poolish, capacidades). La jefa lee la suya.
     match /config/{id} { allow read: if admin() || (deArea() && tengo(id)); allow write: if admin(); }

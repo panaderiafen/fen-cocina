@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.8.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.9.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -320,3 +320,5 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
 
 /* v0.7.0 · Bodega */
 .txt-ojo { color: var(--ojo); font-weight: 600; }
+.ayuda.bloque { display: block; font-weight: 400; }
+.fila-aj label small.txt-ojo { color: var(--ojo); font-weight: 600; }
