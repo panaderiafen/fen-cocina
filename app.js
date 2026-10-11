@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.1.1
+//  fën · Cocina — la app de las jefas  v0.1.2
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -12,12 +12,13 @@
 //  todas las áreas. Bollería, Pastelería y Cafetería siguen en la app actual por ahora.
 //  v0.1.1: las elaboraciones previas (masa ciabatta, masa madre…) tienen tarjeta completa, con
 //  ingredientes, tandas (por unidades o por kg, y "dividir siempre así") y ajuste de harina/agua.
+//  v0.1.2: el ajuste muestra el peso por pieza y sugiere la harina base que lo mantiene.
 // ═══════════════════════════════════════════════
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.1.1';
-import * as M from './modelo.js?v=0.1.1';
+} from './firebase.js?v=0.1.2';
+import * as M from './modelo.js?v=0.1.2';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -341,7 +342,7 @@ function vistaHoy() {
 function textoAjuste(r, a) {
   if (!a) return '';
   const P = M.panadero(r), partes = [];
-  if (M.num(a.harina) > 0 && Math.abs(M.num(a.harina) - P.harina) > 0.1) partes.push(`Harina base ${M.gramos(a.harina)} (receta ${M.gramos(P.harina)})`);
+  if (M.num(a.harina) > 0 && Math.abs(M.num(a.harina) - P.harina) > 0.1) { const gH = g => g >= 1000 ? M.gramos(g) : M.unidades(g) + ' g'; partes.push(`Harina base ${gH(a.harina)} (receta ${gH(P.harina)})`); }
   Object.entries(a.pct || {}).forEach(([id, p]) => {
     const i = (r.ingredientes || []).find(x => x.id === id);
     if (i) partes.push(`${i.nombre} ${M.unidades(p)} % (receta ${M.unidades(P.pct(i))} %)`);
@@ -677,17 +678,24 @@ function dialogoAjuste(rid) {
   const ingsPct = (r.ingredientes || []).filter(i => P.pct(i) > 0 && !(harinas.length === 1 && harinas[0] === i));
   const pctOrig = i => Math.round(P.pct(i) * 100) / 100;
   const esSubR = r.tipo === 'sub_receta';
+  // Peso por pieza: se muestra cuando la receta rinde unidades (en las masas que van por kilos, los kilos ya se mantienen solos)
+  const mostrarPeso = r.unidad !== 'g' && !(esSubR && r.unidad === 'g');
+  const porc = M.porciones(r);
+  const redondear = g => g >= 2000 ? Math.round(g) : Math.round(g * 10) / 10;
+  const gH = g => g >= 1000 ? M.gramos(g) : M.unidades(g) + ' g';   // en bases chicas el decimal importa (102,1 g)
+  let sugerida = null;
   let harina = vig && M.num(vig.harina) > 0 ? M.num(vig.harina) : orig;
   const pct = {}; ingsPct.forEach(i => { pct[i.id] = vig && vig.pct && vig.pct[i.id] !== undefined ? M.num(vig.pct[i.id]) : pctOrig(i); });
   let vigencia = vig ? (vig.hasta === vig.desde ? 'dia' : 'seguir') : 'dia';   // uno nuevo parte "solo este día"
   const d = $('dialogo');
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>Ajustar harina / agua · ${esc(r.nombre)}</h2>
-      <p class="ayuda">Para cuando llega una harina que absorbe distinto. La receta original no cambia: el ajuste vale para las tarjetas, las tandas, las elaboraciones previas y los insumos.${esSubR ? (r.unidad !== 'g' ? ' Se mantiene la harina de cada unidad: con más agua, la masa pesa un poco más.' : ' Se mantienen los kilos que piden los panes; cambian las proporciones.') : ''}${P.calculado ? ' Los % se calculan de los gramos de la receta.' : ''}</p>
+      <p class="ayuda">Para cuando llega una harina que absorbe distinto. La receta original no cambia: el ajuste vale para las tarjetas, las tandas, las elaboraciones previas y los insumos.${esSubR ? (r.unidad !== 'g' ? ' Se mantiene la harina de cada unidad; abajo ves cómo cambia el peso por pieza y la harina que lo conserva.' : ' Se mantienen los kilos que piden los panes; cambian las proporciones.') : ''}${P.calculado ? ' Los % se calculan de los gramos de la receta.' : ''}</p>
       <div class="filas-aj">
         <div class="fila-aj"><label for="aj-harina">Harina base (100 %)<small>Receta: ${M.gramos(orig)}</small></label><input id="aj-harina" inputmode="decimal" value="${enCampo(harina)}"><span class="gr">g</span></div>
         ${ingsPct.map(i => `<div class="fila-aj"><label for="aj-${esc(i.id)}">${esc(i.nombre)}<small>Receta: ${M.unidades(pctOrig(i))} %</small></label><input id="aj-${esc(i.id)}" data-pct="${esc(i.id)}" inputmode="decimal" value="${enCampo(pct[i.id])}"><span class="gr" id="aj-g-${esc(i.id)}"></span></div>`).join('')}
       </div>
+      ${mostrarPeso ? '<div class="nota neutra peso-aj" id="aj-peso" role="status"></div>' : ''}
       <fieldset class="opciones" style="border:0;padding:0;margin:0"><legend class="rotulo">¿Hasta cuándo?</legend>
         <label><input type="radio" name="vig" value="dia" ${vigencia === 'dia' ? 'checked' : ''}>Solo el ${esc(M.fechaCorta(f))}</label>
         <label><input type="radio" name="vig" value="seguir" ${vigencia === 'seguir' ? 'checked' : ''}>Desde el ${esc(M.fechaCorta(f))}, hasta que lo quite (por ejemplo, mientras dure esta harina)</label>
@@ -697,6 +705,12 @@ function dialogoAjuste(rid) {
   const marcar = () => {
     const h = $('aj-harina'); h.classList.toggle('cambiado', Math.abs(harina - orig) > 0.1);
     ingsPct.forEach(i => { const el = $('aj-' + i.id), g = $('aj-g-' + i.id); if (el) el.classList.toggle('cambiado', Math.abs(pct[i.id] - pctOrig(i)) > 0.001); if (g) g.textContent = M.gramos(harina * pct[i.id] / 100); });
+    const caja = $('aj-peso'); if (!caja) return;
+    const w = M.pesoAjustado(r, harina, pct), pieza = x => M.gramos(x / porc);
+    sugerida = w.harinaParaMantener ? redondear(w.harinaParaMantener) : null;
+    const distinto = Math.abs(w.peso - w.original) > Math.max(0.05 * porc, w.original * 0.001);
+    caja.innerHTML = `<span>Peso por pieza: <b>${pieza(w.peso)}</b>${distinto ? ` (receta ${pieza(w.original)})` : ' · igual que la receta'}.`
+      + (distinto && sugerida ? ` Para que cada pieza pese ${pieza(w.original)}, la harina base va en <b>${gH(sugerida)}</b>.</span> <button type="button" class="btn-sec" data-mantener="1">Usar ${gH(sugerida)}</button>` : '</span>');
   };
   marcar(); d.showModal();
   d.onsubmit = ev => ev.preventDefault();
@@ -711,6 +725,7 @@ function dialogoAjuste(rid) {
   d.onclick = ev => {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.cerrar) { d.close(); return; }
+    if (b.dataset.mantener) { if (sugerida) { harina = sugerida; $('aj-harina').value = enCampo(sugerida); marcar(); } return; }
     const ref = doc(db, 'ajustes', `${E.area}_${rid}`);
     const periodos = ((doc0 && doc0.periodos) || []).map(x => ({ ...x }));
     const terminarDesde = lista => lista.filter(x => x.desde < f).map(x => (!x.hasta || x.hasta >= f) ? { ...x, hasta: M.sumarDias(f, -1) } : x);

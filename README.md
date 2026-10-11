@@ -1,6 +1,6 @@
-# fën · Cocina · v0.1.1
+# fën · Cocina · v0.1.2
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,16 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.1.2
+**Qué cambia en GitHub:** los mismos 6 archivos de la v0.1.1. Si aún no subiste la v0.1.1, esta la incluye.
+
+- **Peso por pieza en el ajuste**, en las recetas que rinden unidades (Masa ciabatta, Hogaza…). El modal muestra:
+  - cuánto pesa cada pieza con los % que pusiste, por ejemplo: "194 g (receta 198 g)";
+  - la harina base que mantiene el peso, por ejemplo: "102,1 g", calculada como harina × 198 / 194;
+  - un botón **Usar** que la pone en "Harina base". Se puede corregir a mano antes de guardar.
+- Sirve igual si bajas el agua, la masa madre o los dos.
+- En las masas que van por kilos (masa madre) no aparece, porque esos kilos ya se mantienen solos.
 
 ## Novedades v0.1.1 (ajustes de Panadería)
 
@@ -81,11 +91,12 @@ firestore-produccion.rules         → consola de Firebase de fen-produccion →
 3. **admins:** Firestore → Datos → Iniciar colección `admins` → ID del documento = **tu UID** → campo `ok` (booleano) `true`.
 4. **config.js:** pega tu firebaseConfig (o mándamelo y lo dejo puesto).
 5. **Script de Producción v2.3.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
-6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.1.1**.
+6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.1.2**.
 7. En la tablet de Panadería, abre la dirección, autoriza con la cuenta de Panadería y prueba el PIN.
 
-## Lista de verificación v0.1.1
-- [ ] Abajo dice **Cocina v0.1.1** (si no, recarga la página una vez).
+## Lista de verificación v0.1.1 y v0.1.2
+- [ ] Abajo dice **Cocina v0.1.2** (si no, recarga la página una vez).
+- [ ] Masa ciabatta → Ajustar → baja el agua 2 puntos: dice el peso por pieza nuevo y la harina sugerida. "Usar" → "igual que la receta".
 - [ ] Hoy: "Elaboraciones previas" muestra Masa ciabatta con sus ingredientes, en unidades y kg.
 - [ ] Masa ciabatta → Tandas → "de hasta 30" → se ve dividida. Con "Dividir siempre así", el día siguiente también.
 - [ ] Masa madre blanca → Tandas → 2 → dos mitades. Ajustar → cambiar el agua → el total no cambia y las proporciones sí.

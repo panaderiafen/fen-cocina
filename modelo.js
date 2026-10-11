@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — cálculos (sin pantalla)  v0.1.1
+//  fën · Cocina — cálculos (sin pantalla)  v0.1.2
 //  Semanas por fechas, escalado de recetas, ajuste de harina/agua del día,
 //  tandas, elaboraciones previas (sub recetas), insumos y pie de masa madre.
 //  Todo es función pura: recibe los datos y devuelve el resultado.
@@ -117,6 +117,20 @@ export function escalar(r, cantidad, ajuste, ctx = {}) {
       pct: aj ? i.pctEfectivo : null, ajustado: !!i.ajustado, esSub: ctx.mps ? esSub(i, ctx) : false };
   });
   return { filas, total: filas.reduce((s, x) => s + x.gramos, 0), factor: f };
+}
+
+// Peso de la masa con una harina y unos % (los que no cambian quedan como en la receta), y la harina que
+// mantiene el peso original: peso = fijos + harina × suma de % / 100 → harina = (peso original − fijos) / (suma / 100).
+// Sirve para "bajé el agua 2 puntos: ¿a cuánto subo la harina para que cada pieza pese lo mismo?".
+export function pesoAjustado(r, harina, pcts) {
+  const ings = (r && r.ingredientes) || [], P = panadero(r);
+  let fijos = 0, suma = 0;
+  ings.forEach(i => {
+    const p = pcts && pcts[i.id] !== undefined ? num(pcts[i.id]) : P.pct(i);
+    if (P.ajustable && p > 0) suma += p / 100; else fijos += num(i.gramos);
+  });
+  const original = pesoBase(ings), peso = fijos + num(harina) * suma;
+  return { original, peso, harinaParaMantener: suma > 0 ? (original - fijos) / suma : null };
 }
 
 // Cómo baja una sub receta desde la receta que la usa: por UNIDADES si la sub receta rinde unidades y el
