@@ -1,4 +1,4 @@
-# fën · Cocina · v0.4.1
+# fën · Cocina · v0.4.2
 
 **App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.4.0: 11 de octubre)
 
@@ -8,6 +8,21 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.4.2 · formulario de recetas más ordenado
+Incluye todo lo de la v0.4.1. Qué cambia en el formulario:
+- **Ingredientes en una grilla fija:**
+  - en el celular, el nombre arriba con la × al lado, y debajo **Unidades · Gramos · %** en casillas iguales;
+  - en la tablet horizontal o el computador, todo en una línea;
+  - las filas siempre calzan: "—" donde no aplica, por ejemplo las unidades de una materia prima.
+- **Rinde y En** del mismo alto, lado a lado, con una ayuda debajo.
+- **Bloques con fondo tenue:** Ingredientes con el color del área muy suave; Insumos y Pasos en gris arena. Cada bloque tiene su título y su botón "+".
+- **Pasos numerados** (Paso 1, Paso 2…).
+- **Botones:**
+  - en el celular, uno bajo otro, primero **Enviar a revisión**, después **Marcar en prueba**, y "Anular propuesta" aparte, como enlace;
+  - en pantallas anchas, en una fila a la derecha.
+
+**Qué cambia en GitHub (fen-cocina):** `editor.js`, `app.js`, `bolleria.js`, `index.html`, `config.js`, `estilos.css` y `README.md`.
 
 ## Novedades v0.4.1 · arreglo: no aparecían materias primas al armar una receta
 - Una materia prima con **"áreas habilitadas" vacío** en la planilla sirve para **todas las áreas**, como en la app actual. Cocina solo mostraba las que nombraban el área.
@@ -46,7 +61,7 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - **Panadería · "Llevar el ajuste a la receta"**, en el modal de harina/agua cuando hay un ajuste guardado: envía a revisión la receta con esos % y esa harina. El ajuste sigue valiendo mientras la apruebas.
 
 **Lista de verificación v0.4.0**
-- [ ] Reglas v1.2.0 publicadas · script v2.4.0 (ping) · Sistema Fën v0.33.0 · abajo dice **Cocina v0.4.1**.
+- [ ] Reglas v1.2.0 publicadas · script v2.4.0 (ping) · Sistema Fën v0.33.0 · abajo dice **Cocina v0.4.2**.
 - [ ] Bollería → Recetas → Nueva receta → enviar a revisión → aparece en Sistema Fën → Producción → **Desde Cocina** con su costo.
 - [ ] Aprobarla → aparece en Recetas y en Metas de Bollería; en la planilla queda como consolidada.
 - [ ] Devolver otra con un comentario → la jefa lo ve y la puede corregir.
@@ -201,7 +216,7 @@ firestore-produccion.rules (v1.2.0) → consola de Firebase de fen-produccion �
 3. **admins:** Firestore → Datos → Iniciar colección `admins` → ID del documento = **tu UID** → campo `ok` (booleano) `true`.
 4. **config.js:** pega tu firebaseConfig (o mándamelo y lo dejo puesto).
 5. **Script de Producción v2.3.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
-6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.4.1**.
+6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.4.2**.
 7. En la tablet de Panadería, abre la dirección, autoriza con la cuenta de Panadería y prueba el PIN.
 
 ## Lista de verificación v0.1.1 y v0.1.2

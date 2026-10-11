@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.4.1
+//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.4.2
 //  Las jefas de Panadería y Bollería crean y editan recetas aquí. Una receta vigente NUNCA
 //  se cambia directo: cada cambio es una PROPUESTA (propuestas/{AREA}_{id}) que pasa por
 //  borrador → en prueba → en revisión. La aprueba (o la devuelve con un comentario)
@@ -10,7 +10,7 @@
 //  · Materia prima que falta: se pide desde aquí (solicitudes/{AREA}_{id}); la crea o habilita
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.4.1';
+import * as M from './modelo.js?v=0.4.2';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }
 export function configurar(api) { A = api; }
@@ -193,28 +193,33 @@ export function vistaEditor() {
   const ult = (p.historial || []).slice(-1)[0] || {};
   const devuelta = [...(p.historial || [])].reverse().find(h => h.estado === 'devuelta');
   const ings = d.ingredientes || (d.ingredientes = []), ins = d.insumos || (d.insumos = []), pasos = d.pasos || (d.pasos = []);
+  // Fila de ingrediente: el nombre arriba (con la × al lado) y debajo, en casillas iguales, Unidades · Gramos · %.
+  // En pantallas anchas va todo en una línea. Las casillas siempre están (vacías si no aplican) para que las filas calcen.
   const filaIng = (i, k) => {
     const su = subEnUnidades(i.id), harina = esHarina(i.nombre), noExiste = i.nombre && !i.id;
     return `<div class="ing-fila" data-fila="${k}">
-      <div class="campo ing-nombre"><label for="ed-ing-${k}-n" class="sr">Ingrediente ${k + 1}</label><input id="ed-ing-${k}-n" data-ing="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Escribe para buscar la materia prima o sub receta" autocomplete="off" ${dis}><div class="sugs" id="ed-ing-${k}-n-sug"></div>
+      <div class="c-nombre"><label for="ed-ing-${k}-n" class="sr">Ingrediente ${k + 1}</label><input id="ed-ing-${k}-n" data-ing="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Escribe para buscar…" autocomplete="off" ${dis}><div class="sugs" id="ed-ing-${k}-n-sug"></div>
         ${noExiste ? `<small class="error">No está habilitada para ${esc(A.AREAS[E.area].nombre)}: pídela con "Falta una materia prima".</small>` : ''}</div>
-      ${su ? `<div class="campo ing-num"><label for="ed-ing-${k}-u">Unidades</label><input id="ed-ing-${k}-u" data-ing="${k}" data-k="unidades" inputmode="decimal" value="${i.unidades === null || i.unidades === undefined ? '' : esc(String(i.unidades).replace('.', ','))}" ${dis}></div>` : ''}
-      <div class="campo ing-num"><label for="ed-ing-${k}-g">Gramos</label><input id="ed-ing-${k}-g" data-ing="${k}" data-k="gramos" inputmode="decimal" value="${M.num(i.gramos) ? esc(String(r1(i.gramos)).replace('.', ',')) : ''}" ${dis}></div>
-      ${pan ? `<div class="campo ing-num"><label for="ed-ing-${k}-p">%</label>${harina ? `<span class="calc" id="ed-ing-${k}-pc"></span>` : `<input id="ed-ing-${k}-p" data-ing="${k}" data-k="pct" inputmode="decimal" ${dis}>`}</div>` : ''}
-      ${puede ? `<button type="button" class="btn-x" data-quitar-ing="${k}" aria-label="Quitar ${esc(i.nombre || 'ingrediente')}">×</button>` : ''}
+      <div class="c-nums ${pan ? 'tres' : 'dos'}">
+        <div class="c-num"><label for="ed-ing-${k}-u">Unidades</label>${su ? `<input id="ed-ing-${k}-u" data-ing="${k}" data-k="unidades" inputmode="decimal" value="${i.unidades === null || i.unidades === undefined ? '' : esc(String(i.unidades).replace('.', ','))}" ${dis}>` : '<span class="no-aplica" title="Solo para sub recetas que rinden unidades">—</span>'}</div>
+        <div class="c-num"><label for="ed-ing-${k}-g">Gramos</label><input id="ed-ing-${k}-g" data-ing="${k}" data-k="gramos" inputmode="decimal" value="${M.num(i.gramos) ? esc(String(r1(i.gramos)).replace('.', ',')) : ''}" ${dis}></div>
+        ${pan ? `<div class="c-num"><label for="ed-ing-${k}-p">%</label>${harina ? `<span class="calc" id="ed-ing-${k}-pc"></span>` : `<input id="ed-ing-${k}-p" data-ing="${k}" data-k="pct" inputmode="decimal" ${dis}>`}</div>` : ''}
+      </div>
+      <div class="c-x">${puede ? `<button type="button" class="btn-x" data-quitar-ing="${k}" aria-label="Quitar ${esc(i.nombre || 'ingrediente')}">×</button>` : ''}</div>
     </div>`;
   };
   const filaIns = (i, k) => `<div class="ing-fila" data-fila-ins="${k}">
-      <div class="campo ing-nombre"><label for="ed-ins-${k}-n" class="sr">Insumo ${k + 1}</label><input id="ed-ins-${k}-n" data-ins="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Escribe para buscar: envase, etiqueta…" autocomplete="off" ${dis}><div class="sugs" id="ed-ins-${k}-n-sug"></div>
+      <div class="c-nombre"><label for="ed-ins-${k}-n" class="sr">Insumo ${k + 1}</label><input id="ed-ins-${k}-n" data-ins="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Escribe para buscar: envase, etiqueta…" autocomplete="off" ${dis}><div class="sugs" id="ed-ins-${k}-n-sug"></div>
         ${i.nombre && !i.id ? `<small class="error">No está habilitado: pídelo con "Falta una materia prima".</small>` : ''}</div>
-      <div class="campo ing-num"><label for="ed-ins-${k}-c">Cantidad</label><input id="ed-ins-${k}-c" data-ins="${k}" data-k="cantidad" inputmode="decimal" value="${M.num(i.cantidad) ? esc(String(i.cantidad).replace('.', ',')) : ''}" ${dis}></div>
-      ${puede ? `<button type="button" class="btn-x" data-quitar-ins="${k}" aria-label="Quitar insumo">×</button>` : ''}
+      <div class="c-nums uno"><div class="c-num"><label for="ed-ins-${k}-c">Cantidad</label><input id="ed-ins-${k}-c" data-ins="${k}" data-k="cantidad" inputmode="decimal" value="${M.num(i.cantidad) ? esc(String(i.cantidad).replace('.', ',')) : ''}" ${dis}></div></div>
+      <div class="c-x">${puede ? `<button type="button" class="btn-x" data-quitar-ins="${k}" aria-label="Quitar insumo">×</button>` : ''}</div>
     </div>`;
   const clasBol = [['producto_simple', 'Producto'], ['masa_base', 'Masa base, empaste o poolish'], ['relleno', 'Relleno o preparación']];
+  // Botones: el principal primero (en el celular quedan uno bajo otro); "Anular" aparte, como enlace
   const acciones = [];
+  if (EDITABLE(p)) acciones.push(`<button type="button" class="btn btn-fuerte" data-ed-estado="en_revision">Enviar a revisión</button>`);
   if (p.estado === 'borrador' || p.estado === 'devuelta') acciones.push(`<button type="button" class="btn-sec" data-ed-estado="en_prueba">Marcar en prueba</button>`);
   if (p.estado === 'en_prueba') acciones.push(`<button type="button" class="btn-sec" data-ed-estado="borrador">Volver a borrador</button>`);
-  if (EDITABLE(p)) acciones.push(`<button type="button" class="btn btn-fuerte" data-ed-estado="en_revision">Enviar a revisión</button>`);
   if (p.estado === 'en_revision') acciones.push(`<button type="button" class="btn-sec" data-ed-estado="borrador">Retirar de revisión</button>`);
   return `<div class="nav-fecha"><button type="button" class="btn-flecha" data-ed-cerrar="1" aria-label="Volver a Recetas">${ic('izq')}</button>
       <h2>${esc(d.nombre || 'Receta nueva')}</h2><span class="estado est-${esc(p.estado)}">${esc(ESTADOS_P[p.estado] || p.estado)}</span>
@@ -224,39 +229,46 @@ export function vistaEditor() {
     ${p.estado === 'devuelta' && devuelta ? `<div class="nota ojo">${ic('alerta')}<span><b>Devuelta por ${esc(devuelta.por || 'Administración')}:</b> ${esc(devuelta.comentario || 'sin comentario')}. Corrígela y vuelve a enviarla.</span></div>` : ''}
     ${p.estado === 'en_revision' ? `<div class="nota neutra">${ic('alerta')}<span>En revisión desde ${esc((ult.en || '').slice(0, 10))}. Para cambiar algo, "Retirar de revisión".</span></div>` : ''}
     <section class="caja form-receta">
-      <div class="fila-campos">
-        <div class="campo" style="flex:2;min-width:220px"><label for="ed-nombre">Nombre</label><input id="ed-nombre" data-ed="nombre" value="${esc(d.nombre)}" maxlength="80" ${dis}></div>
+      <div class="bloque bloque-datos">
+        <div class="campo"><label for="ed-nombre">Nombre</label><input id="ed-nombre" data-ed="nombre" value="${esc(d.nombre)}" maxlength="80" ${dis}></div>
         <div class="campo"><label for="ed-tipo">Tipo</label><select id="ed-tipo" data-ed="tipo" ${dis}><option value="receta" ${d.tipo !== 'sub_receta' ? 'selected' : ''}>Receta (se planifica)</option><option value="sub_receta" ${d.tipo === 'sub_receta' ? 'selected' : ''}>Sub receta (va dentro de otras)</option></select></div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo"><label for="ed-porciones">Rinde</label><input id="ed-porciones" data-ed="porciones" inputmode="decimal" value="${M.num(d.porciones) ? esc(String(d.porciones).replace('.', ',')) : ''}" ${dis}></div>
-        <div class="campo"><label for="ed-unidad">En</label><select id="ed-unidad" data-ed="unidad" ${dis}><option value="un" ${d.unidad !== 'g' ? 'selected' : ''}>unidades (piezas contables)</option><option value="g" ${d.unidad === 'g' ? 'selected' : ''}>gramos (se usa por peso)</option></select></div>
+        <div class="par">
+          <div class="campo"><label for="ed-porciones">Rinde</label><input id="ed-porciones" data-ed="porciones" inputmode="decimal" value="${M.num(d.porciones) ? esc(String(d.porciones).replace('.', ',')) : ''}" ${dis}></div>
+          <div class="campo"><label for="ed-unidad">En</label><select id="ed-unidad" data-ed="unidad" ${dis}><option value="un" ${d.unidad !== 'g' ? 'selected' : ''}>unidades</option><option value="g" ${d.unidad === 'g' ? 'selected' : ''}>gramos</option></select></div>
+        </div>
+        <small class="ayuda">Unidades: piezas que se cuentan (12 marraquetas, 1 masa). Gramos: lo que se usa por peso (masa madre, rellenos).</small>
         ${bol ? `<div class="campo"><label for="ed-clas">Clasificación</label><select id="ed-clas" data-ed="clasificacion" ${dis}>${clasBol.map(([v, t]) => `<option value="${v}" ${(d.clasificacion || 'producto_simple') === v || (v === 'producto_simple' && d.clasificacion === 'producto_compuesto') ? 'selected' : ''}>${t}</option>`).join('')}</select></div>` : ''}
+        ${bol && d.clasificacion === 'masa_base' ? `<div class="par">
+          <div class="campo"><label for="ed-peso">Peso de 1 unidad (g)</label><input id="ed-peso" data-ed="pesoUnidad" inputmode="decimal" value="${M.num(d.pesoUnidad) || ''}" ${dis}></div>
+          <label class="check"><input type="checkbox" data-ed="planificable" ${d.planificable !== false ? 'checked' : ''} ${dis}> Se planifica en Masas</label></div>
+          <small class="ayuda">Desmarca "Se planifica en Masas" en empastes y poolish: van dentro de la masa base.</small>` : ''}
+        ${bol && d.clasificacion === 'relleno' ? `<p class="ayuda">Los rellenos pasan a Pastelería más adelante.</p>` : ''}
+        ${bol && d.tipo !== 'sub_receta' ? `<div class="par">
+          <label class="check"><input type="checkbox" data-ed="seCongela" ${d.seCongela ? 'checked' : ''} ${dis}> Se congela ya formado</label>
+          <div class="campo"><label for="ed-caja">Unidades por caja</label><input id="ed-caja" data-ed="unidadesPorCaja" inputmode="numeric" value="${M.num(d.unidadesPorCaja) || ''}" ${dis}></div></div>` : ''}
       </div>
-      ${bol && d.clasificacion === 'masa_base' ? `<div class="fila-campos">
-        <div class="campo"><label for="ed-peso">Peso de 1 unidad (g)</label><input id="ed-peso" data-ed="pesoUnidad" inputmode="decimal" value="${M.num(d.pesoUnidad) || ''}" ${dis}></div>
-        <label class="check"><input type="checkbox" data-ed="planificable" ${d.planificable !== false ? 'checked' : ''} ${dis}> Se planifica en Masas (la masa base). Desmárcalo en empastes y poolish.</label></div>` : ''}
-      ${bol && d.clasificacion === 'relleno' ? `<p class="ayuda">Los rellenos pasan a Pastelería más adelante.</p>` : ''}
-      ${bol && d.tipo !== 'sub_receta' ? `<div class="fila-campos">
-        <label class="check"><input type="checkbox" data-ed="seCongela" ${d.seCongela ? 'checked' : ''} ${dis}> Se congela ya formado</label>
-        <div class="campo"><label for="ed-caja">Unidades por caja (congelador)</label><input id="ed-caja" data-ed="unidadesPorCaja" inputmode="numeric" value="${M.num(d.unidadesPorCaja) || ''}" ${dis}></div></div>` : ''}
 
-      <h3 class="rotulo">Ingredientes</h3>
-      <div class="ings">${ings.map(filaIng).join('') || '<p class="ayuda">Sin ingredientes todavía.</p>'}</div>
-      <div class="fila total"><span>Total${pan ? ` · harina <b id="ed-harina"></b>` : ''}</span><b id="ed-total"></b></div>
-      ${puede ? `<div class="botones" style="justify-content:flex-start"><button type="button" class="btn-sec" data-ed-agregar="ing">+ Ingrediente</button><button type="button" class="btn-link" data-ed-pedir="1">Falta una materia prima</button></div>` : ''}
+      <div class="bloque bloque-ing">
+        <div class="bloque-cab"><h3>Ingredientes</h3><span>Total <b id="ed-total"></b>${pan ? ` · harina <b id="ed-harina"></b>` : ''}</span></div>
+        <div class="ings">${ings.map(filaIng).join('') || '<p class="ayuda">Sin ingredientes todavía.</p>'}</div>
+        ${puede ? `<div class="bloque-pie"><button type="button" class="btn-sec" data-ed-agregar="ing">+ Ingrediente</button><button type="button" class="btn-link" data-ed-pedir="1">Falta una materia prima</button></div>` : ''}
+      </div>
 
-      ${d.tipo !== 'sub_receta' ? `<h3 class="rotulo">Insumos (envases, etiquetas) · por ${d.unidad === 'g' ? 'lote' : 'unidad'}</h3>
-      <div class="ings">${ins.map(filaIns).join('') || '<p class="ayuda">Sin insumos.</p>'}</div>
-      ${puede ? `<div class="botones" style="justify-content:flex-start"><button type="button" class="btn-sec" data-ed-agregar="ins">+ Insumo</button></div>` : ''}` : ''}
+      ${d.tipo !== 'sub_receta' ? `<div class="bloque bloque-neutro">
+        <div class="bloque-cab"><h3>Insumos</h3><span>envases, etiquetas · por ${d.unidad === 'g' ? 'lote' : 'unidad'}</span></div>
+        <div class="ings">${ins.map(filaIns).join('') || '<p class="ayuda">Sin insumos.</p>'}</div>
+        ${puede ? `<div class="bloque-pie"><button type="button" class="btn-sec" data-ed-agregar="ins">+ Insumo</button></div>` : ''}
+      </div>` : ''}
 
-      <h3 class="rotulo">Pasos</h3>
-      <ol class="pasos-ed">${pasos.map((t, k) => `<li><label for="ed-paso-${k}" class="sr">Paso ${k + 1}</label><textarea id="ed-paso-${k}" data-paso="${k}" rows="2" ${dis}>${esc(t)}</textarea>${puede ? `<button type="button" class="btn-x" data-quitar-paso="${k}" aria-label="Quitar paso ${k + 1}">×</button>` : ''}</li>`).join('')}</ol>
-      ${puede ? `<div class="botones" style="justify-content:flex-start"><button type="button" class="btn-sec" data-ed-agregar="paso">+ Paso</button></div>` : ''}
+      <div class="bloque bloque-neutro">
+        <div class="bloque-cab"><h3>Pasos</h3></div>
+        <div class="pasos-ed">${pasos.map((t, k) => `<div class="paso-ed"><label for="ed-paso-${k}">Paso ${k + 1}</label><div class="paso-fila"><textarea id="ed-paso-${k}" data-paso="${k}" rows="2" ${dis}>${esc(t)}</textarea>${puede ? `<button type="button" class="btn-x" data-quitar-paso="${k}" aria-label="Quitar paso ${k + 1}">×</button>` : ''}</div></div>`).join('') || '<p class="ayuda">Sin pasos todavía.</p>'}</div>
+        ${puede ? `<div class="bloque-pie"><button type="button" class="btn-sec" data-ed-agregar="paso">+ Paso</button></div>` : ''}
+      </div>
 
       <div class="campo"><label for="ed-notas">Notas internas (opcional)</label><textarea id="ed-notas" data-ed="notas" rows="2" ${dis}>${esc(d.notas || '')}</textarea></div>
       <div class="error" id="ed-error" role="alert"></div>
-      <div class="botones">${ABIERTA(p) ? `<button type="button" class="btn-link izq" data-ed-estado="anulada">Anular propuesta</button>` : ''}${acciones.join('')}</div>
+      <div class="acciones-ed">${acciones.join('')}${ABIERTA(p) ? `<button type="button" class="btn-link anular" data-ed-estado="anulada">Anular propuesta</button>` : ''}</div>
     </section>`;
 }
 // Totales y % en vivo (sin redibujar los campos)

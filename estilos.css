@@ -214,34 +214,72 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
   #impresion td:last-child { text-align: right; }
 }
 
-/* v0.4.0 · Formulario de recetas */
-.form-receta { gap: 12px; }
-.form-receta .fila-campos { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
-.form-receta .fila-campos .campo { flex: 1; min-width: 160px; }
-.form-receta h3.rotulo { margin: 10px 0 0; }
-.ings { display: flex; flex-direction: column; gap: 8px; }
-.ing-fila { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid #F1ECE5; }
-.ing-fila .ing-nombre { flex: 3; min-width: 200px; }
-.ing-fila .ing-num { flex: 1; min-width: 86px; max-width: 130px; }
-.ing-fila .calc { display: block; padding: 12px 4px; color: var(--suave); }
-.ing-fila .error, .form-receta .error { font-size: 13px; }
-.btn-x { min-width: 44px; min-height: 44px; border-radius: 10px; border: 1px solid var(--linea); background: #fff; font-size: 20px; color: var(--suave); cursor: pointer; }
-.pasos-ed { display: flex; flex-direction: column; gap: 8px; padding-left: 22px; margin: 0; }
-.pasos-ed li { display: flex; gap: 8px; align-items: flex-start; }
-.pasos-ed textarea { flex: 1; font: inherit; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; }
-.form-receta .fila.total { border-top: 1px solid var(--linea); padding-top: 8px; }
+/* v0.4.2 · Formulario de recetas, más ordenado */
+.form-receta { gap: 14px; }
+.form-receta input:not([type=checkbox]):not([type=radio]), .form-receta select { height: 48px; box-sizing: border-box; }
+.form-receta textarea { font: inherit; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; box-sizing: border-box; width: 100%; background: #fff; }
+.bloque { border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.bloque-datos { padding: 0; }
+.bloque-ing { background: color-mix(in srgb, var(--tinte) 70%, #fff); border: 1px solid var(--tinte-borde); }
+.bloque-neutro { background: #F8F6F2; border: 1px solid #EEE9E1; }
+.bloque-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bloque-cab h3 { margin: 0; font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--acento-texto); }
+.bloque-neutro .bloque-cab h3 { color: var(--suave); }
+.bloque-cab span { font-size: 14px; color: var(--suave); }
+.bloque-pie { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.par { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+.par .check { min-height: 48px; }
+.ings { display: flex; flex-direction: column; gap: 10px; }
+/* Fila de ingrediente: nombre + × arriba; casillas iguales abajo */
+.ing-fila { display: grid; grid-template-columns: 1fr 48px; grid-template-areas: "nombre x" "nums nums"; gap: 8px 8px; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,.07); }
+.ing-fila:last-child { border-bottom: 0; padding-bottom: 0; }
+.ing-fila .c-nombre { grid-area: nombre; min-width: 0; }
+.ing-fila .c-nombre input { width: 100%; }
+.ing-fila .c-x { grid-area: x; align-self: start; }
+.ing-fila .c-nums { grid-area: nums; display: grid; gap: 8px; }
+.c-nums.tres { grid-template-columns: repeat(3, 1fr); }
+.c-nums.dos { grid-template-columns: repeat(2, 1fr); }
+.c-nums.uno { grid-template-columns: minmax(0, 160px); }
+.c-num { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.c-num label { font-size: 12px; color: var(--suave); font-weight: 600; }
+.c-num input { width: 100%; text-align: right; }
+.c-num .calc, .c-num .no-aplica { display: flex; align-items: center; justify-content: flex-end; height: 48px; padding: 0 12px; border: 1px dashed var(--linea); border-radius: 10px; color: var(--suave); box-sizing: border-box; }
+.ing-fila .error { display: block; font-size: 13px; margin-top: 4px; }
+@media (min-width: 720px) {
+  .ing-fila { grid-template-columns: 1fr auto 48px; grid-template-areas: "nombre nums x"; align-items: end; }
+  .c-nums.tres { grid-template-columns: repeat(3, 110px); }
+  .c-nums.dos { grid-template-columns: repeat(2, 120px); }
+  .c-nums.uno { grid-template-columns: 140px; }
+  .ing-fila .c-x { align-self: end; }
+}
+.btn-x { width: 48px; height: 48px; border-radius: 10px; border: 1px solid var(--linea); background: #fff; font-size: 20px; color: var(--suave); cursor: pointer; }
+.pasos-ed { display: flex; flex-direction: column; gap: 10px; }
+.paso-ed label { font-size: 12px; color: var(--suave); font-weight: 600; display: block; margin-bottom: 4px; }
+.paso-fila { display: grid; grid-template-columns: 1fr 48px; gap: 8px; align-items: start; }
+/* Botones de la propuesta: en el celular uno bajo otro, el principal primero; "Anular" aparte */
+.acciones-ed { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
+.acciones-ed .btn, .acciones-ed .btn-sec { width: 100%; justify-content: center; }
+.acciones-ed .anular { align-self: center; margin-top: 6px; color: var(--suave); }
+@media (min-width: 720px) {
+  .acciones-ed { flex-direction: row-reverse; align-items: center; }
+  .acciones-ed .btn, .acciones-ed .btn-sec { width: auto; }
+  .acciones-ed .anular { margin: 0 auto 0 0; }
+}
 .estado.est-en_revision { background: #EEF0F8; color: #4C5578; }
 .estado.est-devuelta { background: #FFF4E5; color: #8A5A1F; border-color: #F2D7B0; }
 .estado.est-en_prueba { background: var(--tinte); color: var(--acento-texto); }
 #ed-guardado { margin-left: auto; }
 #ed-guardado.mal { color: #9A3B2E; font-weight: 600; }
-.btn-link.izq { margin-right: auto; }
 .form-receta .check { display: flex; gap: 10px; align-items: center; min-height: 44px; }
 
 /* v0.4.1 · Buscador de ingredientes */
-.ing-nombre { position: relative; }
+.c-nombre { position: relative; }
 .sugs { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .sugs:empty { display: none; }
 .sug { text-align: left; min-height: 44px; padding: 8px 12px; border: 1px solid var(--linea); border-radius: 10px; background: #fff; font: inherit; cursor: pointer; }
 .sug:hover, .sug:focus { background: var(--tinte); border-color: var(--tinte-borde); }
 .sug small { color: var(--suave); margin-left: 6px; }
+/* Casillas del formulario fuera de .campo (ingredientes, insumos, pasos): mismo estilo que las demás */
+.ing-fila input, .paso-fila textarea { min-height: 48px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--borde); background: #fff; font: inherit; font-size: 16px; box-sizing: border-box; }
+.paso-fila textarea { padding: 10px 12px; }
+.ing-fila input:disabled, .paso-fila textarea:disabled { background: var(--suave-fondo); color: var(--suave); }

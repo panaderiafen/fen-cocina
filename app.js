@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.4.1
+//  fën · Cocina — la app de las jefas  v0.4.2
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -23,10 +23,10 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.4.1';
-import * as M from './modelo.js?v=0.4.1';
-import * as B from './bolleria.js?v=0.4.1';
-import * as ED from './editor.js?v=0.4.1';
+} from './firebase.js?v=0.4.2';
+import * as M from './modelo.js?v=0.4.2';
+import * as B from './bolleria.js?v=0.4.2';
+import * as ED from './editor.js?v=0.4.2';
 
 const C = window.FEN_COCINA;
 const AREAS = {
