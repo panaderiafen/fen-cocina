@@ -1,6 +1,6 @@
-# fën · Cocina · v0.12.0
+# fën · Cocina · v0.12.1
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.1: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,11 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.12.1 · Bitácora más fácil de leer · Masas = Plan de elaboración de masas (PEM)
+- **Bitácora:** cada anotación tiene su título y **una línea por cosa** (nombre a la izquierda, número a la derecha), como "Congelado al cierre". Ejemplo: Inventario del congelador → Masa Base 84 masas / Empastes de Masa Base 46 / Croissant XL 220.
+- **Masas:** el título ahora es **"Plan de elaboración de masas (PEM) · lun 5 al vie 9 oct"** y abajo, más chico, **"Para la meta del lun 12 al dom 18 oct"**. En Metas, el título vuelve a ser solo "Meta del…". El enlace de Metas dice "Repartir en el Plan de elaboración de masas (PEM)".
+- Archivos: `app.js`, `estilos.css`, `README.md` y los demás (solo versión): `editor.js`, `config.js`, `firebase.js`, `index.html`. Reglas, script y Sistema Fën sin cambios.
 
 ## Novedades v0.12.0 · Bollería descuenta lo congelado · marcar todo · copiar de cualquier semana
 **Bollería — se piden menos masas si ya sobran congeladas** (decisión de Emmanuel, 11-oct):

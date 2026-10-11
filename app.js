@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.12.0
+//  fën · Cocina — la app de las jefas  v0.12.1
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,7 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.12.1: Bitácora con una línea por cosa; Masas se titula Plan de elaboración de masas (PEM), la meta abajo.
 //  v0.12.0: Bollería descuenta de lo que hay que elaborar las masas que ya sobran en el congelador (congelado.js),
 //  con un aviso de por qué se piden menos; Bollería también tiene "Marcar todo como hecho". Panadería: copiar de
 //  cualquier semana y "Deshacer la copia".
@@ -45,13 +46,13 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.12.0';
+} from './firebase.js?v=0.12.1';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.12.0';
+import * as ED from './editor.js?v=0.12.1';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.11.0';
-import * as CG from './congelado.js?v=0.12.0';
+import * as CG from './congelado.js?v=0.12.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -407,7 +408,7 @@ function pintar() {
   const main = $('principal');
   if (!seccionesDe(E.area).some(x => x[0] === v)) { location.hash = '#' + seccionesDe(E.area)[0][0]; return; }
   $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas'
-    : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'merma' ? 'Merma · lo que se pierde' : v === 'bodega' ? 'Bodega · materias primas críticas' : v === 'turno' ? 'Bitácora de turno · ' + M.fechaLarga(M.hoyTxt()) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
+    : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'merma' ? 'Merma · lo que se pierde' : v === 'bodega' ? 'Bodega · materias primas críticas' : v === 'turno' ? 'Bitácora de turno · ' + M.fechaLarga(M.hoyTxt()) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · PEM ${etiquetaPem(E.lunesMeta)}`
     : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
   main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'bodega' ? vistaBodega() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
   if (v === 'recetas' && E.editor) ED.actualizarCalculos();
@@ -595,12 +596,21 @@ function avisoCongelado(lunes, r) {
         <p class="ayuda">Sale de la Bitácora (inventario, elaboré, descongelé, merma congelada). Si algo no se anotó, el número no calza: hagan un inventario del congelador.</p>
       </details></div></div>`;
 }
-function navMeta() {
+// "lun 5 al vie 9 oct": los días en que se elaboran las masas (PEM) de una meta
+const MES_C = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function etiquetaPem(lunesMeta) {
+  const a = semanaElab(lunesMeta), b = M.sumarDias(a, 4), ma = Number(a.slice(5, 7)) - 1, mb = Number(b.slice(5, 7)) - 1;
+  return `lun ${Number(a.slice(8))}${ma !== mb ? ' ' + MES_C[ma] : ''} al vie ${Number(b.slice(8))} ${MES_C[mb]}`;
+}
+// v0.12.1: en Metas manda la meta; en Masas manda el Plan de elaboración de masas (PEM) y la meta va abajo, más chica
+function navMeta(vista = 'metas') {
   const l = E.lunesMeta;
+  const titulo = vista === 'masas'
+    ? `<div class="titulo-meta"><h2>Plan de elaboración de masas (PEM) · ${esc(etiquetaPem(l))}</h2><span class="elab-semana">Para la meta del ${esc(M.etiquetaSemana(l))}</span></div>`
+    : `<h2>Meta del ${esc(M.etiquetaSemana(l))}</h2>`;
   return `<div class="nav-fecha">
       <button type="button" class="btn-flecha" data-meta-sem="-7" aria-label="Semana anterior">${ic('izq')}</button>
-      <div class="titulo-meta"><h2>Meta del ${esc(M.etiquetaSemana(l))}</h2>
-        <span class="elab-semana">Las masas se elaboran del <b>${esc(M.fechaCorta(semanaElab(l)))} al ${esc(M.fechaCorta(M.sumarDias(semanaElab(l), 4)))}</b> (semana anterior)</span></div>
+      ${titulo}
       <button type="button" class="btn-flecha" data-meta-sem="7" aria-label="Semana siguiente">${ic('der')}</button>
       ${l !== M.sumarDias(M.lunesDe(M.hoyTxt()), 7) ? '<button type="button" class="btn-sec" data-meta-sem="prox">La próxima</button>' : ''}
     </div>`;
@@ -659,7 +669,7 @@ function vistaMetas() {
       <thead><tr><th scope="col">Producto</th><th scope="col">Meta (piezas)</th><th scope="col">Masas</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="3" style="text-align:left;color:var(--suave);padding:18px 10px">No hay productos aprobados que lleven una masa base.</td></tr>'}</tbody>
     </table></div>
-    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2>${avisoCongelado(E.lunesMeta, NM)}<section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir las masas en los días →</a></p>` : ''}
+    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2>${avisoCongelado(E.lunesMeta, NM)}<section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir en el Plan de elaboración de masas (PEM) →</a></p>` : ''}
     ${enPrueba.length ? `<p class="ayuda">En prueba (no se ofrecen para metas hasta que se aprueben): ${esc(enPrueba.map(p => p.receta.nombre).join(', '))}.</p>` : ''}
     ${sinMasa.length ? `<p class="ayuda">No entran a las metas porque no llevan una masa base: ${esc(sinMasa.map(r => r.nombre).join(', '))}.</p>` : ''}`;
 }
@@ -667,8 +677,8 @@ function vistaMetas() {
 function vistaMasas() {
   if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
   const m = asegurarMetas(E.lunesMeta);
-  if (!m) return navMeta() + '<div class="vacio">Cargando…</div>';
-  if (m.sinPermiso) return navMeta() + avisoPermiso();
+  if (!m) return navMeta('masas') + '<div class="vacio">Cargando…</div>';
+  if (m.sinPermiso) return navMeta('masas') + avisoPermiso();
   const NM = necesidadesMeta(E.lunesMeta, m), nec = NM.nec, elab = m.elaboracion || {};
   const el = semanaElab(E.lunesMeta), hoy = M.hoyTxt();
   const ids = [...new Set([...nec.masas.map(x => x.masa.id), ...Object.keys(elab).filter(id => B.sumaDias(elab[id]) > 0)])];
@@ -691,8 +701,8 @@ function vistaMasas() {
     return { masas, tandas, empastes, kg, pasa: tandas > tpd };
   });
   const cap = filas.length ? filas.map(x => `${esc(x.masa.nombre)}: ${porTandaDe(x.masa)} masas por tanda (${M.gramos(B.pesoMasa(x.masa))} c/u)`).join(' · ') : '';
-  return navMeta() + `
-    <p class="ayuda">Masas base para la meta del ${esc(M.etiquetaSemana(E.lunesMeta))}, que se elaboran <b>del ${esc(M.fechaCorta(el))} al ${esc(M.fechaCorta(M.sumarDias(el, 4)))}</b>. Reparte en los días que quieran: cada número se guarda solo. Cada masa lleva su empaste.</p>
+  return navMeta('masas') + `
+    <p class="ayuda">Reparte las masas de la meta en los días de elaboración: cada número se guarda solo. Cada masa lleva su empaste.</p>
     ${nec.avisos.map(a => `<div class="nota ojo">${ic('alerta')}<span>${esc(a)}</span></div>`).join('')}
     ${filas.length ? avisoCongelado(E.lunesMeta, NM) : ''}
     ${!filas.length ? `<div class="vacio">${ic('meta')}<b>Sin metas para esa semana</b><a href="#metas">Poner las metas</a></div>` : `
@@ -868,19 +878,25 @@ function productosBol() {
   E.recetas.filter(r => r.area === E.area && r.tipo !== 'sub_receta' && r.seCongela && !con.includes(r)).forEach(r => con.push(r));
   return con.filter(r => r.estado === 'consolidada' || r.seCongela).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
-function textoAnot(a) {
+// v0.12.1: cada anotación es un título y una línea por cosa (nombre a la izquierda, número a la derecha),
+// como "Congelado al cierre"
+function anotFilas(a) {
+  const un = (n, s1, s2) => `${M.miles(n)} ${M.num(n) === 1 ? s1 : s2}`;
   if (a.tipo === 'inventario') {
-    const partes = [];
-    Object.entries(a.masas || {}).forEach(([id, n]) => partes.push(`${nombreDe(id)} ${M.miles(n)}`));
-    Object.entries(a.empastes || {}).forEach(([id, n]) => partes.push(`empastes de ${nombreDe(id)} ${M.miles(n)}`));
-    Object.entries(a.productos || {}).forEach(([id, n]) => { if (M.num(n)) partes.push(`${nombreDe(id)} ${M.miles(n)}`); });
-    return 'Inventario del congelador: ' + (partes.join(' · ') || 'vacío');
+    const filas = [];
+    Object.entries(a.masas || {}).forEach(([id, n]) => filas.push([nombreDe(id), un(n, 'masa', 'masas')]));
+    Object.entries(a.empastes || {}).forEach(([id, n]) => filas.push([`Empastes de ${nombreDe(id)}`, M.miles(n)]));
+    Object.entries(a.productos || {}).forEach(([id, n]) => { if (M.num(n)) filas.push([nombreDe(id), M.miles(n)]); });
+    return { titulo: 'Inventario del congelador', filas: filas.length ? filas : [['Vacío', '']] };
   }
-  if (a.tipo === 'elaboro') return `Elaboré ${M.miles(a.n)} ${a.n === 1 ? 'masa' : 'masas'} de ${nombreDe(a.masa)} y sus empastes → congelador${a.origen === 'hoy' ? ' (desde Hoy)' : ''}`;
-  if (a.tipo === 'descongelo') return `Descongelé ${M.miles(a.n)} ${a.n === 1 ? 'masa' : 'masas'} de ${nombreDe(a.masa)} (con sus empastes)`;
-  if (a.tipo === 'formo') { const h = M.num(a.n) - M.num(a.congelar); return `Formé ${M.miles(a.n)} ${nombreDe(a.producto)}: ${M.miles(a.congelar)} al congelador${h ? `, ${M.miles(h)} al horno hoy` : ''}`; }
-  if (a.tipo === 'horneo') return `Horneé ${M.miles(a.n)} ${nombreDe(a.producto)} desde el congelador`;
-  return a.tipo;
+  if (a.tipo === 'elaboro') return { titulo: `Elaboré masas → congelador${a.origen === 'hoy' ? ' (desde Hoy)' : ''}`,
+    filas: [[nombreDe(a.masa), un(a.n, 'masa', 'masas')], ...(a.conEmpaste !== false ? [['Empastes', M.miles(a.n)]] : [])] };
+  if (a.tipo === 'descongelo') return { titulo: 'Descongelé masas',
+    filas: [[nombreDe(a.masa), un(a.n, 'masa', 'masas')], ...(a.conEmpaste !== false ? [['Empastes (con sus masas)', M.miles(a.n)]] : [])] };
+  if (a.tipo === 'formo') { const h = M.num(a.n) - M.num(a.congelar); return { titulo: 'Formé',
+    filas: [[nombreDe(a.producto), M.miles(a.n)], ['Al congelador', M.miles(a.congelar)], ...(h ? [['Al horno hoy', M.miles(h)]] : [])] }; }
+  if (a.tipo === 'horneo') return { titulo: 'Horneé desde el congelador', filas: [[nombreDe(a.producto), M.miles(a.n)]] };
+  return { titulo: a.tipo, filas: [] };
 }
 
 function vistaBitacora() {
@@ -896,7 +912,7 @@ function vistaBitacora() {
   const delDia = Object.entries(dia.bitacora || {}).map(([id, a]) => ({ ...a, id })).sort((a, b) => String(a.en || '').localeCompare(String(b.en || '')));
   const botones = Object.entries(B.TIPOS).map(([k, t]) => `<button type="button" class="btn-sec" data-anotar="${k}">${ic(k === 'inventario' ? 'copo' : k === 'formo' || k === 'horneo' ? 'pan' : 'capas')}${esc(t)}</button>`).join('');
   const lista = delDia.length ? `<div class="lista-bit">${delDia.map(a => `<div class="anot ${a.anulado ? 'anulada' : ''}">
-      <div><b>${esc(textoAnot(a))}</b><span class="ayuda">${esc(a.por || '')} · ${esc(horaDe(a.en))}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
+      <div class="anot-cuerpo">${(f => `<b>${esc(f.titulo)}</b><div class="lista-mini">${f.filas.map(([n, v]) => `<div class="fila sub"><span>${esc(n)}</span><span>${esc(v)}</span></div>`).join('')}</div>`)(anotFilas(a))}<span class="ayuda">${esc(a.por || '')} · ${esc(horaDe(a.en))}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
       ${a.anulado ? '' : `<button type="button" class="btn-link" data-anular="${esc(a.id)}">Anular</button>`}
     </div>`).join('')}</div>` : '<p class="ayuda">Sin anotaciones este día.</p>';
   // Congelado al final del día
