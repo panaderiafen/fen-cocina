@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.11.0
+//  fën · Cocina — la app de las jefas  v0.12.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,10 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.12.0: Bollería descuenta de lo que hay que elaborar las masas que ya sobran en el congelador (congelado.js),
+//  con un aviso de por qué se piden menos; Bollería también tiene "Marcar todo como hecho". Panadería: copiar de
+//  cualquier semana y "Deshacer la copia".
+//  v0.11.1: Bollería, en Metas y Masas: bajo "Meta del…" dice en qué días se elaboran las masas (semana anterior).
 //  v0.11.0: el conteo de bodega vale como cierre de su día (lo hecho ese día ya está incluido). Panadería: aviso de
 //  que "Marcar terminada" descuenta la bodega y "Marcar todo como hecho".
 //  v0.10.0: lo que Administración configura con envase (saco de 25 kg…) se cuenta y se recibe en sacos + lo suelto,
@@ -41,12 +45,13 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.11.0';
+} from './firebase.js?v=0.12.0';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.11.0';
+import * as ED from './editor.js?v=0.12.0';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.11.0';
+import * as CG from './congelado.js?v=0.12.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -103,6 +108,8 @@ const IC = {
   copo: '<path d="M12 3v18M4.5 7.5l15 9M19.5 7.5l-15 9"/>',
   merma: '<path d="M5 7h14M10 4h4M7 7l1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12"/><path d="M10 11v5M14 11v5"/>',
   bodega: '<path d="M4 9l8-5 8 5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M8 20v-7h8v7M8 16h8"/>',
+  copiar: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  deshacer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -562,11 +569,38 @@ const avisoPermiso = () => `<div class="nota ojo">${ic('alerta')}<span>Este equi
 // Semana de la meta (lunes) → la elaboración de masas es la semana anterior (lun–vie)
 const semanaElab = lunesMeta => M.sumarDias(lunesMeta, -7);
 const recetaPorId = id => E.recetas.find(r => r.id === id);
+// Lo que hay que elaborar para una meta, con las masas que ya sobran en el congelador descontadas (congelado.js)
+function necesidadesMeta(lunes, m, hoy = M.hoyTxt()) {
+  const c = ctx(), base = B.necesidades((m && m.productos) || {}, c, E.config), el = semanaElab(lunes);
+  const sinDescontar = estado => ({ nec: CG.descontar(base, null), sob: { estado, desde: el, porMasa: {} } });
+  if (hoy < el) return sinDescontar('futuro');
+  const mAct = asegurarMetas(el);
+  if (!E.cargado.diasArea || !mAct) return sinDescontar('cargando');
+  const necAct = {}; B.necesidades(mAct.productos || {}, c, E.config).masas.forEach(x => { necAct[x.masa.id] = x.masas; });
+  const sob = CG.sobrantes(E.diasArea, lunes, necAct, hoy);
+  return { nec: CG.descontar(base, sob), sob };
+}
+// Aviso (limpio) de por qué se piden menos masas que las de la meta
+function avisoCongelado(lunes, r) {
+  const el = semanaElab(lunes), s = r.sob;
+  if (s.estado === 'sinInventario') return `<div class="nota ojo">${ic('alerta')}<span>Sin inventario del congelador no se pueden descontar las masas que ya hay: se pide la meta completa. Anótenlo en la <a href="#bitacora">Bitácora</a>.</span></div>`;
+  if (s.estado === 'futuro') return `<p class="ayuda">Desde el ${esc(M.fechaCorta(el))} se descuentan solas las masas que sobren en el congelador.</p>`;
+  const con = r.nec.masas.filter(x => x.congeladas > 0);
+  if (s.estado !== 'ok' || !con.length) return '';
+  const cierre = M.fechaCorta(s.hasta);
+  return `<div class="nota neutra aviso-congelado">${ic('copo')}<div>
+      <span><b>Se piden menos masas porque ya hay congeladas.</b> ${esc(con.map(x => `${x.masa.nombre}: ${M.miles(x.meta)} de la meta − ${M.miles(x.congeladas)} congeladas = ${M.miles(x.masas)}`).join(' · '))}.</span>
+      <details class="desp"><summary>Cómo se calcula</summary>
+        ${con.map(x => { const p = s.porMasa[x.masa.id]; return `<div class="calculo"><b>${esc(x.masa.nombre)}</b><span>${M.miles(p.congeladas)} en el congelador (${esc(cierre)}) − ${M.miles(p.elaboradas)} ya elaboradas para esta meta − ${M.miles(p.faltaDescongelar)} por descongelar para la meta del ${esc(M.etiquetaSemana(el))} = <b>${M.miles(p.sobran)} de más</b></span></div>`; }).join('')}
+        <p class="ayuda">Sale de la Bitácora (inventario, elaboré, descongelé, merma congelada). Si algo no se anotó, el número no calza: hagan un inventario del congelador.</p>
+      </details></div></div>`;
+}
 function navMeta() {
   const l = E.lunesMeta;
   return `<div class="nav-fecha">
       <button type="button" class="btn-flecha" data-meta-sem="-7" aria-label="Semana anterior">${ic('izq')}</button>
-      <h2>Meta del ${esc(M.etiquetaSemana(l))}</h2>
+      <div class="titulo-meta"><h2>Meta del ${esc(M.etiquetaSemana(l))}</h2>
+        <span class="elab-semana">Las masas se elaboran del <b>${esc(M.fechaCorta(semanaElab(l)))} al ${esc(M.fechaCorta(M.sumarDias(semanaElab(l), 4)))}</b> (semana anterior)</span></div>
       <button type="button" class="btn-flecha" data-meta-sem="7" aria-label="Semana siguiente">${ic('der')}</button>
       ${l !== M.sumarDias(M.lunesDe(M.hoyTxt()), 7) ? '<button type="button" class="btn-sec" data-meta-sem="prox">La próxima</button>' : ''}
     </div>`;
@@ -600,7 +634,7 @@ function vistaMetas() {
   if (m.sinPermiso) return navMeta() + avisoPermiso();
   const c = ctx(), metas = m.productos || {};
   const prods = B.productos(E.recetas, c).filter(p => p.receta.estado === 'consolidada' || M.num(metas[p.receta.id]) > 0);
-  const nec = B.necesidades(metas, c, E.config);
+  const NM = necesidadesMeta(E.lunesMeta, m), nec = NM.nec;
   const sinMasa = E.recetas.filter(r => r.area === E.area && r.tipo !== 'sub_receta' && r.estado === 'consolidada' && !prods.some(p => p.receta.id === r.id));
   const enPrueba = B.productos(E.recetas, c).filter(p => p.receta.estado !== 'consolidada' && !(M.num(metas[p.receta.id]) > 0));
   const el = semanaElab(E.lunesMeta);
@@ -613,6 +647,7 @@ function vistaMetas() {
   const resumen = nec.masas.map(x => `<div class="caja">
       <span class="rotulo">${esc(x.masa.nombre)}</span>
       <span class="grande num">${M.miles(x.masas)} masas</span>
+      ${x.congeladas ? `<span class="ayuda congeladas">${ic('copo')}${M.miles(x.meta)} de la meta − ${M.miles(x.congeladas)} ya congeladas</span>` : ''}
       <span class="ayuda">${M.gramos(x.kg * 1000)} de masa${x.merma ? ` · incluye ${M.unidades(x.merma)} % de merma de laminado` : ''}${Math.abs(x.masas - x.exactas) > 0.001 ? ` · exactas ${M.unidades(x.exactas)}, se redondea a masas enteras` : ''}</span>
       ${x.empastes ? `<div class="fila sub"><span>${esc(x.empaste ? x.empaste.nombre : 'Empaste')}</span><span>${M.miles(x.empastes)} de ${M.gramos(x.gPorEmpaste)} · ${M.gramos(x.empastes * x.gPorEmpaste)}</span></div>` : ''}
       <div class="lista-mini">${x.productos.map(p => `<div class="fila sub"><span>${esc(p.receta.nombre)} · ${M.miles(p.piezas)}</span><span>${M.unidades(p.masas)} masas</span></div>`).join('')}</div>
@@ -624,7 +659,7 @@ function vistaMetas() {
       <thead><tr><th scope="col">Producto</th><th scope="col">Meta (piezas)</th><th scope="col">Masas</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="3" style="text-align:left;color:var(--suave);padding:18px 10px">No hay productos aprobados que lleven una masa base.</td></tr>'}</tbody>
     </table></div>
-    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2><section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir las masas en los días →</a></p>` : ''}
+    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2>${avisoCongelado(E.lunesMeta, NM)}<section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir las masas en los días →</a></p>` : ''}
     ${enPrueba.length ? `<p class="ayuda">En prueba (no se ofrecen para metas hasta que se aprueben): ${esc(enPrueba.map(p => p.receta.nombre).join(', '))}.</p>` : ''}
     ${sinMasa.length ? `<p class="ayuda">No entran a las metas porque no llevan una masa base: ${esc(sinMasa.map(r => r.nombre).join(', '))}.</p>` : ''}`;
 }
@@ -634,7 +669,7 @@ function vistaMasas() {
   const m = asegurarMetas(E.lunesMeta);
   if (!m) return navMeta() + '<div class="vacio">Cargando…</div>';
   if (m.sinPermiso) return navMeta() + avisoPermiso();
-  const c = ctx(), nec = B.necesidades(m.productos || {}, c, E.config), elab = m.elaboracion || {};
+  const NM = necesidadesMeta(E.lunesMeta, m), nec = NM.nec, elab = m.elaboracion || {};
   const el = semanaElab(E.lunesMeta), hoy = M.hoyTxt();
   const ids = [...new Set([...nec.masas.map(x => x.masa.id), ...Object.keys(elab).filter(id => B.sumaDias(elab[id]) > 0)])];
   const filas = ids.map(id => { const x = nec.masas.find(y => y.masa.id === id); return { id, masa: x ? x.masa : recetaPorId(id), nec: x }; }).filter(x => x.masa)
@@ -643,21 +678,23 @@ function vistaMasas() {
   const porTandaDe = masa => B.masasPorTanda(masa, E.config), tpd = B.tandasPorDia(E.config);
   const cuerpo = filas.map(x => {
     const plan = elab[x.id] || {}, hecho = B.sumaDias(plan), necesarias = x.nec ? x.nec.masas : 0, dif = necesarias - hecho;
-    const estado = !necesarias && !hecho ? '' : dif > 0 ? `<span class="chip ojo">Faltan ${M.miles(dif)}</span>` : dif < 0 ? `<span class="chip">Sobran ${M.miles(-dif)}</span>` : '<span class="chip ok">Completo</span>';
-    return `<tr data-masa="${esc(x.id)}"><td class="nombre">${esc(x.masa.nombre)}<small>${M.miles(necesarias)} necesarias · ${porTandaDe(x.masa)} por tanda</small></td>
+    const cubierta = x.nec && x.nec.congeladas > 0 && !necesarias;
+    const estado = cubierta && !hecho ? `<span class="chip ok">Cubierta con lo congelado</span>` : !necesarias && !hecho ? '' : dif > 0 ? `<span class="chip ojo">Faltan ${M.miles(dif)}</span>` : dif < 0 ? `<span class="chip">Sobran ${M.miles(-dif)}</span>` : '<span class="chip ok">Completo</span>';
+    return `<tr data-masa="${esc(x.id)}"><td class="nombre">${esc(x.masa.nombre)}<small>${M.miles(necesarias)} necesarias${x.nec && x.nec.congeladas ? ` (${M.miles(x.nec.meta)} de la meta − ${M.miles(x.nec.congeladas)} congeladas)` : ''} · ${porTandaDe(x.masa)} por tanda</small></td>
       ${dias.map(d => `<td class="${M.sumarDias(el, d) === hoy ? 'hoy-col' : ''}">${campoNum(`e-${x.id}-${d}`, 'elab', x.id, d, plan['d' + d], `${x.masa.nombre} ${M.DIAS_CORTOS[d]}`)}</td>`).join('')}
       <td class="num"><b>${M.miles(hecho)}</b></td><td>${estado}<button type="button" class="btn-link" data-repartir="${esc(x.id)}" data-n="${necesarias}">Repartir parejo</button></td></tr>`;
   }).join('');
   // Por día: masas, tandas (masas enteras por tanda) y empastes (1 por masa)
   const pie = dias.map(d => {
     let masas = 0, tandas = 0, empastes = 0, kg = 0;
-    filas.forEach(x => { const n = M.num((elab[x.id] || {})['d' + d]); masas += n; tandas += B.tandasMasas(n, porTandaDe(x.masa)).length; kg += n * B.pesoMasa(x.masa) / 1000; if (x.nec && x.nec.empastes) empastes += n; });
+    filas.forEach(x => { const n = M.num((elab[x.id] || {})['d' + d]); masas += n; tandas += B.tandasMasas(n, porTandaDe(x.masa)).length; kg += n * B.pesoMasa(x.masa) / 1000; if (x.nec && x.nec.gPorEmpaste > 0) empastes += n; });
     return { masas, tandas, empastes, kg, pasa: tandas > tpd };
   });
   const cap = filas.length ? filas.map(x => `${esc(x.masa.nombre)}: ${porTandaDe(x.masa)} masas por tanda (${M.gramos(B.pesoMasa(x.masa))} c/u)`).join(' · ') : '';
   return navMeta() + `
     <p class="ayuda">Masas base para la meta del ${esc(M.etiquetaSemana(E.lunesMeta))}, que se elaboran <b>del ${esc(M.fechaCorta(el))} al ${esc(M.fechaCorta(M.sumarDias(el, 4)))}</b>. Reparte en los días que quieran: cada número se guarda solo. Cada masa lleva su empaste.</p>
     ${nec.avisos.map(a => `<div class="nota ojo">${ic('alerta')}<span>${esc(a)}</span></div>`).join('')}
+    ${filas.length ? avisoCongelado(E.lunesMeta, NM) : ''}
     ${!filas.length ? `<div class="vacio">${ic('meta')}<b>Sin metas para esa semana</b><a href="#metas">Poner las metas</a></div>` : `
     <div class="tabla-caja"><table class="plan masas">
       <thead><tr><th scope="col">Masa base</th>${dias.map(d => `<th scope="col" class="${M.sumarDias(el, d) === hoy ? 'hoy-col' : ''}">${M.DIAS_CORTOS[d]} ${Number(M.sumarDias(el, d).slice(8))}</th>`).join('')}<th scope="col">Total</th><th scope="col"><span class="sr">Estado</span></th></tr></thead>
@@ -685,11 +722,12 @@ function vistaHoyBol() {
     </div>`;
   if (!m) return nav + '<div class="vacio">Cargando…</div>';
   if (m.sinPermiso) return nav + avisoPermiso();
-  const c = ctx(), hechos = dia.hechos || {}, nec = B.necesidades(m.productos || {}, c, E.config);
+  const c = ctx(), hechos = dia.hechos || {}, nec = B.necesidades(m.productos || {}, c, E.config), necA = necesidadesMeta(lunesMeta, m, f).nec;   // necA: con lo congelado descontado
   const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
   const masasHoy = B.masasBase(E.recetas, E.area).map(rs => ({ rs, n: M.num(((m.elaboracion || {})[rs.id] || {})['d' + idx]) })).filter(x => x.n > 0);
   const aviso = `<p class="ayuda">"Marcar terminada" en una masa la anota en la <a href="#bitacora">Bitácora</a> (masas elaboradas y congeladas). El formado y el horneado se anotan allá.</p>`;
   if (!masasHoy.length) return nav + `<div class="vacio">${ic('capas')}<b>Sin masas programadas para este día</b><a href="#masas">Ir a Masas</a></div>` + aviso;
+  // v0.12.0: como en Panadería, el aviso de que marcar terminada descuenta la bodega + "Marcar todo como hecho" (más abajo)
   E.tarjetas = {};
   // Lo del día: masas + empastes (para elaboraciones previas e insumos)
   const planDia = [], empastes = [];
@@ -723,14 +761,19 @@ function vistaHoyBol() {
     </div>` : '';
   const total = masasHoy.reduce((s, x) => s + x.n, 0);
   const cajaMeta = `<div class="caja"><span class="rotulo">Para la meta del ${esc(M.etiquetaSemana(lunesMeta))}</span><span class="grande num">${M.miles(total)} ${total === 1 ? 'masa' : 'masas'} hoy</span>
-      <div class="lista-mini">${nec.masas.map(x => { const hechas = B.sumaDias((m.elaboracion || {})[x.masa.id]); return `<div class="fila sub"><span>${esc(x.masa.nombre)}</span><span>${M.miles(hechas)} programadas de ${M.miles(x.masas)} necesarias</span></div>`; }).join('')}</div></div>`;
+      <div class="lista-mini">${necA.masas.map(x => { const hechas = B.sumaDias((m.elaboracion || {})[x.masa.id]); return `<div class="fila sub"><span>${esc(x.masa.nombre)}</span><span>${M.miles(hechas)} programadas de ${M.miles(x.masas)} necesarias${x.congeladas ? ` (${M.miles(x.congeladas)} ya congeladas)` : ''}</span></div>`; }).join('')}</div></div>`;
   const notas = dia.notas || {};
+  // Lo que falta marcar: masas (van a la Bitácora y descuentan la bodega con su empaste), empastes y elaboraciones previas
+  const pendientes = [...masasHoy.map(x => 'masa_' + x.rs.id), ...empastes.map(e => 'emp_' + e.masa.id),
+    ...el.subRecetas.filter(s => !empIds.has(s.id)).map(s => 'sub_' + s.id)].filter(k => !hecho(k));
+  const avisoHecho = `<div class="nota neutra aviso-hecho">${ic('alerta')}<span><b>Marcar terminada descuenta la bodega.</b> Cada masa terminada pasa al congelador en la <a href="#bitacora">Bitácora</a> y descuenta sus materias primas (con su empaste); lo formado se anota allá. Al cerrar el día, que todo lo hecho quede marcado.</span>
+      ${pendientes.length ? `<button type="button" class="btn-sec" data-todo-hecho="${esc(pendientes.join(','))}">${ic('check')}Marcar todo como hecho (${pendientes.length})</button>` : `<span class="chip-ok">${ic('ok')}Todo marcado</span>`}</div>`;
   return nav + `
     <section class="resumen" aria-label="Antes de empezar">${cajaMeta}${cajaIns}</section>
+    ${avisoHecho}
     ${previas ? `<h2 class="titulo">Elaboraciones previas · ${el.subRecetas.filter(s => !empIds.has(s.id)).length}</h2>${previas}` : ''}
     <h2 class="titulo">Masas del día · ${masasHoy.length}</h2>${masas}
     ${emps ? `<h2 class="titulo">Empastes</h2>${emps}` : ''}
-    ${aviso}
     <section class="caja">
       <label class="rotulo" for="notas-dia">Notas del día (las ve la dupla)</label>
       <textarea id="notas-dia" rows="3" style="font: inherit; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; background: var(--suave-fondo)">${esc(notas.texto || '')}</textarea>
@@ -908,6 +951,7 @@ function dialogoAnotar(tipo) {
   let cuerpo = '';
   if (tipo === 'inventario') {
     cuerpo = `<p class="ayuda">Cuenten lo que hay en el congelador. Reemplaza lo que la app tenía: desde aquí todo se mueve solo con las anotaciones.</p>
+      <p class="ayuda"><b>Antes de contar, marquen como terminadas las masas de hoy</b> (y anoten lo descongelado): lo que se anote después del inventario se suma encima.</p>
       <div class="filas-aj">
         ${masas.map(r => num('inv-m-' + r.id, r.nombre + ' (masas)', M.num(st.masas[r.id]) || '', '') + num('inv-e-' + r.id, 'Empastes de ' + r.nombre, M.num(st.empastes[r.id]) || '', '')).join('')}
         ${prods.map(r => num('inv-p-' + r.id, r.nombre, M.num(st.productos[r.id]) || '', r.unidadesPorCaja ? `${r.unidadesPorCaja} por caja` : '')).join('')}
@@ -1037,6 +1081,8 @@ function vistaPlan() {
   const disponibles = E.recetas.filter(r => r.area === E.area && r.estado === 'consolidada' && r.tipo !== 'sub_receta' && !ids.includes(r.id)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const totDia = M.DIAS_CORTOS.map((_, i) => lista.reduce((s, x) => s + M.num((filas[x.id] || {})['d' + i]), 0));
   const enRevision = lista.filter(x => x.r && x.r.estado !== 'consolidada');
+  // "Deshacer la copia" se ofrece 3 días después de copiar; después ya hubo cambios que no conviene perder
+  const deshacer = plan.antesDeCopiar && plan.antesDeCopiar.filas && Date.now() - new Date(plan.antesDeCopiar.en).getTime() < 3 * 864e5 ? plan.antesDeCopiar : null;
   return nav + `
     ${enRevision.length ? `<div class="nota ojo">${ic('alerta')}<span>${esc(enRevision.map(x => x.nombre).join(', '))}: la receta no está aprobada ahora (${esc(enRevision.map(x => ESTADOS[x.r.estado] || x.r.estado).join(', '))}). Su plan se mantiene.</span></div>` : ''}
     <div class="tabla-caja">
@@ -1046,7 +1092,7 @@ function vistaPlan() {
             <td class="nombre">${esc(x.nombre)}</td>
             ${M.DIAS_CORTOS.map((d, i) => { const v = M.num((filas[x.id] || {})['d' + i]); const idc = `c-${x.id}-${i}`, mala = E.celdasMalas[lunes + '|' + idc]; return `<td class="${i === hoyIdx ? 'hoy-col' : ''}"><label class="sr" for="${esc(idc)}">${esc(x.nombre)} ${d}</label><input id="${esc(idc)}" inputmode="numeric" data-celda="${esc(x.id)}" data-d="${i}" value="${mala !== undefined ? esc(mala) : (v || '')}" class="${mala !== undefined ? 'error-celda' : ''}" autocomplete="off"></td>`; }).join('')}
             <td class="num"><b>${M.miles(M.DIAS_CORTOS.reduce((s, _, i) => s + M.num((filas[x.id] || {})['d' + i]), 0))}</b></td>
-          </tr>`).join('') : `<tr><td colspan="9" style="text-align:left;color:var(--suave);padding:18px 10px">Esta semana no tiene recetas planificadas. Agrega una abajo o copia la semana anterior.</td></tr>`}</tbody>
+          </tr>`).join('') : `<tr><td colspan="9" style="text-align:left;color:var(--suave);padding:18px 10px">Esta semana no tiene recetas planificadas. Agrega una abajo o copia otra semana.</td></tr>`}</tbody>
         ${lista.length ? `<tfoot><tr><td>Total</td>${totDia.map((t, i) => `<td class="num ${i === hoyIdx ? 'hoy-col' : ''}">${M.miles(t)}</td>`).join('')}<td class="num">${M.miles(totDia.reduce((s, x) => s + x, 0))}</td></tr></tfoot>` : ''}
       </table>
     </div>
@@ -1054,8 +1100,10 @@ function vistaPlan() {
       <div class="campo"><label for="agregar-receta">Agregar receta a esta semana</label>
         <select id="agregar-receta"><option value="">Elige una receta aprobada…</option>${disponibles.map(r => `<option value="${esc(r.id)}">${esc(r.nombre)}</option>`).join('')}</select></div>
       <button type="button" class="btn-sec" data-accion="agregar">Agregar</button>
-      <button type="button" class="btn-sec" data-accion="copiar">Copiar la semana anterior</button>
+      <button type="button" class="btn-sec" data-accion="copiar">${ic('copiar')}Copiar de otra semana</button>
+      ${deshacer ? `<button type="button" class="btn-sec" data-accion="deshacer-copia">${ic('deshacer')}Deshacer la copia</button>` : ''}
     </div>
+    ${deshacer ? `<p class="ayuda">Esta semana se copió de la del ${esc(M.etiquetaSemana(deshacer.desde))} (${esc(deshacer.por || '')} · ${esc(M.fechaCorta(String(deshacer.en || '').slice(0, 10) || M.hoyTxt()))} ${esc(horaDe(deshacer.en))}). "Deshacer la copia" la deja como estaba antes.</p>` : ''}
     <p class="ayuda">Cada número se guarda solo al escribirlo, y la dupla lo ve al instante. La planilla de Producción se actualiza sola unos segundos después${planillaTexto()}.</p>`;
 }
 function planillaTexto() {
@@ -1081,24 +1129,63 @@ function guardarCelda(rid, d, texto) {
     .catch(e => { const el = $(`c-${rid}-${d}`); if (el) { el.classList.remove('guardando'); el.classList.add('error-celda'); } avisar('No se guardó: ' + mensajeError(e), true); });
   programarPlanilla();
 }
-async function copiarSemanaAnterior() {
-  const lunes = E.lunesPlan, ant = M.sumarDias(lunes, -7);
-  asegurarPlan(ant);
-  for (let i = 0; i < 40 && !E.planes[ant]; i++) await new Promise(r => setTimeout(r, 100));
-  const prev = E.planes[ant];
-  const filasPrev = Object.fromEntries(Object.entries((prev && prev.filas) || {}).filter(([, d]) => Object.values(d || {}).some(v => M.num(v) > 0)));
-  if (!Object.keys(filasPrev).length) { avisar('La semana anterior no tiene nada planificado.', true); return; }
+// v0.12.0: copiar desde cualquier semana (las 12 anteriores, o las siguientes) y deshacer la última copia.
+// Antes de copiar se guarda cómo estaba la semana (antesDeCopiar.filas, como texto para que se reemplace entero).
+const filasConNumeros = f => Object.fromEntries(Object.entries(f || {}).filter(([, d]) => Object.values(d || {}).some(v => M.num(v) > 0)));
+const totalPlan = f => Object.values(f || {}).reduce((s, d) => s + Object.values(d || {}).reduce((a, v) => a + M.num(v), 0), 0);
+async function leerPlan(lunes) {
+  if (E.planes[lunes]) return E.planes[lunes];
+  try { const sn = await getDoc(doc(db, 'planes', `${E.area}_${lunes}`)); return sn.exists() ? sn.data() : { filas: {} }; } catch (e) { return { filas: {}, error: true }; }
+}
+async function dialogoCopiar() {
+  const lunes = E.lunesPlan, d = $('dialogo');
+  const semanas = [...Array.from({ length: 12 }, (_, i) => M.sumarDias(lunes, -7 * (i + 1))), M.sumarDias(lunes, 7), M.sumarDias(lunes, 14)];
+  d.innerHTML = `<form method="dialog" class="dlg"><h2>Copiar de otra semana</h2><p class="ayuda">Buscando los planes…</p></form>`; d.showModal();
+  const planes = await Promise.all(semanas.map(leerPlan));
+  const opciones = semanas.map((l, i) => ({ l, f: filasConNumeros(planes[i].filas), futura: l > lunes })).filter(o => Object.keys(o.f).length);
+  const actual = E.planes[lunes] || {}, tiene = Object.keys(filasConNumeros(actual.filas)).length > 0;
+  d.innerHTML = `<form method="dialog" class="dlg" id="f-copiar">
+      <h2>Copiar a la semana ${esc(M.etiquetaSemana(lunes))}</h2>
+      ${opciones.length ? `<p class="ayuda">Elige de qué semana traer los números. ${tiene ? '<b>Reemplaza lo que tiene esta semana</b>; si te equivocas, "Deshacer la copia" la deja como estaba.' : 'Después puedes ajustar cada número.'}</p>
+      <div class="lista-semanas" role="radiogroup">${opciones.map((o, i) => `<label class="opcion-semana"><input type="radio" name="sem" value="${esc(o.l)}" ${i === 0 ? 'checked' : ''}>
+          <span><span><b>${esc(M.etiquetaSemana(o.l))}</b>${o.l === M.sumarDias(lunes, -7) ? ' · la anterior' : o.l === M.sumarDias(lunes, -28) ? ' · hace 4 semanas' : o.futura ? ' · siguiente' : ''}</span><small>${Object.keys(o.f).length} ${Object.keys(o.f).length === 1 ? 'receta' : 'recetas'} · ${M.miles(totalPlan(o.f))} unidades</small></span></label>`).join('')}</div>`
+      : `<p class="ayuda">Las 12 semanas anteriores no tienen nada planificado.</p>`}
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button>${opciones.length ? '<button type="button" class="btn btn-fuerte" data-guardar="1">Copiar</button>' : ''}</div>
+    </form>`;
+  d.onsubmit = ev => ev.preventDefault();
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (b.dataset.guardar) {
+      const el = d.querySelector('input[name="sem"]:checked'); if (!el) return;
+      const o = opciones.find(x => x.l === el.value); d.close();
+      copiarSemana(lunes, o.l, o.f, planes[semanas.indexOf(o.l)]);
+    }
+  };
+}
+function copiarSemana(lunes, desde, filasPrev, prev) {
   const actual = E.planes[lunes] || {};
-  const tiene = Object.values(actual.filas || {}).some(d => Object.values(d || {}).some(v => M.num(v) > 0));
-  if (tiene && !confirm('Esta semana ya tiene números. ¿Reemplazarlos por los de la semana anterior?')) return;
-  // Celda por celda: lo de esta semana que no estaba en la anterior queda en 0
+  // Celda por celda: lo de esta semana que no estaba en la otra queda en 0
   const filas = {};
   new Set([...Object.keys(actual.filas || {}), ...Object.keys(filasPrev)]).forEach(id => {
     filas[id] = {}; for (let i = 0; i < 7; i++) filas[id]['d' + i] = M.num(((filasPrev[id] || {})['d' + i]) || 0);
   });
-  const nombres = {}; Object.keys(filas).forEach(id => { const r = E.recetas.find(x => x.id === id); nombres[id] = r ? r.nombre : ((prev.nombres || {})[id] || id); });
-  guardarSinEsperar(setDoc(doc(db, 'planes', `${E.area}_${lunes}`), { area: E.area, lunes, filas, nombres, planillaPendiente: true, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }));
-  avisar('Semana anterior copiada. Revisa y ajusta lo que corresponda.'); programarPlanilla();
+  const nombres = {}; Object.keys(filas).forEach(id => { const r = E.recetas.find(x => x.id === id); nombres[id] = r ? r.nombre : (((prev || {}).nombres || {})[id] || (actual.nombres || {})[id] || id); });
+  const antes = { filas: JSON.stringify(filasConNumeros(actual.filas)), desde, por: quien(), en: ahoraIso() };
+  guardarSinEsperar(setDoc(doc(db, 'planes', `${E.area}_${lunes}`), { area: E.area, lunes, filas, nombres, antesDeCopiar: antes, planillaPendiente: true, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }));
+  avisar(`Copiada la semana del ${M.etiquetaSemana(desde)}. Revisa y ajusta lo que corresponda.`); programarPlanilla();
+}
+function deshacerCopia() {
+  const lunes = E.lunesPlan, actual = E.planes[lunes] || {}, a = actual.antesDeCopiar;
+  if (!a || !a.filas) return;
+  if (!confirm('¿Dejar la semana como estaba antes de copiar? Se pierden también los números que cambiaron después de la copia.')) return;
+  let antes = {}; try { antes = JSON.parse(a.filas) || {}; } catch (e) { avisar('No se pudo leer cómo estaba la semana.', true); return; }
+  const filas = {};
+  new Set([...Object.keys(actual.filas || {}), ...Object.keys(antes)]).forEach(id => {
+    filas[id] = {}; for (let i = 0; i < 7; i++) filas[id]['d' + i] = M.num(((antes[id] || {})['d' + i]) || 0);
+  });
+  guardarSinEsperar(setDoc(doc(db, 'planes', `${E.area}_${lunes}`), { area: E.area, lunes, filas, antesDeCopiar: null, planillaPendiente: true, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }), 'La semana quedó como antes de copiar.');
+  programarPlanilla();
 }
 
 // La planilla (copia para Looker y la app antigua): el Apps Script lee los planes cambiados y los escribe
@@ -1181,9 +1268,14 @@ $('principal').addEventListener('click', async ev => {
   if (ds.anotar) { dialogoAnotar(ds.anotar); return; }
   if (ds.todoHecho) {
     const ks = ds.todoHecho.split(',').filter(Boolean);
-    if (!confirm(`¿Marcar como hecho todo lo que falta hoy (${ks.length})? Las recetas se descuentan de la bodega. Se puede deshacer una por una.`)) return;
-    const h = {}, en = ahoraIso(); ks.forEach(k => { h[k] = { por: quien(), en }; });
-    guardarSinEsperar(guardarDia(E.fecha, { hechos: h }), 'Todo marcado como hecho.');
+    if (!confirm(`¿Marcar como hecho todo lo que falta hoy (${ks.length})? ${E.area === 'BOL' ? 'Las masas pasan al congelador (Bitácora) y se descuentan de la bodega.' : 'Las recetas se descuentan de la bodega.'} Se puede deshacer una por una.`)) return;
+    const h = {}, en = ahoraIso(), bit = {}; ks.forEach(k => { h[k] = { por: quien(), en }; });
+    // Bollería: cada masa terminada se anota en la bitácora, igual que con "Marcar terminada"
+    if (E.area === 'BOL') ks.filter(k => k.startsWith('masa_')).forEach(k => {
+      const rid = k.slice(5), T = (E.tarjetas || {})[k];
+      bit['hoy_' + rid] = { tipo: 'elaboro', masa: rid, n: T ? T.total : 0, origen: 'hoy', por: quien(), en, anulado: null };
+    });
+    guardarSinEsperar(guardarDia(E.fecha, Object.keys(bit).length ? { hechos: h, bitacora: bit } : { hechos: h }), 'Todo marcado como hecho.');
     return;
   }
   if (ds.periodo) { E[ds.periodoDe] = ds.periodo; pintar(); return; }
@@ -1214,7 +1306,8 @@ $('principal').addEventListener('click', async ev => {
     const el = $(`c-${id}-0`); if (el) el.focus();
     return;
   }
-  if (ds.accion === 'copiar') { b.disabled = true; await copiarSemanaAnterior(); b.disabled = false; return; }
+  if (ds.accion === 'copiar') { dialogoCopiar(); return; }
+  if (ds.accion === 'deshacer-copia') { deshacerCopia(); return; }
   if (ds.receta) { E.recetaVista = ds.receta; E.cantidadVista = null; pintar(); return; }
   if (ds.volver) { E.recetaVista = null; pintar(); return; }
 });

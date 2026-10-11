@@ -1,6 +1,6 @@
-# fën · Cocina · v0.11.0
+# fën · Cocina · v0.12.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.11.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,34 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.12.0 · Bollería descuenta lo congelado · marcar todo · copiar de cualquier semana
+**Bollería — se piden menos masas si ya sobran congeladas** (decisión de Emmanuel, 11-oct):
+- En **Metas**, **Masas** y **Hoy**, "necesarias" ya descuenta las masas que sobran en el congelador. Ejemplo: "63 necesarias (70 de la meta − 7 congeladas)".
+- Un solo aviso, arriba, explica por qué se piden menos: "Se piden menos masas porque ya hay congeladas. Masa Base: 70 de la meta − 7 congeladas = 63". En **"Cómo se calcula"**: en el congelador − ya elaboradas para esta meta − por descongelar para la meta en curso = de más.
+- Sale de la **Bitácora**: inventario, elaboré, descongelé y merma congelada. El número no cambia en la semana mientras se anote lo que pasa.
+- Se descongela la víspera: lo descongelado del **domingo antes al sábado** cuenta para la meta en curso; lo del domingo siguiente ya es para la próxima.
+- El inventario del congelador ahora recuerda: **antes de contar, marquen las masas de hoy** (lo que se anota después se suma encima).
+- **Sin inventario del congelador** no descuenta nada y lo avisa. **Antes de la semana de elaboración** tampoco (se pide la meta completa).
+- Si lo congelado alcanza, la masa dice "Cubierta con lo congelado".
+- Archivo nuevo: `congelado.js` (el cálculo). Prueba: `pruebas/cocina/congelado.test.mjs`.
+
+**Bollería — Hoy:** arriba, el aviso **"Marcar terminada descuenta la bodega"** y el botón **"Marcar todo como hecho"** (masas, empastes y elaboraciones previas). Cada masa marcada así pasa a la Bitácora igual que con "Marcar terminada". Se puede deshacer una por una.
+
+**Panadería — Planificación:**
+- **"Copiar de otra semana"**: muestra las 12 semanas anteriores (y las 2 siguientes) que tienen plan, con cuántas recetas y unidades. Parte marcada la anterior.
+- **"Deshacer la copia"**: la semana vuelve a como estaba antes de copiar (se guarda en el mismo plan, `antesDeCopiar`). Se ofrece durante 3 días después de copiar. Lo que se deshace queda en 0, nada se borra. La planilla se actualiza sola.
+
+**Archivos:** `app.js`, `congelado.js` (nuevo), `editor.js`, `config.js`, `firebase.js`, `index.html`, `estilos.css`, `README.md`. Los cálculos compartidos con Sistema Fën (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`) no cambian. **Reglas, script y Sistema Fën sin cambios.**
+
+**Revisar:**
+- [ ] Bollería: hacer el inventario del congelador en la Bitácora. En Masas de la próxima meta aparece el aviso con el descuento, y "Cómo se calcula" calza con lo que hay.
+- [ ] Bollería, Hoy: "Marcar todo como hecho" → en la Bitácora aparece "Elaboré N masas… (desde Hoy)".
+- [ ] Panadería: "Copiar de otra semana" en una semana vacía y luego "Deshacer la copia".
+
+## Novedades v0.11.1 · Bollería: cuándo se elaboran las masas
+- En **Metas** y **Masas**, justo debajo de "Meta del lun 19 al dom 25 oct", dice **"Las masas se elaboran del Lun 12 al Vie 16 (semana anterior)"**. Así queda claro que lo que se elabora esta semana es para la meta de la próxima.
+- Archivos: `app.js`, `editor.js`, `config.js`, `firebase.js`, `index.html`, `estilos.css` y `README.md`. Los cálculos (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`) no cambian: siguen en v0.11.0, igual que la copia de Sistema Fën. Reglas y script sin cambios.
 
 ## Novedades v0.11.0 · el conteo vale como cierre del día
 Regla de Fën: la bodega se cuenta **al terminar la producción del día**. En Cafetería, después de cerrar la caja.

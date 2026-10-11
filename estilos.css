@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.11.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.12.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -79,6 +79,9 @@ main { padding: 20px 24px 32px; display: flex; flex-direction: column; gap: 16px
 /* Navegación de día / semana */
 .nav-fecha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .nav-fecha h2 { margin: 0; font-size: 19px; font-weight: 600; min-width: 0; }
+.titulo-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.elab-semana { font-size: 14px; color: var(--suave); }
+.elab-semana b { color: var(--texto, inherit); font-weight: 600; }
 .btn-flecha { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--borde); background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 
 /* Avisos */
@@ -342,3 +345,16 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
 .aviso-hecho { flex-wrap: wrap; align-items: center; }
 .aviso-hecho > span { flex: 1 1 260px; }
 .chip-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 600; font-size: 14px; }
+
+/* v0.12.0 · Bollería: masas que ya hay congeladas (se piden menos) · Panadería: copiar de otra semana */
+.aviso-congelado { align-items: flex-start; }
+.aviso-congelado > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.aviso-congelado .desp summary { font-size: 14px; }
+.aviso-congelado .calculo { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 4px; color: var(--texto); }
+.aviso-congelado .calculo b { font-weight: 600; }
+.ayuda.congeladas { display: inline-flex; align-items: center; gap: 6px; color: var(--texto); }
+.lista-semanas { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; margin: 8px 0; }
+.opcion-semana { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--linea); border-radius: 10px; cursor: pointer; }
+.opcion-semana:has(input:checked) { border-color: var(--acento, var(--texto)); background: var(--suave-fondo); }
+.opcion-semana > span { display: flex; flex-direction: column; gap: 2px; }
+.opcion-semana small { color: var(--suave); }
