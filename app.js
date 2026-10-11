@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.7.0
+//  fën · Cocina — la app de las jefas  v0.8.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,8 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.8.0: Cafetería crea y edita sus recetas aquí (como las otras áreas) y su consumo entra a la bodega
+//  (lo vendido en la caja + el café de la bitácora de turno; lo calcula Sistema Fën).
 //  v0.7.0 (P5): Bodega en las cuatro áreas: "Llegó mercadería" y "Conteo de bodega" de las materias primas
 //  críticas (bodega común: lo que cuenta un área vale para todas). El stock y las alertas los calcula Sistema Fën
 //  con lo hecho en Cocina; aquí se ve lo que está bajo el mínimo.
@@ -33,12 +35,12 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.7.0';
-import * as M from './modelo.js?v=0.7.0';
-import * as B from './bolleria.js?v=0.7.0';
-import * as ED from './editor.js?v=0.7.0';
-import * as R from './registros.js?v=0.7.0';
-import * as K from './consumo.js?v=0.7.0';
+} from './firebase.js?v=0.8.0';
+import * as M from './modelo.js?v=0.8.0';
+import * as B from './bolleria.js?v=0.8.0';
+import * as ED from './editor.js?v=0.8.0';
+import * as R from './registros.js?v=0.8.0';
+import * as K from './consumo.js?v=0.8.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -1589,7 +1591,7 @@ function vistaBodega() {
   const calculado = cr.map(est).filter(Boolean).map(e => e.en).sort().pop();
   return `
     <div class="cab-seccion">
-      <p class="ayuda">Bodega común: lo que entra y lo que cuentan aquí vale para todas las áreas. El consumo se descuenta solo con lo que marcan como hecho.</p>
+      <p class="ayuda">Bodega común: lo que entra y lo que cuentan aquí vale para todas las áreas. El consumo se descuenta solo: lo que marcan como hecho${E.area === 'CAF' ? ', lo vendido en la caja y el café de la bitácora' : ''}.</p>
       <div class="botones-bit"><button type="button" class="btn btn-fuerte" data-bodega="llegada">${ic('bodega')}Llegó mercadería</button><button type="button" class="btn-sec" data-bodega="conteo">${ic('pasos')}Conteo de bodega</button></div>
     </div>
     ${bajos.length ? `<div class="nota ojo">${ic('alerta')}<span>${bajos.map(m => { const e = est(m); return `<b>${esc(m.nombre)}</b> ${e.bajoAhora ? 'está bajo el mínimo' : 'queda bajo el mínimo el ' + esc(M.fechaLarga(e.bajoDesde).toLowerCase())}`; }).join(' · ')}. Avísale a Administración si no viene un pedido.</span></div>` : ''}

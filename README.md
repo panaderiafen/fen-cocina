@@ -1,6 +1,6 @@
-# fën · Cocina · v0.7.0
+# fën · Cocina · v0.8.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.7.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.8.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,24 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.8.0 · Cafetería crea sus recetas; su consumo entra a la bodega
+**Qué cambia:**
+- **GitHub (fen-cocina):** `editor.js`, `consumo.js`, `app.js`, `README.md` y los demás `.js` (solo versión).
+- **Reglas:** no cambian (siguen las v1.5.0). **Script:** no cambia (sigue el v2.8.0).
+- **Sistema Fën v0.38.0.**
+
+**Qué cambia en Cocina y en la bodega:**
+- **Cafetería crea y edita sus recetas en Cocina**, como las otras áreas. Cada cambio es una propuesta que apruebas en Sistema Fën.
+- **Consumo de Cafetería en la bodega** (lo calcula Sistema Fën):
+  - lo **vendido en la caja** de productos vinculados a una receta de Cafetería, bajado por su receta hasta las materias primas (café, leche, vasos…);
+  - los gramos de café de la **bitácora de turno** (calibraciones, café botado, pruebas), descontados de la materia prima que elijas en Sistema Fën.
+- Lo que se vende en la cafetería pero es de otra área (croissant, pan) no descuenta aquí: lo cuenta su área al hacerlo.
+- Un consejo para Cafetería: el conteo de bodega cuadra mejor si se hace **antes de abrir o después de cerrar**. Las ventas de una caja ya cerrada cuentan al final de su día.
+
+**Lista de verificación v0.8.0**
+- [ ] Abajo dice **Cocina v0.8.0**.
+- [ ] En Cafetería → Recetas aparece **Nueva receta**.
 
 ## Novedades v0.7.0 · Bodega: llegadas, conteo y stock de las materias primas críticas (P5)
 **Qué cambia:**
