@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.1.2
+//  fën · Cocina — la app de las jefas  v0.2.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -13,27 +13,37 @@
 //  v0.1.1: las elaboraciones previas (masa ciabatta, masa madre…) tienen tarjeta completa, con
 //  ingredientes, tandas (por unidades o por kg, y "dividir siempre así") y ajuste de harina/agua.
 //  v0.1.2: el ajuste muestra el peso por pieza y sugiere la harina base que lo mantiene.
+//  v0.2.0 (P2a): Bollería entra a la app nueva: Metas de la semana → masas base y empastes que
+//  se elaboran la semana anterior (Masas), con tandas según la amasadora, y Hoy con las masas del día.
 // ═══════════════════════════════════════════════
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.1.2';
-import * as M from './modelo.js?v=0.1.2';
+} from './firebase.js?v=0.2.0';
+import * as M from './modelo.js?v=0.2.0';
+import * as B from './bolleria.js?v=0.2.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
   PAN: { nombre: 'Panadería', icono: 'pan', nueva: true },
-  BOL: { nombre: 'Bollería', icono: 'croissant', nueva: false },
+  BOL: { nombre: 'Bollería', icono: 'croissant', nueva: true },
   PAS: { nombre: 'Pastelería', icono: 'torta', nueva: false },
   CAF: { nombre: 'Cafetería', icono: 'cafe', nueva: false }
 };
 const ESTADOS = { consolidada: 'Aprobada', en_prueba: 'En prueba', borrador: 'Borrador', 'pendiente_aprobación': 'En revisión', pendiente_aprobacion: 'En revisión' };
 const K_PERSONA = 'fen_cocina_persona', K_AREA = 'fen_cocina_area';
+// Secciones de cada área (las que no están, solo Recetas)
+const SECCIONES = {
+  PAN: [['hoy', 'Hoy', 'hoy'], ['plan', 'Planificación', 'plan'], ['recetas', 'Recetas', 'libro']],
+  BOL: [['hoy', 'Hoy', 'hoy'], ['metas', 'Metas', 'meta'], ['masas', 'Masas', 'capas'], ['recetas', 'Recetas', 'libro']]
+};
+const seccionesDe = a => SECCIONES[a] || [['recetas', 'Recetas', 'libro']];
 
 const E = {
   usuario: null, area: null, persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
+  metas: {}, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7),
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -60,7 +70,8 @@ const IC = {
   croissant: '<path d="M3 14c2-5 5-8 9-8s7 3 9 8"/><path d="M3 14c3 2 6 3 9 3s6-1 9-3"/><path d="M8 8.5l1.5 7M12 6v11M16 8.5l-1.5 7"/>',
   torta: '<path d="M4 20h16M5 20v-7h14v7"/><path d="M5 13c2 1.5 4.5 1.5 7 0s5-1.5 7 0"/><path d="M12 9V6"/>',
   cafe: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M11 3v3"/>',
-  pasos: '<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>'
+  pasos: '<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>',
+  meta: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 
@@ -197,7 +208,7 @@ function escuchar(clave, ref, cb) {
     if (/permission-denied/.test(err.code || '')) avisar('Este equipo perdió el permiso para leer. Pide a Administración que revise la cuenta del área.', true);
   });
 }
-function pararEscuchas() { Object.values(E.escuchas).forEach(f => { try { f(); } catch (e) {} }); E.escuchas = {}; E.planes = {}; E.dias = {}; E.cargado = {}; }
+function pararEscuchas() { Object.values(E.escuchas).forEach(f => { try { f(); } catch (e) {} }); E.escuchas = {}; E.planes = {}; E.dias = {}; E.metas = {}; E.cargado = {}; }
 function iniciarEscuchas() {
   pararEscuchas();
   escuchar('recetas', collection(db, 'recetas'), sn => { E.recetas = sn.docs.map(d => ({ id: d.id, ...d.data() })); E.cargado.recetas = true; repintar(); });
@@ -214,6 +225,12 @@ function iniciarEscuchas() {
 function asegurarPlan(lunes) {
   escuchar('plan_' + lunes, doc(db, 'planes', `${E.area}_${lunes}`), sn => { E.planes[lunes] = sn.exists() ? sn.data() : { area: E.area, lunes, filas: {} }; repintar(); revisarPlanilla(); });
   return E.planes[lunes];
+}
+// Bollería: metas/{AREA}_{lunes de la semana de la meta} = { productos: {receta: piezas}, elaboracion: {masa: {d0..d4}} }
+// (la elaboración es de la semana ANTERIOR: d0 = el lunes 7 días antes)
+function asegurarMetas(lunes) {
+  escuchar('metas_' + lunes, doc(db, 'metas', `${E.area}_${lunes}`), sn => { E.metas[lunes] = sn.exists() ? sn.data() : { area: E.area, lunes, productos: {}, elaboracion: {} }; repintar(); });
+  return E.metas[lunes];
 }
 function asegurarDia(fecha) {
   escuchar('dia_' + fecha, doc(db, 'dias', `${E.area}_${fecha}`), sn => { E.dias[fecha] = sn.exists() ? sn.data() : {}; repintar(); });
@@ -239,8 +256,7 @@ const ctx = () => ({ recetas: E.recetas, mps: E.mps, config: E.config });
 // ═══════════════ La app ═══════════════
 function abrirApp() {
   $('btn-persona').textContent = `${E.persona.nombre} · cambiar`;
-  const nueva = AREAS[E.area].nueva;
-  const items = nueva ? [['hoy', 'Hoy', 'hoy'], ['plan', 'Planificación', 'plan'], ['recetas', 'Recetas', 'libro']] : [['recetas', 'Recetas', 'libro']];
+  const items = seccionesDe(E.area);
   $('secciones').innerHTML = items.map(([id, t, i]) => `<a href="#${id}" data-vista="${id}">${ic(i)}${t}</a>`).join('');
   if (!items.some(x => '#' + x[0] === location.hash)) history.replaceState(null, '', '#' + items[0][0]);
   mostrar('app'); pintarRed(); repintar();
@@ -252,6 +268,7 @@ function revisarCambioDeDia() {
   const h = M.hoyTxt(); if (h === E.hoyVisto) return;
   if (E.fecha === E.hoyVisto) E.fecha = h;
   if (E.lunesPlan === M.lunesDe(E.hoyVisto)) E.lunesPlan = M.lunesDe(h);
+  if (E.lunesMeta === M.sumarDias(M.lunesDe(E.hoyVisto), 7)) E.lunesMeta = M.sumarDias(M.lunesDe(h), 7);
   E.hoyVisto = h; repintar();
 }
 setInterval(revisarCambioDeDia, 60000);
@@ -274,12 +291,14 @@ function pintar() {
   const act = document.activeElement, guardado = act && act.id && $('principal').contains(act) && /INPUT|TEXTAREA/.test(act.tagName)
     ? { id: act.id, valor: act.value, ini: act.selectionStart, fin: act.selectionEnd } : null;
   const main = $('principal');
-  if (!AREAS[E.area].nueva && v !== 'recetas') { location.hash = '#recetas'; return; }
-  $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas' : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
-  main.innerHTML = v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : vistaHoy();
+  if (!seccionesDe(E.area).some(x => x[0] === v)) { location.hash = '#' + seccionesDe(E.area)[0][0]; return; }
+  $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas'
+    : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
+    : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
+  main.innerHTML = v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : E.area === 'BOL' ? vistaHoyBol() : vistaHoy();
   if (guardado && $(guardado.id)) {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
-    if (el.dataset.celda) el.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(el.value));
+    if (el.dataset.celda || el.dataset.num) el.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(el.value));
     try { el.setSelectionRange(guardado.ini, guardado.fin); } catch (e) {}
   }
 }
@@ -355,37 +374,38 @@ const filaIng = (x, conPct) => `<div class="fila"><span>${esc(x.nombre)}</span><
 
 // Tandas que valen hoy: las guardadas del día; si no hay, las "de siempre" de esa receta; si no, una sola.
 // En gramos (masa madre…), si el total cambió se reparten igual que antes; en unidades se avisa.
-function tandasHoy(clave, total, rid, enGramos, dia) {
+function tandasHoy(clave, total, rid, enGramos, dia, defecto) {
   const guardadas = ((dia.tandas || {})[clave]) || null;
   const cuadran = guardadas && Math.abs(M.sumaTandas(guardadas) - total) < (enGramos ? 1 : 0.001);
   if (cuadran) return { tandas: M.tandasDe(guardadas, total) };
   if (guardadas && enGramos) return { tandas: M.reescalar(guardadas, total) };
   if (guardadas) return { tandas: [total], descuadre: guardadas };
   const usual = M.tandasUsual(rid && (E.ajustes[rid] || {}).tandaUsual, total);
-  return { tandas: usual || [total], usual: !!usual };
+  if (usual) return { tandas: usual, usual: true };
+  return { tandas: defecto && defecto.length > 1 ? defecto : [total], defecto: !!(defecto && defecto.length > 1) };
 }
 
 // Tarjeta común de recetas y elaboraciones previas
 function tarjeta(o) {
   const enG = o.unidad === 'g', h = o.hecho(o.claveHecho);
-  const fmt = x => enG ? M.gramos(x) : M.unidades(x);
-  const T = tandasHoy(o.clave, o.total, o.rid, enG, o.dia);
-  E.tarjetas[o.clave] = { nombre: o.nombre, total: o.total, unidad: o.unidad, rid: o.rid, escalar: o.escalar, tandas: T.tandas, aj: o.aj };
+  const un = o.un || 'un', fmt = x => enG ? M.gramos(x) : M.unidades(x);
+  const T = tandasHoy(o.clave, o.total, o.rid, enG, o.dia, o.defecto);
+  E.tarjetas[o.clave] = { nombre: o.nombre, total: o.total, unidad: o.unidad, un, rid: o.rid, escalar: o.escalar, tandas: T.tandas, aj: o.aj, porTanda: o.porTanda };
   const columnas = T.tandas.map((t, i) => {
     const e = o.escalar(t);
     return `<div class="tanda">
-        ${T.tandas.length > 1 ? `<span class="rotulo">Tanda ${i + 1} · ${enG ? M.gramos(t) : M.unidades(t) + ' un'}</span>` : ''}
+        ${T.tandas.length > 1 ? `<span class="rotulo">Tanda ${i + 1} · ${enG ? M.gramos(t) : M.unidades(t) + ' ' + un}</span>` : ''}
         ${e.filas.map(x => filaIng(x, o.conPct)).join('')}
         <div class="fila total"><span>Total masa</span><span>${M.gramos(e.total)}</span></div>
       </div>`;
   }).join('');
   const pasos = o.receta ? (o.receta.pasos || []).filter(Boolean) : [], proc = o.receta && o.receta.procedimiento;
-  return `<article class="receta ${o.elab ? 'elab' : ''} ${h ? 'terminada' : ''}" ${o.elab ? 'data-elab-card' : 'data-receta-card'}="${esc(o.idCard)}">
+  return `<article class="receta ${o.elab ? 'elab' : ''} ${h ? 'terminada' : ''}" ${o.attr || (o.elab ? 'data-elab-card' : 'data-receta-card')}="${esc(o.idCard)}">
       <div class="receta-cab">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
-          ${o.elab ? '<span class="rotulo">Elaboración previa</span>' : ''}
+          ${o.rotulo || o.elab ? `<span class="rotulo">${esc(o.rotulo || 'Elaboración previa')}</span>` : ''}
           <b>${esc(o.nombre)}</b>
-          <span class="det">${o.detalle}${T.tandas.length > 1 ? ` · ${T.tandas.length} tandas (${T.tandas.map(fmt).join(' + ')})${T.usual ? ' · como siempre' : ''}` : ''}${h ? ` · terminada por ${esc(h.por)} a las ${esc(horaDe(h.en))}` : ''}</span>
+          <span class="det">${o.detalle}${T.tandas.length > 1 ? ` · ${T.tandas.length} tandas (${T.tandas.map(fmt).join(' + ')})${T.usual ? ' · como siempre' : T.defecto ? ' · según la amasadora' : ''}` : ''}${h ? ` · terminada por ${esc(h.por)} a las ${esc(horaDe(h.en))}` : ''}</span>
           ${o.para ? `<span class="det">${o.para}</span>` : ''}
         </div>
         ${o.aj && o.receta ? `<span class="chip">Ajuste: ${esc(textoAjuste(o.receta, o.aj))}</span>` : ''}
@@ -420,6 +440,184 @@ function tarjetaElab(s, aj, dia, hecho, c) {
     claveHecho: 'sub_' + s.id, aj, escalar: t => M.escalarSub(s, t, aj, c), conPct: E.area === 'PAN',
     detalle: s.porUnidades ? `${M.unidades(s.unidades)} un · ${M.gramos(s.gramos)}` : M.gramos(s.gramos),
     para: `Para ${esc(para.join(', '))}`, ajustable: E.area === 'PAN' && !!(P && P.ajustable) });
+}
+
+
+// ═══════════════ Bollería ═══════════════
+// Semana de la meta (lunes) → la elaboración de masas es la semana anterior (lun–vie)
+const semanaElab = lunesMeta => M.sumarDias(lunesMeta, -7);
+const recetaPorId = id => E.recetas.find(r => r.id === id);
+function navMeta() {
+  const l = E.lunesMeta;
+  return `<div class="nav-fecha">
+      <button type="button" class="btn-flecha" data-meta-sem="-7" aria-label="Semana anterior">${ic('izq')}</button>
+      <h2>Meta del ${esc(M.etiquetaSemana(l))}</h2>
+      <button type="button" class="btn-flecha" data-meta-sem="7" aria-label="Semana siguiente">${ic('der')}</button>
+      ${l !== M.sumarDias(M.lunesDe(M.hoyTxt()), 7) ? '<button type="button" class="btn-sec" data-meta-sem="prox">La próxima</button>' : ''}
+    </div>`;
+}
+// Un número guardado por celda (meta o masas de un día); lo mal escrito queda marcado
+function campoNum(id, tipo, rid, d, valor, etiqueta) {
+  const mala = E.celdasMalas[E.lunesMeta + '|' + id];
+  return `<label class="sr" for="${esc(id)}">${esc(etiqueta)}</label><input id="${esc(id)}" inputmode="numeric" data-num="${tipo}" data-rid="${esc(rid)}"${d !== null ? ` data-d="${d}"` : ''} value="${mala !== undefined ? esc(mala) : (M.num(valor) || '')}" class="${mala !== undefined ? 'error-celda' : ''}" autocomplete="off">`;
+}
+function valorGuardado(t) {
+  const m = E.metas[E.lunesMeta] || {};
+  return t.dataset.num === 'meta' ? M.num((m.productos || {})[t.dataset.rid]) : M.num(((m.elaboracion || {})[t.dataset.rid] || {})['d' + t.dataset.d]);
+}
+function guardarNumero(t) {
+  const lunes = E.lunesMeta, key = lunes + '|' + t.id, texto = t.value, rid = t.dataset.rid;
+  if (!/^\s*\d*\s*$/.test(texto) || Math.round(M.num(texto)) > 99999) { E.celdasMalas[key] = texto; t.classList.add('error-celda'); avisar(t.dataset.num === 'meta' ? 'Escribe un número entero (piezas).' : 'Escribe un número entero (masas).', true); return; }
+  delete E.celdasMalas[key]; t.classList.remove('error-celda'); t.classList.add('guardando');
+  const n = Math.round(M.num(texto)), r = recetaPorId(rid);
+  const datos = { area: E.area, lunes, nombres: { [rid]: r ? r.nombre : rid }, actualizado: { por: quien(), en: serverTimestamp() } };
+  if (t.dataset.num === 'meta') datos.productos = { [rid]: n }; else datos.elaboracion = { [rid]: { ['d' + t.dataset.d]: n } };
+  const id = t.id;
+  setDoc(doc(db, 'metas', `${E.area}_${lunes}`), datos, { merge: true })
+    .then(() => { const el = $(id); if (el) el.classList.remove('guardando'); })
+    .catch(e => { const el = $(id); if (el) { el.classList.remove('guardando'); el.classList.add('error-celda'); } avisar('No se guardó: ' + mensajeError(e), true); });
+}
+
+function vistaMetas() {
+  if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
+  const m = asegurarMetas(E.lunesMeta);
+  if (!m) return navMeta() + '<div class="vacio">Cargando la meta…</div>';
+  const c = ctx(), metas = m.productos || {};
+  const prods = B.productos(E.recetas, c).filter(p => p.receta.estado === 'consolidada' || M.num(metas[p.receta.id]) > 0);
+  const nec = B.necesidades(metas, c, E.config);
+  const sinMasa = E.recetas.filter(r => r.area === E.area && r.tipo !== 'sub_receta' && r.estado === 'consolidada' && !prods.some(p => p.receta.id === r.id));
+  const enPrueba = B.productos(E.recetas, c).filter(p => p.receta.estado !== 'consolidada' && !(M.num(metas[p.receta.id]) > 0));
+  const el = semanaElab(E.lunesMeta);
+  const filas = prods.map(p => {
+    const n = M.num(metas[p.receta.id]);
+    return `<tr><td class="nombre">${esc(p.receta.nombre)}${p.receta.estado !== 'consolidada' ? ` <span class="estado">${esc(ESTADOS[p.receta.estado] || p.receta.estado)}</span>` : ''}<small>${esc(p.masa.nombre)} · 1 masa rinde ${M.unidades(1 / p.masas)}</small></td>
+      <td>${campoNum('m-' + p.receta.id, 'meta', p.receta.id, null, n, 'Meta de ' + p.receta.nombre)}</td>
+      <td class="num">${n ? M.unidades(n * p.masas) : '—'}</td></tr>`;
+  }).join('');
+  const resumen = nec.masas.map(x => `<div class="caja">
+      <span class="rotulo">${esc(x.masa.nombre)}</span>
+      <span class="grande num">${M.miles(x.masas)} masas</span>
+      <span class="ayuda">${M.gramos(x.kg * 1000)} de masa${x.merma ? ` · incluye ${M.unidades(x.merma)} % de merma de laminado` : ''}${Math.abs(x.masas - x.exactas) > 0.001 ? ` · exactas ${M.unidades(x.exactas)}, se redondea a masas enteras` : ''}</span>
+      ${x.empastes ? `<div class="fila sub"><span>${esc(x.empaste ? x.empaste.nombre : 'Empaste')}</span><span>${M.miles(x.empastes)} de ${M.gramos(x.gPorEmpaste)} · ${M.gramos(x.empastes * x.gPorEmpaste)}</span></div>` : ''}
+      <div class="lista-mini">${x.productos.map(p => `<div class="fila sub"><span>${esc(p.receta.nombre)} · ${M.miles(p.piezas)}</span><span>${M.unidades(p.masas)} masas</span></div>`).join('')}</div>
+    </div>`).join('');
+  return navMeta() + `
+    <p class="ayuda">Las piezas que quieren tener esta semana. De aquí salen las masas base y los empastes que se elaboran y congelan <b>del ${esc(M.fechaCorta(el))} al ${esc(M.fechaCorta(M.sumarDias(el, 4)))}</b> (semana anterior). Cada número se guarda solo y la dupla lo ve al instante.</p>
+    ${nec.avisos.map(a => `<div class="nota ojo">${ic('alerta')}<span>${esc(a)}</span></div>`).join('')}
+    <div class="tabla-caja"><table class="plan metas">
+      <thead><tr><th scope="col">Producto</th><th scope="col">Meta (piezas)</th><th scope="col">Masas</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="3" style="text-align:left;color:var(--suave);padding:18px 10px">No hay productos aprobados que lleven una masa base.</td></tr>'}</tbody>
+    </table></div>
+    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2><section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir las masas en los días →</a></p>` : ''}
+    ${enPrueba.length ? `<p class="ayuda">En prueba (no se ofrecen para metas hasta que se aprueben): ${esc(enPrueba.map(p => p.receta.nombre).join(', '))}.</p>` : ''}
+    ${sinMasa.length ? `<p class="ayuda">No entran a las metas porque no llevan una masa base: ${esc(sinMasa.map(r => r.nombre).join(', '))}.</p>` : ''}`;
+}
+
+function vistaMasas() {
+  if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
+  const m = asegurarMetas(E.lunesMeta);
+  if (!m) return navMeta() + '<div class="vacio">Cargando…</div>';
+  const c = ctx(), nec = B.necesidades(m.productos || {}, c, E.config), elab = m.elaboracion || {};
+  const el = semanaElab(E.lunesMeta), hoy = M.hoyTxt();
+  const ids = [...new Set([...nec.masas.map(x => x.masa.id), ...Object.keys(elab).filter(id => B.sumaDias(elab[id]) > 0)])];
+  const filas = ids.map(id => { const x = nec.masas.find(y => y.masa.id === id); return { id, masa: x ? x.masa : recetaPorId(id), nec: x }; }).filter(x => x.masa)
+    .sort((a, b) => a.masa.nombre.localeCompare(b.masa.nombre, 'es'));
+  const dias = [0, 1, 2, 3, 4];
+  const porTandaDe = masa => B.masasPorTanda(masa, E.config), tpd = B.tandasPorDia(E.config);
+  const cuerpo = filas.map(x => {
+    const plan = elab[x.id] || {}, hecho = B.sumaDias(plan), necesarias = x.nec ? x.nec.masas : 0, dif = necesarias - hecho;
+    const estado = !necesarias && !hecho ? '' : dif > 0 ? `<span class="chip ojo">Faltan ${M.miles(dif)}</span>` : dif < 0 ? `<span class="chip">Sobran ${M.miles(-dif)}</span>` : '<span class="chip ok">Completo</span>';
+    return `<tr data-masa="${esc(x.id)}"><td class="nombre">${esc(x.masa.nombre)}<small>${M.miles(necesarias)} necesarias · ${porTandaDe(x.masa)} por tanda</small></td>
+      ${dias.map(d => `<td class="${M.sumarDias(el, d) === hoy ? 'hoy-col' : ''}">${campoNum(`e-${x.id}-${d}`, 'elab', x.id, d, plan['d' + d], `${x.masa.nombre} ${M.DIAS_CORTOS[d]}`)}</td>`).join('')}
+      <td class="num"><b>${M.miles(hecho)}</b></td><td>${estado}<button type="button" class="btn-link" data-repartir="${esc(x.id)}" data-n="${necesarias}">Repartir parejo</button></td></tr>`;
+  }).join('');
+  // Por día: masas, tandas (masas enteras por tanda) y empastes (1 por masa)
+  const pie = dias.map(d => {
+    let masas = 0, tandas = 0, empastes = 0, kg = 0;
+    filas.forEach(x => { const n = M.num((elab[x.id] || {})['d' + d]); masas += n; tandas += B.tandasMasas(n, porTandaDe(x.masa)).length; kg += n * B.pesoMasa(x.masa) / 1000; if (x.nec && x.nec.empastes) empastes += n; });
+    return { masas, tandas, empastes, kg, pasa: tandas > tpd };
+  });
+  const cap = filas.length ? filas.map(x => `${esc(x.masa.nombre)}: ${porTandaDe(x.masa)} masas por tanda (${M.gramos(B.pesoMasa(x.masa))} c/u)`).join(' · ') : '';
+  return navMeta() + `
+    <p class="ayuda">Masas base para la meta del ${esc(M.etiquetaSemana(E.lunesMeta))}, que se elaboran <b>del ${esc(M.fechaCorta(el))} al ${esc(M.fechaCorta(M.sumarDias(el, 4)))}</b>. Reparte en los días que quieran: cada número se guarda solo. Cada masa lleva su empaste.</p>
+    ${nec.avisos.map(a => `<div class="nota ojo">${ic('alerta')}<span>${esc(a)}</span></div>`).join('')}
+    ${!filas.length ? `<div class="vacio">${ic('meta')}<b>Sin metas para esa semana</b><a href="#metas">Poner las metas</a></div>` : `
+    <div class="tabla-caja"><table class="plan masas">
+      <thead><tr><th scope="col">Masa base</th>${dias.map(d => `<th scope="col" class="${M.sumarDias(el, d) === hoy ? 'hoy-col' : ''}">${M.DIAS_CORTOS[d]} ${Number(M.sumarDias(el, d).slice(8))}</th>`).join('')}<th scope="col">Total</th><th scope="col"><span class="sr">Estado</span></th></tr></thead>
+      <tbody>${cuerpo}</tbody>
+      <tfoot>
+        <tr><td>Tandas</td>${pie.map(p => `<td class="num ${p.pasa ? 'pasa' : ''}">${p.tandas || ''}</td>`).join('')}<td></td><td class="ayuda">${tpd} por día</td></tr>
+        <tr><td>Empastes</td>${pie.map(p => `<td class="num">${p.empastes || ''}</td>`).join('')}<td class="num">${M.miles(pie.reduce((s, p) => s + p.empastes, 0))}</td><td></td></tr>
+        <tr><td>Kilos de masa</td>${pie.map(p => `<td class="num">${p.kg ? M.unidades(p.kg) : ''}</td>`).join('')}<td class="num">${M.unidades(pie.reduce((s, p) => s + p.kg, 0))}</td><td></td></tr>
+      </tfoot>
+    </table></div>
+    ${pie.some(p => p.pasa) ? `<div class="nota ojo">${ic('alerta')}<span>${esc(pie.map((p, d) => p.pasa ? `${M.DIAS_CORTOS[d]}: ${p.tandas} tandas` : '').filter(Boolean).join(' · '))}: más de las ${tpd} tandas de un día normal.</span></div>` : ''}
+    <p class="ayuda">Amasadora: ${cap}. La capacidad y las tandas por día se cambian en Sistema Fën (Configuración de Producción).</p>`}`;
+}
+
+// Hoy de Bollería: las masas que tocan hoy (de la meta de la semana siguiente), sus elaboraciones previas, los empastes y los insumos
+function vistaHoyBol() {
+  if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
+  const f = E.fecha, idx = M.indiceDia(f), lunesMeta = M.sumarDias(M.lunesDe(f), 7);
+  const m = asegurarMetas(lunesMeta), dia = asegurarDia(f) || {};
+  const nav = `<div class="nav-fecha">
+      <button type="button" class="btn-flecha" data-dia="-1" aria-label="Día anterior">${ic('izq')}</button>
+      <h2>${esc(M.fechaLarga(f))}${f === M.hoyTxt() ? ' · hoy' : ''}</h2>
+      <button type="button" class="btn-flecha" data-dia="1" aria-label="Día siguiente">${ic('der')}</button>
+      ${f !== M.hoyTxt() ? '<button type="button" class="btn-sec" data-dia="hoy">Volver a hoy</button>' : ''}
+    </div>`;
+  if (!m) return nav + '<div class="vacio">Cargando…</div>';
+  const c = ctx(), hechos = dia.hechos || {}, nec = B.necesidades(m.productos || {}, c, E.config);
+  const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
+  const masasHoy = B.masasBase(E.recetas, E.area).map(rs => ({ rs, n: M.num(((m.elaboracion || {})[rs.id] || {})['d' + idx]) })).filter(x => x.n > 0);
+  const aviso = `<p class="ayuda">Formado y horneado de la meta de esta semana: por ahora en la app actual (llegan con la bitácora).</p>`;
+  if (!masasHoy.length) return nav + `<div class="vacio">${ic('capas')}<b>Sin masas programadas para este día</b><a href="#masas">Ir a Masas</a></div>` + aviso;
+  E.tarjetas = {};
+  // Lo del día: masas + empastes (para elaboraciones previas e insumos)
+  const planDia = [], empastes = [];
+  masasHoy.forEach(x => {
+    planDia.push({ receta: x.rs, unidades: x.n });
+    const ne = nec.masas.find(y => y.masa.id === x.rs.id);
+    if (ne && ne.empastes && ne.gPorEmpaste > 0) {
+      const g = x.n * ne.gPorEmpaste, er = ne.empaste && ne.empaste.ingredientes && ne.empaste.ingredientes.length ? ne.empaste : null;
+      empastes.push({ masa: x.rs, n: x.n, g, gPor: ne.gPorEmpaste, er, nombre: ne.empaste ? ne.empaste.nombre : 'Empaste' });
+      if (er && M.pesoBase(er.ingredientes) > 0) planDia.push({ receta: er, unidades: g * M.porciones(er) / M.pesoBase(er.ingredientes) });
+    }
+  });
+  const el = M.elaboracionesDia(planDia, {}, c);
+  const empIds = new Set(empastes.map(e => e.er && e.er.mpId).filter(Boolean));
+  const previas = el.subRecetas.filter(s => !empIds.has(s.id)).map(s => tarjetaElab(s, null, dia, hecho, c)).join('');
+  const masas = masasHoy.map(x => {
+    const porTanda = B.masasPorTanda(x.rs, E.config);
+    return tarjeta({ clave: 'masa_' + x.rs.id, idCard: x.rs.id, attr: 'data-masa-card', rid: x.rs.id, receta: x.rs, nombre: x.rs.nombre, rotulo: 'Masa base', unidad: 'un', un: 'masas', total: x.n, dia, hecho,
+      claveHecho: 'masa_' + x.rs.id, escalar: t => M.escalar(x.rs, t, null, c), conPct: false, porTanda,
+      detalle: `${M.miles(x.n)} ${x.n === 1 ? 'masa' : 'masas'} · ${M.gramos(x.n * B.pesoMasa(x.rs))}`, defecto: B.tandasMasas(x.n, porTanda), ajustable: false });
+  }).join('');
+  const emps = empastes.map(e => tarjeta({ clave: 'emp_' + e.masa.id, idCard: e.masa.id, attr: 'data-empaste-card', rid: e.er ? e.er.id : null, receta: e.er, nombre: e.nombre, rotulo: 'Empastes de ' + e.masa.nombre, unidad: 'g', total: Math.round(e.g), dia, hecho,
+    claveHecho: 'emp_' + e.masa.id, escalar: t => e.er ? M.escalarSub({ id: e.er.mpId || e.er.id, nombre: e.nombre, recetaId: e.er.id, porUnidades: false }, t, null, c) : { filas: [{ nombre: e.nombre, gramos: t, unidades: null, pct: null }], total: t }, conPct: false,
+    detalle: `${M.miles(e.n)} de ${M.gramos(e.gPor)} · ${M.gramos(e.g)}`, ajustable: false })).join('');
+  const ins = Object.entries(el.insumos).filter(([, g]) => g > 0.5).sort((a, b) => b[1] - a[1]);
+  const cajaIns = ins.length ? `<div class="caja">
+      <span class="rotulo">Insumos del día</span>
+      <span class="grande num">${M.gramos(ins[0][1])}</span>
+      <span class="ayuda">${esc(ins[0][0])}</span>
+      <details class="desp"><summary>Ver todos (${ins.length})</summary><div class="lista-mini">${ins.map(([n, g]) => `<div class="fila sub"><span>${esc(n)}</span><span>${M.gramos(g)}</span></div>`).join('')}</div></details>
+    </div>` : '';
+  const total = masasHoy.reduce((s, x) => s + x.n, 0);
+  const cajaMeta = `<div class="caja"><span class="rotulo">Para la meta del ${esc(M.etiquetaSemana(lunesMeta))}</span><span class="grande num">${M.miles(total)} ${total === 1 ? 'masa' : 'masas'} hoy</span>
+      <div class="lista-mini">${nec.masas.map(x => { const hechas = B.sumaDias((m.elaboracion || {})[x.masa.id]); return `<div class="fila sub"><span>${esc(x.masa.nombre)}</span><span>${M.miles(hechas)} programadas de ${M.miles(x.masas)} necesarias</span></div>`; }).join('')}</div></div>`;
+  const notas = dia.notas || {};
+  return nav + `
+    <section class="resumen" aria-label="Antes de empezar">${cajaMeta}${cajaIns}</section>
+    ${previas ? `<h2 class="titulo">Elaboraciones previas · ${el.subRecetas.filter(s => !empIds.has(s.id)).length}</h2>${previas}` : ''}
+    <h2 class="titulo">Masas del día · ${masasHoy.length}</h2>${masas}
+    ${emps ? `<h2 class="titulo">Empastes</h2>${emps}` : ''}
+    ${aviso}
+    <section class="caja">
+      <label class="rotulo" for="notas-dia">Notas del día (las ve la dupla)</label>
+      <textarea id="notas-dia" rows="3" style="font: inherit; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; background: var(--suave-fondo)">${esc(notas.texto || '')}</textarea>
+      ${notas.por ? `<span class="ayuda">Última nota de ${esc(notas.por)}</span>` : ''}
+    </section>`;
 }
 
 // ── Planificación ──
@@ -556,6 +754,16 @@ $('principal').addEventListener('click', async ev => {
   const b = ev.target.closest('button'); if (!b) return;
   const ds = b.dataset;
   if (ds.dia) { E.fecha = ds.dia === 'hoy' ? M.hoyTxt() : M.sumarDias(E.fecha, Number(ds.dia)); pintar(); return; }
+  if (ds.metaSem) { E.lunesMeta = ds.metaSem === 'prox' ? M.sumarDias(M.lunesDe(M.hoyTxt()), 7) : M.sumarDias(E.lunesMeta, Number(ds.metaSem)); pintar(); return; }
+  if (ds.repartir) {
+    const n = Number(ds.n); if (!(n > 0)) { avisar('Esa masa no tiene masas necesarias esta semana.', true); return; }
+    const plan = (E.metas[E.lunesMeta] || {}).elaboracion || {};
+    if (B.sumaDias(plan[ds.repartir]) > 0 && !confirm('¿Reemplazar lo repartido por un reparto parejo de lunes a viernes?')) return;
+    const r = B.repartir(n), dias = {}; for (let d = 0; d < 5; d++) dias['d' + d] = r['d' + d] || 0;
+    const rr = recetaPorId(ds.repartir);
+    guardarSinEsperar(setDoc(doc(db, 'metas', `${E.area}_${E.lunesMeta}`), { area: E.area, lunes: E.lunesMeta, elaboracion: { [ds.repartir]: dias }, nombres: { [ds.repartir]: rr ? rr.nombre : ds.repartir }, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }));
+    return;
+  }
   if (ds.semana) { E.lunesPlan = ds.semana === 'hoy' ? M.lunesDe(M.hoyTxt()) : M.sumarDias(E.lunesPlan, Number(ds.semana)); pintar(); return; }
   if (ds.hecho) {
     b.disabled = true;
@@ -581,6 +789,11 @@ $('principal').addEventListener('input', ev => {
     t.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(t.value));   // se marca al tiro si no es un número
     tiempos[k] = setTimeout(() => guardarCelda(t.dataset.celda, Number(t.dataset.d), t.value), 700);
   }
+  if (t.dataset.num) {
+    const k = t.id; clearTimeout(tiempos[k]);
+    t.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(t.value));
+    tiempos[k] = setTimeout(() => { if (!/^\s*\d*\s*$/.test(t.value) || Math.round(M.num(t.value)) !== valorGuardado(t)) guardarNumero(t); }, 700);
+  }
   if (t.id === 'notas-dia') { clearTimeout(tiempos.notas); const f = E.fecha; tiempos.notas = setTimeout(() => guardarSinEsperar(guardarDia(f, { notas: { texto: t.value.slice(0, 2000), por: quien(), en: ahoraIso() } })), 900); }
   if (t.id === 'buscar-receta') { E.buscar = t.value; repintar(); }
   if (t.id === 'cant-receta') { const v = M.num(t.value); if (v > 0) { E.cantidadVista = v; repintar(); } }
@@ -588,6 +801,7 @@ $('principal').addEventListener('input', ev => {
 // Al salir de una celda se guarda si cambió (focusout también corre cuando la pantalla se repintó mientras se escribía)
 $('principal').addEventListener('focusout', ev => {
   const t = ev.target;
+  if (t.dataset && t.dataset.num) { clearTimeout(tiempos[t.id]); if (!/^\s*\d*\s*$/.test(t.value) || Math.round(M.num(t.value)) !== valorGuardado(t)) guardarNumero(t); return; }
   if (!t.dataset || !t.dataset.celda) return;
   clearTimeout(tiempos[t.id]);
   const plan = E.planes[E.lunesPlan] || {}, actual = M.num(((plan.filas || {})[t.dataset.celda] || {})['d' + t.dataset.d]);
@@ -609,7 +823,7 @@ function guardarSinEsperar(promesa, ok) {
 function dialogoTandas(clave) {
   const T = E.tarjetas && E.tarjetas[clave]; if (!T) return;
   const total = T.total, enG = T.unidad === 'g';
-  const fmt = x => enG ? M.gramos(x) : M.unidades(x) + ' un';
+  const fmt = x => enG ? M.gramos(x) : M.unidades(x) + ' ' + (T.un || 'un');
   const usualPrev = T.rid ? ((E.ajustes[T.rid] || {}).tandaUsual || null) : null;
   let t = T.tandas.slice();
   let modo = usualPrev ? { ...usualPrev } : t.length > 1 ? { modo: 'n', valor: t.length } : null;
@@ -630,7 +844,7 @@ function dialogoTandas(clave) {
       <h2>Tandas · ${esc(T.nombre)}</h2>
       <p class="ayuda">Total del día: <b>${fmt(total)}</b>. Cada tanda muestra su receta escalada${T.aj ? ', con el ajuste de harina/agua de hoy' : ''}. La dupla las ve al instante.</p>
       <div class="botones-n" role="group" aria-label="Cantidad de tandas">${[1, 2, 3, 4, 5, 6].map(n => `<button type="button" class="btn-sec" data-n="${n}" aria-pressed="false">${n} ${n === 1 ? 'tanda' : 'tandas'}</button>`).join('')}</div>
-      <div class="fila-aj"><label for="t-cada">O tandas de hasta<small>${enG ? 'Kilos de masa por tanda' : 'Unidades por tanda (por ejemplo, lo que cabe en la amasadora)'}</small></label><input id="t-cada" inputmode="decimal" value="${modo && modo.modo === 'cada' ? enCampo(enG ? modo.valor / 1000 : modo.valor) : ''}"><span class="gr">${enG ? 'kg' : 'un'}</span></div>
+      <div class="fila-aj"><label for="t-cada">O tandas de hasta<small>${enG ? 'Kilos de masa por tanda' : T.porTanda ? `${T.un === 'masas' ? 'Masas' : 'Unidades'} por tanda (la amasadora aguanta ${T.porTanda})` : 'Unidades por tanda (por ejemplo, lo que cabe en la amasadora)'}</small></label><input id="t-cada" inputmode="decimal" value="${modo && modo.modo === 'cada' ? enCampo(enG ? modo.valor / 1000 : modo.valor) : ''}"><span class="gr">${enG ? 'kg' : esc(T.un || 'un')}</span></div>
       <div class="filas-aj" id="t-lista"></div>
       <div id="t-estado" role="status"></div>
       ${T.rid ? `<label class="check"><input type="checkbox" id="t-siempre" ${usualPrev ? 'checked' : ''}> Dividir siempre así ${esc(T.nombre)} (también los próximos días)</label>` : ''}

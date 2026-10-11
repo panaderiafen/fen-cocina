@@ -1,6 +1,6 @@
-# fën · Cocina · v0.1.2
+# fën · Cocina · v0.2.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,41 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.2.0 · Bollería, primera parte (P2a)
+**Qué cambia:**
+- **GitHub (fen-cocina):** nuevo `bolleria.js`; cambian `app.js`, `modelo.js`, `index.html`, `config.js`, `estilos.css` y `README.md`.
+- **Reglas de Firebase v1.1.0** (`firestore-produccion.rules`): consola de Firebase de **fen-produccion** → Firestore → Reglas → borrar todo → pegar → **Publicar**. Agregan la colección `metas`. **Sin esto, Bollería no puede guardar las metas.**
+- **Sistema Fën v0.32.0** (Configuración de Producción: la amasadora en kg).
+
+La tablet de Bollería ahora tiene **Hoy**, **Metas**, **Masas** y **Recetas**:
+- **Metas** (por semana, "meta del lun 19 al dom 25 oct"): piezas por producto. Se ofrecen las recetas **aprobadas** que llevan una masa base. Para cada una, la app dice cuánto rinde 1 masa (Croissant XL: 0,1 masa → rinde 10). Calcula:
+  - **masas base** enteras y kg (600 XL → 60 masas, 96 kg), con la merma de laminado si la configuraste;
+  - **empastes**: 1 por masa, con los gramos que piden las recetas (30 g × 10 = 300 g);
+  - avisa si dos productos de la misma masa piden distinto empaste por masa.
+- **Masas** (para esa meta, se elaboran de lunes a viernes de la semana anterior):
+  - masas por día, cada número se guarda solo;
+  - **Repartir parejo**;
+  - "Faltan N", "Sobran N" o "Completo";
+  - por día: tandas (en masas enteras según la amasadora), empastes y kilos. Avisa cuando un día pasa de las tandas normales.
+- **Hoy:** las masas del día. Se calculan de las Masas de la meta de la semana siguiente. Muestra:
+  - tandas según la amasadora (10 masas con 5 por tanda → 2 tandas de 5), con la receta escalada por tanda; se pueden cambiar con "Tandas";
+  - las elaboraciones previas (Poolish Masa Base), los empastes del día y los insumos;
+  - "Marcar terminada" y notas del día, compartidas con la dupla.
+- **Formado y horneado** de la meta en curso: por ahora siguen en la app actual. Llegan con la **bitácora** (P2b), junto con el stock congelado, el inventario inicial y el PDF del viernes.
+
+Cómo reconoce las recetas:
+- **masa base**: clasificación "Masa Base" con "aparece en la grilla" marcado;
+- **empaste**: sub receta de masa base que no va a la grilla (o se llama "Empaste");
+- **producto**: receta que lleva una masa base.
+
+**Lista de verificación v0.2.0**
+- [ ] Reglas v1.1.0 publicadas.
+- [ ] Sistema Fën → Producción → Configuración → Bollería: amasadora en kg.
+- [ ] Tablet de Bollería: abajo dice **Cocina v0.2.0**. Aparecen Hoy, Metas, Masas y Recetas.
+- [ ] Metas → poner la meta de la próxima semana: aparecen las masas y los empastes.
+- [ ] Masas → Repartir parejo → Hoy (el día que toca) muestra las masas en tandas.
+- [ ] Panadería sigue igual.
 
 ## Novedades v0.1.2
 **Qué cambia en GitHub:** los mismos 6 archivos de la v0.1.1. Si aún no subiste la v0.1.1, esta la incluye.
@@ -43,7 +78,8 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 | Área | Qué tiene |
 |---|---|
 | **Panadería** | **Hoy**, **Planificación** y **Recetas** |
-| Bollería, Pastelería, Cafetería | Solo **Recetas** (consulta). Siguen planificando en la app actual hasta su etapa |
+| Bollería | Desde v0.2.0: **Hoy**, **Metas**, **Masas** y **Recetas** |
+| Pastelería, Cafetería | Solo **Recetas** (consulta). Siguen planificando en la app actual hasta su etapa |
 
 **Hoy (Panadería)**, para cualquier día (flechas ‹ ›):
 - **Pie de masa madre** los días que toca (por defecto martes y viernes). Si el período cruza a la semana siguiente, usa el plan de esa semana; antes tomaba el lunes de la semana en curso.
@@ -79,10 +115,10 @@ Quién entra a cada área sigue saliendo de la app actual (Administración → S
 
 ## Archivos y dónde va cada uno
 ```
-index.html, app.js, modelo.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
+index.html, app.js, modelo.js, bolleria.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
 config.js                          → GitHub, raíz (lleva el firebaseConfig de fen-produccion)
 README.md                          → GitHub, raíz
-firestore-produccion.rules         → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
+firestore-produccion.rules (v1.1.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
 ```
 
 ## Instalación (una vez)
@@ -91,7 +127,7 @@ firestore-produccion.rules         → consola de Firebase de fen-produccion →
 3. **admins:** Firestore → Datos → Iniciar colección `admins` → ID del documento = **tu UID** → campo `ok` (booleano) `true`.
 4. **config.js:** pega tu firebaseConfig (o mándamelo y lo dejo puesto).
 5. **Script de Producción v2.3.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
-6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.1.2**.
+6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.2.0**.
 7. En la tablet de Panadería, abre la dirección, autoriza con la cuenta de Panadería y prueba el PIN.
 
 ## Lista de verificación v0.1.1 y v0.1.2

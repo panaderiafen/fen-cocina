@@ -1,13 +1,14 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.0.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.1.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
 //  · Cada área tiene UNA cuenta (cuentas/{uid} = { area: 'PAN' | 'BOL' | 'PAS' | 'CAF' }),
 //    con la que se autoriza la tablet. Lee recetas y materias primas (sin costos: los
 //    costos no se guardan en esta base), y escribe solo lo de su área: planes, el día
-//    (hechos, notas, tandas) y los ajustes de harina/agua.
+//    (hechos, notas, tandas), los ajustes de harina/agua y las metas de Bollería.
+//  · v1.1.0: colección metas (Bollería: metas semanales y masas a elaborar).
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -51,6 +52,15 @@ service cloud.firestore {
       allow list: if admin() || (deArea() && resource.data.area == miArea());
       allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
         && request.resource.data.fecha is string);
+      allow delete: if false;
+    }
+
+    // Bollería: metas/{AREA}_{lunes de la meta} (piezas por producto y masas a elaborar la semana anterior). Cada celda por separado.
+    match /metas/{id} {
+      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow list: if admin() || (deArea() && resource.data.area == miArea());
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+        && request.resource.data.lunes is string);
       allow delete: if false;
     }
 
