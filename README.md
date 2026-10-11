@@ -1,6 +1,6 @@
-# fën · Cocina · v0.12.2
+# fën · Cocina · v0.12.3
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.2: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.3: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,10 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.12.3 · título corto en Masas
+- El título de Masas ahora es **"PEM · lun 5 al vie 9 oct"** (Plan de elaboración de masas), más corto para que no se desarme en el celular o la tablet. Abajo sigue "Para la meta del…".
+- Archivos: `app.js`, `README.md` y los demás (solo versión): `editor.js`, `config.js`, `firebase.js`, `index.html`, `estilos.css`.
 
 ## Novedades v0.12.2 · las anuladas abajo
 - En **todas las áreas**, en la Bitácora (Bollería), Merma, Bitácora de turno (Cafetería) y los movimientos de Bodega, las anotaciones **anuladas** bajan a **"Anuladas (N)"**, cerrado, al final de la lista. Adentro se ven como antes: tachadas y sin botón. Nada se borra.

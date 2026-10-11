@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.12.2
+//  fën · Cocina — la app de las jefas  v0.12.3
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,7 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.12.3: Masas se titula solo "PEM · lun 5 al vie 9 oct" (cabe en el celular).
 //  v0.12.2: las anotaciones anuladas van abajo, en "Anuladas (N)" cerrado (Bitácora, Merma, Turno, Bodega).
 //  v0.12.1: Bitácora con una línea por cosa; Masas se titula Plan de elaboración de masas (PEM), la meta abajo.
 //  v0.12.0: Bollería descuenta de lo que hay que elaborar las masas que ya sobran en el congelador (congelado.js),
@@ -47,13 +48,13 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.12.2';
+} from './firebase.js?v=0.12.3';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.12.2';
+import * as ED from './editor.js?v=0.12.3';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.11.0';
-import * as CG from './congelado.js?v=0.12.2';
+import * as CG from './congelado.js?v=0.12.3';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -607,7 +608,7 @@ function etiquetaPem(lunesMeta) {
 function navMeta(vista = 'metas') {
   const l = E.lunesMeta;
   const titulo = vista === 'masas'
-    ? `<div class="titulo-meta"><h2>Plan de elaboración de masas (PEM) · ${esc(etiquetaPem(l))}</h2><span class="elab-semana">Para la meta del ${esc(M.etiquetaSemana(l))}</span></div>`
+    ? `<div class="titulo-meta"><h2>PEM · ${esc(etiquetaPem(l))}</h2><span class="elab-semana">Para la meta del ${esc(M.etiquetaSemana(l))}</span></div>`
     : `<h2>Meta del ${esc(M.etiquetaSemana(l))}</h2>`;
   return `<div class="nav-fecha">
       <button type="button" class="btn-flecha" data-meta-sem="-7" aria-label="Semana anterior">${ic('izq')}</button>
@@ -670,7 +671,7 @@ function vistaMetas() {
       <thead><tr><th scope="col">Producto</th><th scope="col">Meta (piezas)</th><th scope="col">Masas</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="3" style="text-align:left;color:var(--suave);padding:18px 10px">No hay productos aprobados que lleven una masa base.</td></tr>'}</tbody>
     </table></div>
-    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2>${avisoCongelado(E.lunesMeta, NM)}<section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir en el Plan de elaboración de masas (PEM) →</a></p>` : ''}
+    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2>${avisoCongelado(E.lunesMeta, NM)}<section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir en el PEM →</a></p>` : ''}
     ${enPrueba.length ? `<p class="ayuda">En prueba (no se ofrecen para metas hasta que se aprueben): ${esc(enPrueba.map(p => p.receta.nombre).join(', '))}.</p>` : ''}
     ${sinMasa.length ? `<p class="ayuda">No entran a las metas porque no llevan una masa base: ${esc(sinMasa.map(r => r.nombre).join(', '))}.</p>` : ''}`;
 }
