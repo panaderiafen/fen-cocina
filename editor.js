@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.4.2
+//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.5.0
+//  v0.5.0: Pastelería también crea y edita recetas aquí.
 //  Las jefas de Panadería y Bollería crean y editan recetas aquí. Una receta vigente NUNCA
 //  se cambia directo: cada cambio es una PROPUESTA (propuestas/{AREA}_{id}) que pasa por
 //  borrador → en prueba → en revisión. La aprueba (o la devuelve con un comentario)
@@ -10,12 +11,12 @@
 //  · Materia prima que falta: se pide desde aquí (solicitudes/{AREA}_{id}); la crea o habilita
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.4.2';
+import * as M from './modelo.js?v=0.5.0';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }
 export function configurar(api) { A = api; }
 
-export const AREAS_EDITAN = ['PAN', 'BOL'];
+export const AREAS_EDITAN = ['PAN', 'BOL', 'PAS'];
 export const ESTADOS_P = { borrador: 'Borrador', en_prueba: 'En prueba', en_revision: 'En revisión', aprobando: 'Aprobándose', devuelta: 'Devuelta', aprobada: 'Aprobada', anulada: 'Anulada' };
 const ABIERTA = p => p && !['aprobada', 'anulada'].includes(p.estado);
 const EDITABLE = p => p && ['borrador', 'en_prueba', 'devuelta'].includes(p.estado);

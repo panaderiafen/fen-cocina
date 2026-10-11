@@ -1,6 +1,6 @@
-# fën · Cocina · v0.4.2
+# fën · Cocina · v0.5.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.4.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.5.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,34 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.5.0 · Pastelería entra a la app nueva (P4a)
+**Qué cambia:**
+- **GitHub (fen-cocina):** `app.js`, `editor.js`, `bolleria.js`, `modelo.js`, `index.html`, `config.js`, `estilos.css`, `README.md`.
+- **Reglas v1.3.0** (`firestore-produccion.rules`): cada área puede **leer** (no cambiar) el plan y las metas de las otras. Pastelería lo necesita para sus sugerencias.
+- **Script de Producción v2.5.0** y **Sistema Fën v0.34.0**, para pasar las recetas de Bollería a Pastelería.
+
+**Orden:**
+1. Reglas v1.3.0.
+2. Script v2.5.0 (nueva implementación).
+3. Sistema Fën v0.34.0 → Producción → **Pasar recetas de Bollería a Pastelería**: revisa las marcadas y pásalas.
+4. Cocina v0.5.0.
+5. Autoriza la tablet de Pastelería con su cuenta. En Asistencia deben estar las personas de Pastelería; Sistema Fën las copia con "Leer la planilla" → "Copiar".
+
+**Pastelería: Hoy, sin plan semanal** (como "Recetas del día" de la app actual, pero compartido y con fecha):
+- Cada receta aprobada de Pastelería muestra:
+  - **Semana: sugerido**: lo que piden los productos que planificaron Bollería (metas) y Panadería (plan) esa semana. Por ejemplo, 50 croissant relleno × 40 g = 2 kg de crema, con de qué productos sale;
+  - **hecho** en la semana (lo marcado como terminado) y **cuánto falta**.
+- **Hoy**: escriben cuánto hacen (gramos o unidades, según la receta) y la receta aparece arriba **escalada**, con **Tandas** y **Marcar terminada**. Lo terminado suma a la semana. La dupla lo ve al instante.
+- **Insumos de hoy** y **Notas del día**.
+- Pastelería también **crea y edita recetas** en Cocina, con propuestas que apruebas en Sistema Fën, igual que Panadería y Bollería.
+
+**Lista de verificación v0.5.0**
+- [ ] Reglas v1.3.0, script v2.5.0 (ping), Sistema Fën v0.34.0; abajo dice **Cocina v0.5.0**.
+- [ ] Sistema Fën → Producción → "Ver las recetas de Bollería": vienen marcados los rellenos y cremas (sub recetas). Los productos como "Croissant relleno" no se marcan. Pasar.
+- [ ] En la planilla, las recetas movidas están en PAS_recetas con el mismo ID, y hay registro en "Movimientos_recetas".
+- [ ] Tablet de Pastelería: Hoy muestra sus recetas con lo sugerido de la semana. Escribir una cantidad → aparece escalada → Marcar terminada → suma a "hecho".
+- [ ] Bollería y Panadería siguen igual.
 
 ## Novedades v0.4.2 · formulario de recetas más ordenado
 Incluye todo lo de la v0.4.1. Qué cambia en el formulario:
@@ -168,7 +196,8 @@ Cómo reconoce las recetas:
 |---|---|
 | **Panadería** | **Hoy**, **Planificación** y **Recetas** |
 | Bollería | **Hoy**, **Bitácora** (v0.3.0), **Metas**, **Masas** y **Recetas** |
-| Pastelería, Cafetería | Solo **Recetas** (consulta). Siguen planificando en la app actual hasta su etapa |
+| Pastelería | **Hoy** (recetas del día, v0.5.0) y **Recetas** |
+| Cafetería | Solo **Recetas** (consulta). Sigue en la app actual hasta su etapa |
 
 **Hoy (Panadería)**, para cualquier día (flechas ‹ ›):
 - **Pie de masa madre** los días que toca (por defecto martes y viernes). Si el período cruza a la semana siguiente, usa el plan de esa semana; antes tomaba el lunes de la semana en curso.
@@ -207,7 +236,7 @@ Quién entra a cada área sigue saliendo de la app actual (Administración → S
 index.html, app.js, modelo.js, bolleria.js, editor.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
 config.js                          → GitHub, raíz (lleva el firebaseConfig de fen-produccion)
 README.md                          → GitHub, raíz
-firestore-produccion.rules (v1.2.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
+firestore-produccion.rules (v1.3.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
 ```
 
 ## Instalación (una vez)
@@ -216,7 +245,7 @@ firestore-produccion.rules (v1.2.0) → consola de Firebase de fen-produccion �
 3. **admins:** Firestore → Datos → Iniciar colección `admins` → ID del documento = **tu UID** → campo `ok` (booleano) `true`.
 4. **config.js:** pega tu firebaseConfig (o mándamelo y lo dejo puesto).
 5. **Script de Producción v2.3.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
-6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.4.2**.
+6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.5.0**.
 7. En la tablet de Panadería, abre la dirección, autoriza con la cuenta de Panadería y prueba el PIN.
 
 ## Lista de verificación v0.1.1 y v0.1.2

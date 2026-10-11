@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.4.2
+//  fën · Cocina — la app de las jefas  v0.5.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -19,20 +19,22 @@
 //  stock congelado que sale de ella, avance contra la meta y cierre del viernes para imprimir.
 //  v0.4.0 (P3): Panadería y Bollería crean y editan recetas (editor.js): cada cambio es una propuesta
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
+//  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
+//  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
 // ═══════════════════════════════════════════════
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.4.2';
-import * as M from './modelo.js?v=0.4.2';
-import * as B from './bolleria.js?v=0.4.2';
-import * as ED from './editor.js?v=0.4.2';
+} from './firebase.js?v=0.5.0';
+import * as M from './modelo.js?v=0.5.0';
+import * as B from './bolleria.js?v=0.5.0';
+import * as ED from './editor.js?v=0.5.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
   PAN: { nombre: 'Panadería', icono: 'pan', nueva: true },
   BOL: { nombre: 'Bollería', icono: 'croissant', nueva: true },
-  PAS: { nombre: 'Pastelería', icono: 'torta', nueva: false },
+  PAS: { nombre: 'Pastelería', icono: 'torta', nueva: true },
   CAF: { nombre: 'Cafetería', icono: 'cafe', nueva: false }
 };
 const ESTADOS = { consolidada: 'Aprobada', en_prueba: 'En prueba', borrador: 'Borrador', 'pendiente_aprobación': 'En revisión', pendiente_aprobacion: 'En revisión' };
@@ -40,7 +42,8 @@ const K_PERSONA = 'fen_cocina_persona', K_AREA = 'fen_cocina_area';
 // Secciones de cada área (las que no están, solo Recetas)
 const SECCIONES = {
   PAN: [['hoy', 'Hoy', 'hoy'], ['plan', 'Planificación', 'plan'], ['recetas', 'Recetas', 'libro']],
-  BOL: [['hoy', 'Hoy', 'hoy'], ['bitacora', 'Bitácora', 'bitacora'], ['metas', 'Metas', 'meta'], ['masas', 'Masas', 'capas'], ['recetas', 'Recetas', 'libro']]
+  BOL: [['hoy', 'Hoy', 'hoy'], ['bitacora', 'Bitácora', 'bitacora'], ['metas', 'Metas', 'meta'], ['masas', 'Masas', 'capas'], ['recetas', 'Recetas', 'libro']],
+  PAS: [['hoy', 'Hoy', 'hoy'], ['recetas', 'Recetas', 'libro']]
 };
 const seccionesDe = a => SECCIONES[a] || [['recetas', 'Recetas', 'libro']];
 
@@ -48,7 +51,7 @@ const E = {
   usuario: null, area: null, persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
-  metas: {}, diasArea: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7),
+  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7),
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -129,7 +132,8 @@ onAuthStateChanged(auth, async u => {
 });
 
 function entrarArea(area) {
-  E.area = area; E.recetaVista = null; E.cantidadVista = null; E.buscar = '';
+  E.area = area; E.recetaVista = null; E.cantidadVista = null; E.buscar = ''; E.editor = null;
+  E.fecha = M.hoyTxt(); E.lunesPlan = M.lunesDe(E.fecha); E.lunesMeta = M.sumarDias(E.lunesPlan, 7);   // cada área parte en hoy
   document.body.dataset.area = area;
   $('area-icono').innerHTML = ic(AREAS[area].icono);
   $('area-nombre').textContent = AREAS[area].nombre;
@@ -217,7 +221,7 @@ function escuchar(clave, ref, cb, alFallar) {
     if (/permission-denied/.test(err.code || '')) avisar('Este equipo perdió el permiso para leer. Pide a Administración que revise la cuenta del área.', true);
   });
 }
-function pararEscuchas() { Object.values(E.escuchas).forEach(f => { try { f(); } catch (e) {} }); E.escuchas = {}; E.planes = {}; E.dias = {}; E.metas = {}; E.propuestas = {}; E.solicitudes = {}; E.editor = null; E.cargado = {}; }
+function pararEscuchas() { Object.values(E.escuchas).forEach(f => { try { f(); } catch (e) {} }); E.escuchas = {}; E.planes = {}; E.dias = {}; E.metas = {}; E.ajenos = {}; E.propuestas = {}; E.solicitudes = {}; E.editor = null; E.cargado = {}; }
 function iniciarEscuchas() {
   pararEscuchas();
   escuchar('recetas', collection(db, 'recetas'), sn => { E.recetas = sn.docs.map(d => ({ id: d.id, ...d.data() })); E.cargado.recetas = true; repintar(); });
@@ -251,6 +255,12 @@ function asegurarMetas(lunes) {
     // Sin permiso (reglas sin la colección metas): se muestra el aviso en vez de quedarse "Cargando…"
     () => { E.metas[lunes] = { area: E.area, lunes, productos: {}, elaboracion: {}, sinPermiso: true }; repintar(); });
   return E.metas[lunes];
+}
+// Documentos de otra área que se leen para las sugerencias (reglas v1.3.0: planes y metas se pueden leer entre áreas)
+function asegurarAjeno(col, id) {
+  const k = col + '/' + id;
+  escuchar('ajeno_' + k, doc(db, col, id), sn => { E.ajenos[k] = sn.exists() ? sn.data() : {}; repintar(); }, () => { E.ajenos[k] = { sinPermiso: true }; repintar(); });
+  return E.ajenos[k];
 }
 function asegurarDia(fecha) {
   escuchar('dia_' + fecha, doc(db, 'dias', `${E.area}_${fecha}`), sn => { E.dias[fecha] = sn.exists() ? sn.data() : {}; repintar(); });
@@ -315,7 +325,7 @@ function pintar() {
   $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas'
     : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
     : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
-  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : E.area === 'BOL' ? vistaHoyBol() : vistaHoy();
+  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
   if (v === 'recetas' && E.editor) ED.actualizarCalculos();
   if (guardado && $(guardado.id)) {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
@@ -646,6 +656,83 @@ function vistaHoyBol() {
     </section>`;
 }
 
+
+
+// ═══════════════ Pastelería: recetas del día ═══════════════
+// Sin plan semanal. Cada receta muestra cuánto se sugiere para la semana (lo que piden los productos que
+// planificaron Bollería —metas— y Panadería —plan—), cuánto llevan hecho y cuánto hacen hoy.
+// Lo de hoy se guarda en dias/PAS_{fecha}.cantidades = { receta: cantidad } (en la unidad de la receta).
+function sugeridosSemana(lunes) {
+  const c = ctx(), items = [];
+  const metasBol = asegurarAjeno('metas', 'BOL_' + lunes), planPan = asegurarAjeno('planes', 'PAN_' + lunes);
+  Object.entries((metasBol && metasBol.productos) || {}).forEach(([id, n]) => { const r = recetaPorId(id); if (r && M.num(n) > 0) items.push({ receta: r, unidades: M.num(n) }); });
+  Object.entries((planPan && planPan.filas) || {}).forEach(([id, d]) => { const r = recetaPorId(id), n = Object.values(d || {}).reduce((s, v) => s + M.num(v), 0); if (r && n > 0) items.push({ receta: r, unidades: n }); });
+  const subs = items.length ? M.elaboracionesDia(items, {}, c).subRecetas : [];
+  const r = {}, origen = {};
+  subs.forEach(s => {
+    const rs = s.recetaId ? recetaPorId(s.recetaId) : null; if (!rs || rs.area !== E.area) return;
+    const pesoUn = M.pesoBase(rs.ingredientes) / M.porciones(rs);
+    r[rs.id] = rs.unidad === 'g' ? s.gramos : s.porUnidades ? s.unidades : (pesoUn > 0 ? s.gramos / pesoUn : 0);
+    origen[rs.id] = [...new Set(s.usan.map(u => u.nombre))];
+  });
+  return { cant: r, origen, sinPermiso: !!((metasBol && metasBol.sinPermiso) || (planPan && planPan.sinPermiso)) };
+}
+function vistaHoyPas() {
+  if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
+  const f = E.fecha, lunes = M.lunesDe(f), dia = asegurarDia(f) || {};
+  const nav = `<div class="nav-fecha">
+      <button type="button" class="btn-flecha" data-dia="-1" aria-label="Día anterior">${ic('izq')}</button>
+      <h2>${esc(M.fechaLarga(f))}${f === M.hoyTxt() ? ' · hoy' : ''}</h2>
+      <button type="button" class="btn-flecha" data-dia="1" aria-label="Día siguiente">${ic('der')}</button>
+      ${f !== M.hoyTxt() ? '<button type="button" class="btn-sec" data-dia="hoy">Volver a hoy</button>' : ''}
+    </div>`;
+  const c = ctx(), hechos = dia.hechos || {}, cant = dia.cantidades || {};
+  const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
+  const recetas = E.recetas.filter(r => r.area === E.area && r.estado === 'consolidada');
+  if (!recetas.length) return nav + `<div class="vacio">${ic('libro')}<b>Pastelería todavía no tiene recetas aprobadas</b><a href="#recetas">Ir a Recetas</a></div>`;
+  // La semana: lo hecho (días con "terminada") y lo sugerido
+  const dias = Array.from({ length: 7 }, (_, i) => M.sumarDias(lunes, i));
+  dias.forEach(asegurarDia);
+  const hechoSemana = {}; dias.forEach(t => { const d = E.dias[t] || {}; Object.entries(d.cantidades || {}).forEach(([id, n]) => { if (d.hechos && d.hechos['rec_' + id] && d.hechos['rec_' + id].por) hechoSemana[id] = (hechoSemana[id] || 0) + M.num(n); }); });
+  const sug = sugeridosSemana(lunes);
+  const un = r => r.unidad === 'g' ? 'g' : 'un', fmt = (r, x) => r.unidad === 'g' ? M.gramos(x) : M.unidades(x) + ' un';
+  E.tarjetas = {};
+  const hoy = recetas.filter(r => M.num(cant[r.id]) > 0);
+  const tarjetas = hoy.map(r => tarjetaReceta({ receta: r, unidades: M.num(cant[r.id]) }, null, dia, hecho)).join('');
+  const el = hoy.length ? M.elaboracionesDia(hoy.map(r => ({ receta: r, unidades: M.num(cant[r.id]) })), {}, c) : { insumos: {}, subRecetas: [] };
+  const ins = Object.entries(el.insumos).filter(([, g]) => g > 0.5).sort((a, b) => b[1] - a[1]);
+  const cajaIns = ins.length ? `<div class="caja"><span class="rotulo">Insumos de hoy</span><span class="grande num">${M.gramos(ins.reduce((s, [, g]) => s + g, 0))}</span><span class="ayuda">${ins.length} ingredientes</span>
+      <details class="desp"><summary>Ver todos</summary><div class="lista-mini">${ins.map(([n, g]) => `<div class="fila sub"><span>${esc(n)}</span><span>${M.gramos(g)}</span></div>`).join('')}</div></details></div>` : '';
+  const orden = [...recetas].sort((a, b) => ((M.num(sug.cant[b.id]) > 0) - (M.num(sug.cant[a.id]) > 0)) || a.nombre.localeCompare(b.nombre, 'es'));
+  const filas = orden.map(r => {
+    const s = M.num(sug.cant[r.id]), h = M.num(hechoSemana[r.id]), id = 'pas-' + r.id;
+    const mala = E.celdasMalas[f + '|' + id];
+    return `<div class="fila-pas">
+      <div class="txt"><b>${esc(r.nombre)}</b>
+        <span class="ayuda">${s > 0 ? `Semana: sugerido ${fmt(r, s)} (${esc(sug.origen[r.id].join(', '))})` : 'Sin productos planificados que la usen esta semana'}${h > 0 ? ` · hecho ${fmt(r, h)}${s > 0 ? (h >= s ? ' · completo' : ` · faltan ${fmt(r, s - h)}`) : ''}` : ''}</span></div>
+      <div class="cant-pas"><label for="${esc(id)}">Hoy</label><input id="${esc(id)}" data-pas="${esc(r.id)}" inputmode="decimal" value="${mala !== undefined ? esc(mala) : (M.num(cant[r.id]) ? esc(String(cant[r.id]).replace('.', ',')) : '')}" class="${mala !== undefined ? 'error-celda' : ''}" autocomplete="off"><span>${un(r)}</span></div>
+    </div>`;
+  }).join('');
+  const notas = dia.notas || {};
+  return nav + `
+    ${sug.sinPermiso ? `<div class="nota ojo">${ic('alerta')}<span>No se pudo leer lo que planificaron Bollería y Panadería: faltan las reglas v1.3.0 (ver README). Igual pueden anotar lo de hoy.</span></div>` : ''}
+    ${cajaIns ? `<section class="resumen">${cajaIns}</section>` : ''}
+    ${tarjetas ? `<h2 class="titulo">Para hoy · ${hoy.length}</h2>${tarjetas}` : ''}
+    <h2 class="titulo">Recetas</h2>
+    <p class="ayuda">Escribe cuánto hacen hoy de cada una (en gramos o unidades, según la receta): aparece arriba escalada, con tandas y "Marcar terminada". Lo terminado suma a la semana.</p>
+    <div class="lista-pas">${filas}</div>
+    <section class="caja">
+      <label class="rotulo" for="notas-dia">Notas del día (las ve la dupla)</label>
+      <textarea id="notas-dia" rows="3" style="font: inherit; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; background: var(--suave-fondo)">${esc(notas.texto || '')}</textarea>
+      ${notas.por ? `<span class="ayuda">Última nota de ${esc(notas.por)}</span>` : ''}
+    </section>`;
+}
+function guardarCantPas(t) {
+  const f = E.fecha, key = f + '|' + t.id, texto = t.value.trim();
+  if (texto !== '' && !/^\d+([.,]\d+)?$/.test(texto)) { E.celdasMalas[key] = t.value; t.classList.add('error-celda'); avisar('Escribe un número (puede llevar coma).', true); return; }
+  delete E.celdasMalas[key]; t.classList.remove('error-celda');
+  guardarSinEsperar(guardarDia(f, { cantidades: { [t.dataset.pas]: texto === '' ? 0 : M.num(texto) } }));
+}
 
 // ═══════════════ Bitácora de Bollería ═══════════════
 const nombreDe = id => { const r = recetaPorId(id); return r ? r.nombre : id; };
@@ -1035,6 +1122,11 @@ $('principal').addEventListener('input', ev => {
     t.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(t.value));   // se marca al tiro si no es un número
     tiempos[k] = setTimeout(() => guardarCelda(t.dataset.celda, Number(t.dataset.d), t.value), 700);
   }
+  if (t.dataset.pas) {
+    const k = t.id; clearTimeout(tiempos[k]);
+    t.classList.toggle('error-celda', !/^\s*(\d+([.,]\d+)?)?\s*$/.test(t.value));
+    tiempos[k] = setTimeout(() => guardarCantPas(t), 800);
+  }
   if (t.dataset.num) {
     const k = t.id; clearTimeout(tiempos[k]);
     t.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(t.value));
@@ -1047,6 +1139,7 @@ $('principal').addEventListener('input', ev => {
 // Al salir de una celda se guarda si cambió (focusout también corre cuando la pantalla se repintó mientras se escribía)
 $('principal').addEventListener('focusout', ev => {
   const t = ev.target;
+  if (t.dataset && t.dataset.pas) { clearTimeout(tiempos[t.id]); const d = E.dias[E.fecha] || {}; if (M.num(t.value) !== M.num((d.cantidades || {})[t.dataset.pas]) || !/^\s*(\d+([.,]\d+)?)?\s*$/.test(t.value)) guardarCantPas(t); return; }
   if (t.dataset && t.dataset.num) { clearTimeout(tiempos[t.id]); if (!/^\s*\d*\s*$/.test(t.value) || Math.round(M.num(t.value)) !== valorGuardado(t)) guardarNumero(t); return; }
   if (!t.dataset || !t.dataset.celda) return;
   clearTimeout(tiempos[t.id]);

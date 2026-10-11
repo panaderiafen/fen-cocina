@@ -1,6 +1,6 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.2.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.3.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
@@ -12,6 +12,8 @@ rules_version = '2';
 //  · v1.2.0: propuestas de recetas (la jefa propone; solo Administración aprueba o devuelve)
 //    y solicitudes de materias primas (la jefa pide; Administración resuelve); versiones anteriores
 //    de las recetas (solo Administración).
+//  · v1.3.0: cada área puede LEER (no cambiar) el plan y las metas de las otras: Pastelería sugiere sus
+//    rellenos según lo que planificaron Bollería y Panadería.
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -42,7 +44,7 @@ service cloud.firestore {
 
     // Plan semanal: planes/{AREA}_{lunes}. Cada celda se guarda por separado.
     match /planes/{id} {
-      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow get: if admin() || deArea();
       allow list: if admin() || (deArea() && resource.data.area == miArea());
       allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
         && request.resource.data.lunes is string && request.resource.data.filas is map);
@@ -60,7 +62,7 @@ service cloud.firestore {
 
     // Bollería: metas/{AREA}_{lunes de la meta} (piezas por producto y masas a elaborar la semana anterior). Cada celda por separado.
     match /metas/{id} {
-      allow get: if admin() || (deArea() && idDeMiArea(id));
+      allow get: if admin() || deArea();
       allow list: if admin() || (deArea() && resource.data.area == miArea());
       allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
         && request.resource.data.lunes is string);
