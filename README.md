@@ -1,6 +1,6 @@
-# fën · Cocina · v0.12.1
+# fën · Cocina · v0.12.2
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.1: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.2: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,10 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.12.2 · las anuladas abajo
+- En **todas las áreas**, en la Bitácora (Bollería), Merma, Bitácora de turno (Cafetería) y los movimientos de Bodega, las anotaciones **anuladas** bajan a **"Anuladas (N)"**, cerrado, al final de la lista. Adentro se ven como antes: tachadas y sin botón. Nada se borra.
+- Archivos: `app.js`, `estilos.css`, `README.md` y los demás (solo versión): `editor.js`, `config.js`, `firebase.js`, `index.html`. Reglas, script y Sistema Fën sin cambios.
 
 ## Novedades v0.12.1 · Bitácora más fácil de leer · Masas = Plan de elaboración de masas (PEM)
 - **Bitácora:** cada anotación tiene su título y **una línea por cosa** (nombre a la izquierda, número a la derecha), como "Congelado al cierre". Ejemplo: Inventario del congelador → Masa Base 84 masas / Empastes de Masa Base 46 / Croissant XL 220.

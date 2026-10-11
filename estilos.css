@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.12.1 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.12.2 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -365,3 +365,7 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
 .anot .anot-cuerpo > b { font-weight: 600; }
 .anot .lista-mini { margin: 2px 0; }
 .anot.anulada .lista-mini { text-decoration: line-through; }
+/* v0.12.2 · anuladas abajo, cerradas */
+details.anuladas { margin-top: 10px; }
+details.anuladas > summary { font-size: 14px; color: var(--suave); cursor: pointer; }
+details.anuladas .lista-bit { margin-top: 8px; }

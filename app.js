@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.12.1
+//  fën · Cocina — la app de las jefas  v0.12.2
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,7 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.12.2: las anotaciones anuladas van abajo, en "Anuladas (N)" cerrado (Bitácora, Merma, Turno, Bodega).
 //  v0.12.1: Bitácora con una línea por cosa; Masas se titula Plan de elaboración de masas (PEM), la meta abajo.
 //  v0.12.0: Bollería descuenta de lo que hay que elaborar las masas que ya sobran en el congelador (congelado.js),
 //  con un aviso de por qué se piden menos; Bollería también tiene "Marcar todo como hecho". Panadería: copiar de
@@ -46,13 +47,13 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.12.1';
+} from './firebase.js?v=0.12.2';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.12.1';
+import * as ED from './editor.js?v=0.12.2';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.11.0';
-import * as CG from './congelado.js?v=0.12.1';
+import * as CG from './congelado.js?v=0.12.2';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -911,10 +912,10 @@ function vistaBitacora() {
   const c = ctx(), st = B.stock(E.diasArea, f), cfg = E.config || {};
   const delDia = Object.entries(dia.bitacora || {}).map(([id, a]) => ({ ...a, id })).sort((a, b) => String(a.en || '').localeCompare(String(b.en || '')));
   const botones = Object.entries(B.TIPOS).map(([k, t]) => `<button type="button" class="btn-sec" data-anotar="${k}">${ic(k === 'inventario' ? 'copo' : k === 'formo' || k === 'horneo' ? 'pan' : 'capas')}${esc(t)}</button>`).join('');
-  const lista = delDia.length ? `<div class="lista-bit">${delDia.map(a => `<div class="anot ${a.anulado ? 'anulada' : ''}">
+  const lista = delDia.length ? `${listaAnot(delDia, a => `<div class="anot ${a.anulado ? 'anulada' : ''}">
       <div class="anot-cuerpo">${(f => `<b>${esc(f.titulo)}</b><div class="lista-mini">${f.filas.map(([n, v]) => `<div class="fila sub"><span>${esc(n)}</span><span>${esc(v)}</span></div>`).join('')}</div>`)(anotFilas(a))}<span class="ayuda">${esc(a.por || '')} · ${esc(horaDe(a.en))}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
       ${a.anulado ? '' : `<button type="button" class="btn-link" data-anular="${esc(a.id)}">Anular</button>`}
-    </div>`).join('')}</div>` : '<p class="ayuda">Sin anotaciones este día.</p>';
+    </div>`)}` : '<p class="ayuda">Sin anotaciones este día.</p>';
   // Congelado al final del día
   const masas = B.masasBase(E.recetas, E.area).filter(r => M.num(st.masas[r.id]) || M.num(st.empastes[r.id]));
   const prods = productosBol().filter(r => M.num(st.productos[r.id]));
@@ -1327,6 +1328,8 @@ $('principal').addEventListener('click', async ev => {
   if (ds.receta) { E.recetaVista = ds.receta; E.cantidadVista = null; pintar(); return; }
   if (ds.volver) { E.recetaVista = null; pintar(); return; }
 });
+// Lo abierto de "Anuladas" se mantiene aunque la pantalla se repinte
+$('principal').addEventListener('toggle', ev => { if (ev.target.classList && ev.target.classList.contains('anuladas')) E.verAnuladas = ev.target.open; }, true);
 $('principal').addEventListener('input', ev => {
   const t = ev.target;
   if (ED.alInput(t)) return;
@@ -1532,6 +1535,13 @@ function chipsPeriodo(clave, valor, cuales) {
 function avisoCopia() {
   const r = reg(); return r.error ? `<p class="ayuda">La copia a la planilla quedó pendiente (${esc(r.error)}). Se reintenta sola; lo anotado está guardado.</p>` : '';
 }
+// v0.12.2: en todas las listas de anotaciones (Bitácora, Merma, Bitácora de turno, Bodega) las anuladas van
+// abajo, en un desplegable cerrado; siguen tachadas y sin botón
+function listaAnot(lista, fila) {
+  const vig = lista.filter(a => !a.anulado), anu = lista.filter(a => a.anulado);
+  return `${vig.length ? `<div class="lista-bit">${vig.map(fila).join('')}</div>` : '<p class="ayuda">Todo lo de aquí está anulado.</p>'}
+    ${anu.length ? `<details class="desp anuladas"${E.verAnuladas ? ' open' : ''}><summary>Anuladas (${anu.length})</summary><div class="lista-bit">${anu.map(fila).join('')}</div></details>` : ''}`;
+}
 function lineaAnot(campo, a, texto, detalle) {
   return `<div class="anot ${a.anulado ? 'anulada' : ''}">
       <div><b>${texto}</b><span class="ayuda">${detalle}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
@@ -1553,9 +1563,9 @@ function vistaMerma() {
       ${resumen.length ? `<div class="lista-mini">${resumen.map(x => `<div class="fila sub"><span>${esc(x.nombre)}${x.tipo === 'mp' ? ' <small class="ayuda">(materia prima)</small>' : ''}</span><span>${esc(R.cantidadTexto(x.cantidad, x.unidad))}${x.veces > 1 ? ` · ${x.veces} veces` : ''}</span></div>`).join('')}</div>` : '<span class="ayuda">Nada anotado en este período.</span>'}
     </div>
     <h2 class="titulo">Anotaciones</h2>
-    ${lista.length ? `<div class="lista-bit">${lista.map(a => lineaAnot('merma', a,
+    ${lista.length ? `${listaAnot(lista, a => lineaAnot('merma', a,
       `${esc(a.nombre)} · ${esc(R.cantidadTexto(a.cantidad, a.unidad))}`,
-      `${esc(R.MOTIVOS[a.motivo] || a.motivo || '')}${a.congelado ? ' · se perdió congelado' : ''}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin anotaciones.</p>'}
+      `${esc(R.MOTIVOS[a.motivo] || a.motivo || '')}${a.congelado ? ' · se perdió congelado' : ''}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`))}` : '<p class="ayuda">Sin anotaciones.</p>'}
     ${avisoCopia()}`;
 }
 // Lo que se puede anotar como merma en el área
@@ -1649,9 +1659,9 @@ function vistaTurno() {
     ${chipsPeriodo('periodoTurno', E.periodoTurno, ['hoy', 'semana', 'mes', 'mes_ant'])}
     <section class="resumen resumen-cafe">${tiles}<div class="caja cifra total"><span class="rotulo">Total de café</span><b>${esc(M.gramos(t.total))}</b><span class="ayuda">${esc(gPorShot())} g por shot</span></div></section>
     <h2 class="titulo">Anotaciones</h2>
-    ${lista.length ? `<div class="lista-bit">${lista.map(a => lineaAnot('turno', a,
+    ${lista.length ? `${listaAnot(lista, a => lineaAnot('turno', a,
       `${esc(R.TIPOS_CAF[a.tipo] || a.tipo)} · ${a.tipo === 'calibracion' ? `${M.miles(a.shots)} ${M.num(a.shots) === 1 ? 'shot' : 'shots'} × ${esc(M.unidades(a.gPorShot))} g = ` : ''}${esc(M.gramos(a.gramos))}`,
-      `${esc((a.barista && a.barista.nombre) || a.por || '')}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin anotaciones en este período.</p>'}
+      `${esc((a.barista && a.barista.nombre) || a.por || '')}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`))}` : '<p class="ayuda">Sin anotaciones en este período.</p>'}
     ${avisoCopia()}`;
 }
 function dialogoTurno(tipo) {
@@ -1734,9 +1744,9 @@ function vistaBodega() {
       ${calculado ? `<span class="ayuda">Calculado en Sistema Fën: ${esc(M.fechaCorta(M.hoyTxt(new Date(calculado))))} ${esc(horaDe(calculado))}.</span>` : ''}
     </div>
     <h2 class="titulo">Llegadas y conteos de ${esc(AREAS[E.area].nombre)} (14 días)</h2>
-    ${movs.length ? `<div class="lista-bit">${movs.map(a => lineaAnot('bodega', a,
+    ${movs.length ? `${listaAnot(movs, a => lineaAnot('bodega', a,
       `${a.tipo === 'conteo' ? 'Conteo' : 'Llegó'}: ${esc(a.nombre)} · ${esc(K.texto(a.cantidad, a.unidad))}${a.detalle ? ` (${esc(M.unidades(a.detalle.envases))} ${esc(K.envases(a.detalle.envase, a.detalle.envases))}${a.detalle.sueltos ? ' + ' + esc(K.texto(a.detalle.sueltos, a.unidad)) : ''})` : ''}`,
-      `${a.nota ? esc(a.nota) + ' · ' : ''}${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin llegadas ni conteos.</p>'}
+      `${a.nota ? esc(a.nota) + ' · ' : ''}${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`))}` : '<p class="ayuda">Sin llegadas ni conteos.</p>'}
     ${avisoCopia()}`;
 }
 // Último conteo de una materia prima (de cualquier área): { texto, hoyOtra }

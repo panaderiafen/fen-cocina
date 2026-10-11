@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.12.1
+//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.12.2
 //  v0.5.0: Pastelería también crea y edita recetas aquí.
 //  Las jefas de Panadería y Bollería crean y editan recetas aquí. Una receta vigente NUNCA
 //  se cambia directo: cada cambio es una PROPUESTA (propuestas/{AREA}_{id}) que pasa por
