@@ -1,6 +1,6 @@
-# fën · Cocina · v0.10.1
+# fën · Cocina · v0.11.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.10.1: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.11.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,15 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.11.0 · el conteo vale como cierre del día
+Regla de Fën: la bodega se cuenta **al terminar la producción del día**. En Cafetería, después de cerrar la caja.
+- **El conteo vale como cierre de su día.** Lo marcado como hecho ese día, aunque lo marquen después de contar, ya está incluido y no se descuenta de nuevo.
+- **Desde el día siguiente** se descuenta todo lo hecho, lo vendido y la merma.
+- **Las llegadas** van por hora: si llega mercadería después de contar, se suma.
+- El diálogo de conteo lo explica.
+- **Panadería, en Hoy:** un aviso recuerda que **"Marcar terminada" descuenta la bodega**, y el botón **"Marcar todo como hecho"** marca de una vez las recetas y elaboraciones que faltan del día. Pide confirmar y se puede deshacer una por una.
+- Archivos: `consumo.js`, `app.js`, `estilos.css` y los demás `.js` (solo versión). Reglas y script sin cambios.
 
 ## Novedades v0.10.1 · arreglos del conteo en sacos
 - **El plural:** decía "sacoses" cuando el envase se escribió en plural en Sistema Fën. Ahora entiende las dos formas: saco / sacos, caja / cajas, bidón / bidones.
@@ -62,7 +71,7 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
   - lo **vendido en la caja** de productos vinculados a una receta de Cafetería, bajado por su receta hasta las materias primas (café, leche, vasos…);
   - los gramos de café de la **bitácora de turno** (calibraciones, café botado, pruebas), descontados de la materia prima que elijas en Sistema Fën.
 - Lo que se vende en la cafetería pero es de otra área (croissant, pan) no descuenta aquí: lo cuenta su área al hacerlo.
-- Un consejo para Cafetería: el conteo de bodega cuadra mejor si se hace **antes de abrir o después de cerrar**. Las ventas de una caja ya cerrada cuentan al final de su día.
+- Cafetería cuenta la bodega **después de cerrar la caja** (desde v0.11.0 el conteo vale como cierre del día).
 
 **Lista de verificación v0.8.0**
 - [ ] Abajo dice **Cocina v0.8.0**.

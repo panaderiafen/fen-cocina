@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.10.1
+//  fën · Cocina — la app de las jefas  v0.11.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,8 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.11.0: el conteo de bodega vale como cierre de su día (lo hecho ese día ya está incluido). Panadería: aviso de
+//  que "Marcar terminada" descuenta la bodega y "Marcar todo como hecho".
 //  v0.10.0: lo que Administración configura con envase (saco de 25 kg…) se cuenta y se recibe en sacos + lo suelto,
 //  y el stock también se ve en sacos.
 //  v0.9.0: al contar la bodega se ve quién contó cada materia prima la última vez, y avisa si otra área ya la
@@ -39,12 +41,12 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.10.1';
-import * as M from './modelo.js?v=0.10.1';
-import * as B from './bolleria.js?v=0.10.1';
-import * as ED from './editor.js?v=0.10.1';
-import * as R from './registros.js?v=0.10.1';
-import * as K from './consumo.js?v=0.10.1';
+} from './firebase.js?v=0.11.0';
+import * as M from './modelo.js?v=0.11.0';
+import * as B from './bolleria.js?v=0.11.0';
+import * as ED from './editor.js?v=0.11.0';
+import * as R from './registros.js?v=0.11.0';
+import * as K from './consumo.js?v=0.11.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -453,10 +455,15 @@ function vistaHoy() {
     </div>` : '';
   const recetas = planDia.map(x => tarjetaReceta(x, ajHoy[x.receta.id], dia, hecho)).join('');
   const notas = dia.notas || {};
+  // Lo que falta marcar del día: recetas y elaboraciones previas (las recetas descuentan la bodega)
+  const pendientes = [...planDia.map(x => 'rec_' + x.receta.id), ...el.subRecetas.map(s => 'sub_' + s.id)].filter(k => !hecho(k));
+  const avisoHecho = `<div class="nota neutra aviso-hecho">${ic('alerta')}<span><b>Marcar terminada descuenta la bodega</b> (las materias primas de esa receta). Al cerrar el día, que todo lo hecho quede marcado.</span>
+      ${pendientes.length ? `<button type="button" class="btn-sec" data-todo-hecho="${esc(pendientes.join(','))}">${ic('check')}Marcar todo como hecho (${pendientes.length})</button>` : `<span class="chip-ok">${ic('ok')}Todo marcado</span>`}</div>`;
   return nav + `
     <section class="resumen" aria-label="Antes de empezar">${cajaPie}${cajaIns}</section>
     ${elabs ? `<h2 class="titulo">Elaboraciones previas · ${el.subRecetas.length}</h2>${elabs}` : ''}
     <h2 class="titulo">Recetas del día · ${planDia.length}</h2>
+    ${avisoHecho}
     ${recetas}
     <section class="caja">
       <label class="rotulo" for="notas-dia">Notas del día (las ve la dupla)</label>
@@ -1172,6 +1179,13 @@ $('principal').addEventListener('click', async ev => {
     return;
   }
   if (ds.anotar) { dialogoAnotar(ds.anotar); return; }
+  if (ds.todoHecho) {
+    const ks = ds.todoHecho.split(',').filter(Boolean);
+    if (!confirm(`¿Marcar como hecho todo lo que falta hoy (${ks.length})? Las recetas se descuentan de la bodega. Se puede deshacer una por una.`)) return;
+    const h = {}, en = ahoraIso(); ks.forEach(k => { h[k] = { por: quien(), en }; });
+    guardarSinEsperar(guardarDia(E.fecha, { hechos: h }), 'Todo marcado como hecho.');
+    return;
+  }
   if (ds.periodo) { E[ds.periodoDe] = ds.periodo; pintar(); return; }
   if (ds.mermaNueva) { dialogoMerma(); return; }
   if (ds.bodega) { dialogoBodega(ds.bodega); return; }
@@ -1642,7 +1656,7 @@ function dialogoBodega(tipo) {
   };
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>${conteo ? 'Conteo de bodega' : 'Llegó mercadería'} · hoy</h2>
-      <p class="ayuda">${conteo ? 'Cuenten lo que hay ahora de cada una (en sacos, kg, litros o unidades, según diga). Las que no cuenten, déjenlas vacías. El conteo reemplaza lo que decía la cuenta desde este momento.' : 'Escriban lo que llegó (en sacos, kg, litros o unidades, según diga). Lo demás, vacío.'}</p>
+      <p class="ayuda">${conteo ? `Cuenten al terminar la producción del día${E.area === 'CAF' ? ' (en Cafetería, después de cerrar la caja)' : ''}: el conteo vale como cierre de hoy, así que lo hecho hoy ya está incluido y desde mañana se descuenta solo. Escriban en sacos, kg, litros o unidades, según diga. Las que no cuenten, déjenlas vacías: siguen con su conteo anterior.` : 'Escriban lo que llegó (en sacos, kg, litros o unidades, según diga). Lo demás, vacío.'}</p>
       <div class="filas-aj">${cr.map(campo).join('')}</div>
       ${conteo ? '' : '<div class="campo"><label for="bo-nota">Proveedor o factura (opcional)</label><input id="bo-nota" maxlength="120" autocomplete="off"></div>'}
       <div class="error" id="bo-error" role="alert"></div>

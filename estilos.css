@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.10.1 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.11.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -338,3 +338,7 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
   .env-campos input { width: 64px; }
   .env-campos { gap: 6px; }
 }
+/* v0.11.0 · Panadería: aviso de que marcar terminada descuenta la bodega + marcar todo */
+.aviso-hecho { flex-wrap: wrap; align-items: center; }
+.aviso-hecho > span { flex: 1 1 260px; }
+.chip-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 600; font-size: 14px; }
