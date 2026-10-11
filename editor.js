@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.4.0
+//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.4.1
 //  Las jefas de Panadería y Bollería crean y editan recetas aquí. Una receta vigente NUNCA
 //  se cambia directo: cada cambio es una PROPUESTA (propuestas/{AREA}_{id}) que pasa por
 //  borrador → en prueba → en revisión. La aprueba (o la devuelve con un comentario)
@@ -10,7 +10,7 @@
 //  · Materia prima que falta: se pide desde aquí (solicitudes/{AREA}_{id}); la crea o habilita
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.4.0';
+import * as M from './modelo.js?v=0.4.1';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }
 export function configurar(api) { A = api; }
@@ -23,6 +23,8 @@ const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
 const esHarina = n => /^harina/.test(norm(n));
 const nuevoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const r1 = n => Math.round(M.num(n) * 10) / 10;
+// Para comparar datos: Firebase no devuelve los campos en el orden en que se escribieron
+const estable = v => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(c => [c, x[c]])) : x);
 
 // ── Datos de una receta (lo que guarda la propuesta) ──
 export function datosDe(r) {
@@ -70,13 +72,14 @@ export function crear(datos, { recetaId = null, origen = 'nueva', estado = 'borr
 export function alCambiarPropuestas() {
   const E = A.E, ed = E.editor; if (!ed) return;
   const p = E.propuestas[ed.pid]; if (!p) return;
-  const k = JSON.stringify(p.datos || {});
-  if (ed.estado === 'guardado' && k !== ed.base) { ed.datos = JSON.parse(k); ed.base = k; }
+  // Solo si de verdad cambió algo en otra tablet (lo de aquí, sin filas vacías, es distinto de lo que llegó)
+  const k = estable(p.datos || {});
+  if (ed.estado === 'guardado' && k !== ed.base && k !== estable(limpio(ed.datos))) { ed.datos = JSON.parse(JSON.stringify(p.datos || {})); ed.base = k; }
 }
 export function anular(pid, comentario) { cambiarEstado(pid, 'anulada', comentario); }
 export function abrirEditor(pid) {
   const p = A.E.propuestas[pid]; if (!p) return;
-  A.E.editor = { pid, datos: JSON.parse(JSON.stringify(p.datos || {})), base: JSON.stringify(p.datos || {}), t: 0, estado: 'guardado' };
+  A.E.editor = { pid, datos: JSON.parse(JSON.stringify(p.datos || {})), base: estable(p.datos || {}), t: 0, estado: 'guardado' };
   A.E.recetaVista = null;
   if (location.hash !== '#recetas') location.hash = '#recetas';
   A.pintar();
@@ -107,7 +110,7 @@ function guardarYa() {
   clearTimeout(ed.t);
   const p = A.E.propuestas[ed.pid]; if (!EDITABLE(p)) return;
   const datos = limpio(ed.datos);
-  ed.base = JSON.stringify(datos);
+  ed.base = estable(datos);
   ed.estado = 'guardando'; marcarEstado();
   A.setDoc(ref(ed.pid), { area: A.E.area, pid: ed.pid, datos, actualizado: { por: A.quien(), en: A.serverTimestamp() } }, { merge: true })
     .then(() => { if (A.E.editor && A.E.editor.pid === ed.pid && ed.estado === 'guardando') { ed.estado = 'guardado'; marcarEstado(); } })
@@ -133,10 +136,25 @@ function cambiarEstado(pid, nuevo, comentario = '') {
 }
 
 // ── Lo que se puede elegir como ingrediente o insumo (habilitado para el área) ──
+// Habilitada para el área: como en la app actual, "áreas habilitadas" vacío = sirve para todas
+export const habilitada = (m, area) => !(m.areas || []).length || (m.areas || []).map(a => String(a).trim().toUpperCase()).includes(area);
 function opciones(insumo) {
   const E = A.E;
-  return (E.mps || []).filter(m => m.estado !== 'inactiva' && m.estado !== 'pendiente' && (m.areas || []).includes(E.area) && (insumo ? m.tipo === 'insumo' : m.tipo !== 'insumo'))
+  return (E.mps || []).filter(m => (m.estado || 'activa') === 'activa' && habilitada(m, E.area) && (insumo ? m.tipo === 'insumo' : m.tipo !== 'insumo'))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+// Sugerencias mientras se escribe (por parte del nombre, sin importar tildes)
+function sugerencias(texto, insumo) {
+  const q = norm(texto); if (!q) return [];
+  const todas = opciones(insumo), empieza = todas.filter(m => norm(m.nombre).startsWith(q));
+  return [...empieza, ...todas.filter(m => !empieza.includes(m) && norm(m.nombre).includes(q))].slice(0, 8);
+}
+function pintarSugerencias(t, insumo) {
+  const caja = A.$(t.id + '-sug'); if (!caja) return;
+  const i = Number(insumo ? t.dataset.ins : t.dataset.ing), d = A.E.editor.datos, fila = (insumo ? d.insumos : d.ingredientes)[i];
+  const l = fila && fila.id && norm(fila.nombre) === norm(t.value) ? [] : sugerencias(t.value, insumo);
+  caja.innerHTML = l.map(m => `<button type="button" class="sug" data-elegir="${insumo ? 'ins' : 'ing'}" data-fila="${i}" data-mp="${A.esc(m.id)}">${A.esc(m.nombre)}${m.tipo === 'sub_receta' || /^SR/.test(m.id) ? ' <small>sub receta</small>' : ''}</button>`).join('')
+    || (t.value.trim() && !(fila && fila.id) ? '<span class="ayuda">No hay ninguna con ese nombre para esta área: pídela con "Falta una materia prima".</span>' : '');
 }
 const buscarOpcion = (nombre, insumo) => { const n = norm(nombre); return n ? opciones(insumo).find(m => norm(m.nombre) === n) || null : null; };
 // Una sub receta que rinde unidades se puede poner en unidades (1 masa, 0,1 masa…)
@@ -178,7 +196,7 @@ export function vistaEditor() {
   const filaIng = (i, k) => {
     const su = subEnUnidades(i.id), harina = esHarina(i.nombre), noExiste = i.nombre && !i.id;
     return `<div class="ing-fila" data-fila="${k}">
-      <div class="campo ing-nombre"><label for="ed-ing-${k}-n" class="sr">Ingrediente ${k + 1}</label><input id="ed-ing-${k}-n" list="lista-ing" data-ing="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Busca la materia prima o sub receta" autocomplete="off" ${dis}>
+      <div class="campo ing-nombre"><label for="ed-ing-${k}-n" class="sr">Ingrediente ${k + 1}</label><input id="ed-ing-${k}-n" data-ing="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Escribe para buscar la materia prima o sub receta" autocomplete="off" ${dis}><div class="sugs" id="ed-ing-${k}-n-sug"></div>
         ${noExiste ? `<small class="error">No está habilitada para ${esc(A.AREAS[E.area].nombre)}: pídela con "Falta una materia prima".</small>` : ''}</div>
       ${su ? `<div class="campo ing-num"><label for="ed-ing-${k}-u">Unidades</label><input id="ed-ing-${k}-u" data-ing="${k}" data-k="unidades" inputmode="decimal" value="${i.unidades === null || i.unidades === undefined ? '' : esc(String(i.unidades).replace('.', ','))}" ${dis}></div>` : ''}
       <div class="campo ing-num"><label for="ed-ing-${k}-g">Gramos</label><input id="ed-ing-${k}-g" data-ing="${k}" data-k="gramos" inputmode="decimal" value="${M.num(i.gramos) ? esc(String(r1(i.gramos)).replace('.', ',')) : ''}" ${dis}></div>
@@ -187,7 +205,7 @@ export function vistaEditor() {
     </div>`;
   };
   const filaIns = (i, k) => `<div class="ing-fila" data-fila-ins="${k}">
-      <div class="campo ing-nombre"><label for="ed-ins-${k}-n" class="sr">Insumo ${k + 1}</label><input id="ed-ins-${k}-n" list="lista-ins" data-ins="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Envase, etiqueta…" autocomplete="off" ${dis}>
+      <div class="campo ing-nombre"><label for="ed-ins-${k}-n" class="sr">Insumo ${k + 1}</label><input id="ed-ins-${k}-n" data-ins="${k}" data-k="nombre" value="${esc(i.nombre)}" placeholder="Escribe para buscar: envase, etiqueta…" autocomplete="off" ${dis}><div class="sugs" id="ed-ins-${k}-n-sug"></div>
         ${i.nombre && !i.id ? `<small class="error">No está habilitado: pídelo con "Falta una materia prima".</small>` : ''}</div>
       <div class="campo ing-num"><label for="ed-ins-${k}-c">Cantidad</label><input id="ed-ins-${k}-c" data-ins="${k}" data-k="cantidad" inputmode="decimal" value="${M.num(i.cantidad) ? esc(String(i.cantidad).replace('.', ',')) : ''}" ${dis}></div>
       ${puede ? `<button type="button" class="btn-x" data-quitar-ins="${k}" aria-label="Quitar insumo">×</button>` : ''}
@@ -224,13 +242,11 @@ export function vistaEditor() {
         <div class="campo"><label for="ed-caja">Unidades por caja (congelador)</label><input id="ed-caja" data-ed="unidadesPorCaja" inputmode="numeric" value="${M.num(d.unidadesPorCaja) || ''}" ${dis}></div></div>` : ''}
 
       <h3 class="rotulo">Ingredientes</h3>
-      <datalist id="lista-ing">${opciones(false).map(m => `<option value="${esc(m.nombre)}">`).join('')}</datalist>
       <div class="ings">${ings.map(filaIng).join('') || '<p class="ayuda">Sin ingredientes todavía.</p>'}</div>
       <div class="fila total"><span>Total${pan ? ` · harina <b id="ed-harina"></b>` : ''}</span><b id="ed-total"></b></div>
       ${puede ? `<div class="botones" style="justify-content:flex-start"><button type="button" class="btn-sec" data-ed-agregar="ing">+ Ingrediente</button><button type="button" class="btn-link" data-ed-pedir="1">Falta una materia prima</button></div>` : ''}
 
       ${d.tipo !== 'sub_receta' ? `<h3 class="rotulo">Insumos (envases, etiquetas) · por ${d.unidad === 'g' ? 'lote' : 'unidad'}</h3>
-      <datalist id="lista-ins">${opciones(true).map(m => `<option value="${esc(m.nombre)}">`).join('')}</datalist>
       <div class="ings">${ins.map(filaIns).join('') || '<p class="ayuda">Sin insumos.</p>'}</div>
       ${puede ? `<div class="botones" style="justify-content:flex-start"><button type="button" class="btn-sec" data-ed-agregar="ins">+ Insumo</button></div>` : ''}` : ''}
 
@@ -258,6 +274,13 @@ export function actualizarCalculos() {
     if (p && p !== act) p.value = pct ? String(pct).replace('.', ',') : '';
     if (pc) pc.textContent = pct ? M.unidades(pct) + ' %' : '';
   });
+}
+
+// Después de redibujar: si se estaba escribiendo un ingrediente, vuelven sus sugerencias
+export function trasPintar(el) {
+  if (!A.E.editor || !el || !el.dataset || el.dataset.k !== 'nombre') return;
+  if (el.dataset.ing !== undefined) pintarSugerencias(el, false);
+  else if (el.dataset.ins !== undefined) pintarSugerencias(el, true);
 }
 
 // ── Eventos ──
@@ -290,6 +313,16 @@ export function alClick(b) {
   }
   if (ds.quitarIns !== undefined) { ed.datos.insumos.splice(Number(ds.quitarIns), 1); programar(); A.pintar(); return true; }
   if (ds.quitarPaso !== undefined) { ed.datos.pasos.splice(Number(ds.quitarPaso), 1); programar(); A.pintar(); return true; }
+  if (ds.elegir) {
+    const lista = ds.elegir === 'ins' ? ed.datos.insumos : ed.datos.ingredientes, i = lista[Number(ds.fila)], m = (E.mps || []).find(x => x.id === ds.mp);
+    if (i && m) {
+      i.id = m.id; i.nombre = m.nombre;
+      if (ds.elegir === 'ing' && !subEnUnidades(m.id)) i.unidades = null;
+      programar(); A.pintar();
+      const sig = A.$(ds.elegir === 'ins' ? `ed-ins-${ds.fila}-c` : (subEnUnidades(m.id) ? `ed-ing-${ds.fila}-u` : `ed-ing-${ds.fila}-g`)); if (sig) sig.focus();
+    }
+    return true;
+  }
   if (ds.edPedir) { dialogoPedir(); return true; }
   if (ds.edEstado) {
     const nuevo = ds.edEstado;
@@ -331,7 +364,8 @@ export function alInput(t) {
       const m = buscarOpcion(t.value, false), antes = i.id;
       i.nombre = t.value; i.id = m ? m.id : '';
       if (m) i.nombre = m.nombre;
-      if (antes !== i.id) { const su = subEnUnidades(i.id); if (!su) i.unidades = null; programar(); A.pintar(); return true; }
+      if (antes !== i.id && i.id) { const su = subEnUnidades(i.id); if (!su) i.unidades = null; programar(); A.pintar(); return true; }
+      pintarSugerencias(t, false); programar(); return true;
     } else if (ds.k === 'gramos') {
       const antes = sumaHarinas(d);
       i.gramos = M.num(t.value);
@@ -349,7 +383,7 @@ export function alInput(t) {
   }
   if (ds.ins !== undefined) {
     const i = d.insumos[Number(ds.ins)]; if (!i) return true;
-    if (ds.k === 'nombre') { const m = buscarOpcion(t.value, true), antes = i.id; i.nombre = m ? m.nombre : t.value; i.id = m ? m.id : ''; if (antes !== i.id) { programar(); A.pintar(); return true; } }
+    if (ds.k === 'nombre') { const m = buscarOpcion(t.value, true), antes = i.id; i.nombre = m ? m.nombre : t.value; i.id = m ? m.id : ''; if (antes !== i.id && i.id) { programar(); A.pintar(); return true; } pintarSugerencias(t, true); programar(); return true; }
     else i.cantidad = M.num(t.value);
     programar(); return true;
   }
@@ -360,7 +394,7 @@ export function alInput(t) {
 // ── Pedir una materia prima (nueva o habilitar una que existe en otra área) ──
 function dialogoPedir() {
   const E = A.E, esc = A.esc, d = A.$('dialogo'), ed = E.editor;
-  const otras = (E.mps || []).filter(m => m.estado !== 'inactiva' && m.tipo !== 'sub_receta' && !/^SR/.test(m.id) && !(m.areas || []).includes(E.area)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const otras = (E.mps || []).filter(m => (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta' && !/^SR/.test(m.id) && !habilitada(m, E.area)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   let modo = 'nueva';
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>Falta una materia prima</h2>

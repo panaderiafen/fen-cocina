@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.4.0
+//  fën · Cocina — la app de las jefas  v0.4.1
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -23,10 +23,10 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.4.0';
-import * as M from './modelo.js?v=0.4.0';
-import * as B from './bolleria.js?v=0.4.0';
-import * as ED from './editor.js?v=0.4.0';
+} from './firebase.js?v=0.4.1';
+import * as M from './modelo.js?v=0.4.1';
+import * as B from './bolleria.js?v=0.4.1';
+import * as ED from './editor.js?v=0.4.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -321,6 +321,7 @@ function pintar() {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
     if (el.dataset.celda || el.dataset.num) el.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(el.value));
     try { el.setSelectionRange(guardado.ini, guardado.fin); } catch (e) {}
+    if (v === 'recetas' && E.editor) ED.trasPintar(el);
   }
 }
 
