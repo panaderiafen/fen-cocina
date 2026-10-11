@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — cálculos de Bollería (sin pantalla)  v0.5.1
+//  fën · Cocina — cálculos de Bollería (sin pantalla)  v0.6.0
 //  Metas semanales de productos → masas base y empastes que hay que elaborar la semana
 //  ANTERIOR, en masas enteras, y tandas según la amasadora.
 //
@@ -10,7 +10,7 @@
 //  · Producto: receta del área que lleva una masa base. Ej. Croissant XL = 0,1 un de Masa Base
 //    (1 masa rinde 10) + 30 g de Empaste (300 g por masa).
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.5.1';
+import * as M from './modelo.js?v=0.6.0';
 
 const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 // (el empaste y el poolish no son masas base aunque en la planilla tengan esa clasificación)
@@ -102,6 +102,8 @@ export const sumaDias = obj => Object.values(obj || {}).reduce((s, v) => s + M.n
 //  · descongelo { masa, n }            → −n masas y −n empastes (el empaste sale con su masa)
 //  · formo      { producto, n, congelar } → +congelar productos congelados; los demás (n − congelar) se hornean ese día
 //  · horneo     { producto, n }        → −n productos congelados (salen del congelador al horno)
+//  · v0.6.0: la merma del día (dias.merma) marcada "se perdió congelado" baja el stock: −n masas (su empaste
+//    queda) o −n productos. La que no está marcada no toca el stock: lo descongelado o sacado al horno ya salió.
 // El stock parte del último inventario y suma lo que vino después, día por día, en orden de anotación.
 export const TIPOS = {
   inventario: 'Inventario del congelador', elaboro: 'Elaboré masas', descongelo: 'Descongelé masas',
@@ -113,6 +115,9 @@ export function anotaciones(diasDocs, hasta) {
   Object.entries(diasDocs || {}).forEach(([f, d]) => {
     if (hasta && f > hasta) return;
     Object.entries((d && d.bitacora) || {}).forEach(([id, a]) => { if (a && !a.anulado) out.push({ ...a, id, fecha: f }); });
+    Object.entries((d && d.merma) || {}).forEach(([id, a]) => {
+      if (a && !a.anulado && a.congelado && a.item) out.push({ tipo: 'merma', id: 'merma_' + id, fecha: f, en: a.en, n: M.num(a.cantidad), [a.congeladoDe === 'masa' ? 'masa' : 'producto']: a.item });
+    });
   });
   return out.sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.en || '').localeCompare(String(b.en || '')));
 }
@@ -128,6 +133,7 @@ export function stock(diasDocs, hasta) {
     if (a.tipo === 'descongelo') { sumar(s.masas, a.masa, -a.n); if (a.conEmpaste !== false) sumar(s.empastes, a.masa, -a.n); }
     if (a.tipo === 'formo') sumar(s.productos, a.producto, a.congelar);
     if (a.tipo === 'horneo') sumar(s.productos, a.producto, -a.n);
+    if (a.tipo === 'merma') { if (a.masa) sumar(s.masas, a.masa, -a.n); else sumar(s.productos, a.producto, -a.n); }
   });
   return s;
 }

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.5.1
+//  fën · Cocina — la app de las jefas  v0.6.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,31 +21,36 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.6.0 (P4b): Merma en las cuatro áreas (sin precios; Sistema Fën la valoriza) y Cafetería entra a la app
+//  nueva con su Bitácora de turno (calibración, café botado, pruebas). Ambas se copian solas a la planilla.
+//  En Bollería, la merma marcada "se perdió congelado" baja el stock congelado (la que no, no: ya había salido).
 //  v0.5.1: una tablet puede entrar a más de un área (la cuenta tiene "areas"): botón "Cambiar de área".
 //  Antes de cambiar se guarda lo pendiente; en cada área se pide el PIN de una persona de esa área.
 // ═══════════════════════════════════════════════
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.5.1';
-import * as M from './modelo.js?v=0.5.1';
-import * as B from './bolleria.js?v=0.5.1';
-import * as ED from './editor.js?v=0.5.1';
+} from './firebase.js?v=0.6.0';
+import * as M from './modelo.js?v=0.6.0';
+import * as B from './bolleria.js?v=0.6.0';
+import * as ED from './editor.js?v=0.6.0';
+import * as R from './registros.js?v=0.6.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
   PAN: { nombre: 'Panadería', icono: 'pan', nueva: true },
   BOL: { nombre: 'Bollería', icono: 'croissant', nueva: true },
   PAS: { nombre: 'Pastelería', icono: 'torta', nueva: true },
-  CAF: { nombre: 'Cafetería', icono: 'cafe', nueva: false }
+  CAF: { nombre: 'Cafetería', icono: 'cafe', nueva: true }
 };
 const ESTADOS = { consolidada: 'Aprobada', en_prueba: 'En prueba', borrador: 'Borrador', 'pendiente_aprobación': 'En revisión', pendiente_aprobacion: 'En revisión' };
 const K_PERSONA = 'fen_cocina_persona', K_AREA = 'fen_cocina_area';
 // Secciones de cada área (las que no están, solo Recetas)
 const SECCIONES = {
-  PAN: [['hoy', 'Hoy', 'hoy'], ['plan', 'Planificación', 'plan'], ['recetas', 'Recetas', 'libro']],
-  BOL: [['hoy', 'Hoy', 'hoy'], ['bitacora', 'Bitácora', 'bitacora'], ['metas', 'Metas', 'meta'], ['masas', 'Masas', 'capas'], ['recetas', 'Recetas', 'libro']],
-  PAS: [['hoy', 'Hoy', 'hoy'], ['recetas', 'Recetas', 'libro']]
+  PAN: [['hoy', 'Hoy', 'hoy'], ['plan', 'Planificación', 'plan'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']],
+  BOL: [['hoy', 'Hoy', 'hoy'], ['bitacora', 'Bitácora', 'bitacora'], ['metas', 'Metas', 'meta'], ['masas', 'Masas', 'capas'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']],
+  PAS: [['hoy', 'Hoy', 'hoy'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']],
+  CAF: [['turno', 'Bitácora de turno', 'bitacora'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']]
 };
 const seccionesDe = a => SECCIONES[a] || [['recetas', 'Recetas', 'libro']];
 
@@ -53,7 +58,7 @@ const E = {
   usuario: null, area: null, areas: [], persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
-  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7),
+  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7), periodoMerma: 'semana', periodoTurno: 'hoy',
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -84,6 +89,7 @@ const IC = {
   meta: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>',
   bitacora: '<path d="M6 4h11a1 1 0 0 1 1 1v15H7a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   copo: '<path d="M12 3v18M4.5 7.5l15 9M19.5 7.5l-15 9"/>',
+  merma: '<path d="M5 7h14M10 4h4M7 7l1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12"/><path d="M10 11v5M14 11v5"/>',
   imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -151,6 +157,7 @@ function antesDeSalirDelArea() {
   if (E.editor) ED.cerrarEditor();
   const dlg = $('dialogo'); if (dlg.open) dlg.close();
   if (E.planilla.t) { clearTimeout(E.planilla.t); E.planilla.t = 0; pasarPlanilla(E.area); }   // el plan cambiado pasa a la planilla de su área
+  const rg = reg(); if (rg.t) { clearTimeout(rg.t); rg.t = 0; pasarRegistros(E.area); }
 }
 function dialogoArea() {
   const d = $('dialogo');
@@ -288,9 +295,10 @@ function iniciarEscuchas() {
     escuchar('propuestas', query(collection(db, 'propuestas'), where('area', '==', E.area)), sn => { E.propuestas = {}; sn.docs.forEach(d => { const x = d.data(); E.propuestas[x.pid] = { ...x, id: x.pid }; }); E.cargado.propuestas = true; ED.alCambiarPropuestas(); repintar(); });
     escuchar('solicitudes', query(collection(db, 'solicitudes'), where('area', '==', E.area)), sn => { E.solicitudes = {}; sn.docs.forEach(d => { const x = d.data(); E.solicitudes[x.id] = x; }); repintar(); });
   }
-  // Bollería: todos sus días (la bitácora de cada uno arma el stock congelado)
-  if (E.area === 'BOL') escuchar('diasArea', query(collection(db, 'dias'), where('area', '==', E.area)), sn => {
-    E.diasArea = {}; sn.docs.forEach(d => { const x = d.data(); if (x.fecha) E.diasArea[x.fecha] = x; }); E.cargado.diasArea = true; repintar();
+  // Todos los días del área: la bitácora de Bollería arma el stock congelado; la merma y la bitácora de
+  // Cafetería se ven por semana o mes. Lo que quedó sin copiar a la planilla se copia.
+  escuchar('diasArea', query(collection(db, 'dias'), where('area', '==', E.area)), sn => {
+    E.diasArea = {}; sn.docs.forEach(d => { const x = d.data(); if (x.fecha) E.diasArea[x.fecha] = x; }); E.cargado.diasArea = true; repintar(); revisarRegistros();
   });
   escuchar('ajustes', query(collection(db, 'ajustes'), where('area', '==', E.area)), sn => {
     E.ajustes = {}; sn.docs.forEach(d => { const a = d.data(); E.ajustes[a.recetaId] = a; }); E.cargado.ajustes = true; repintar();
@@ -375,9 +383,9 @@ function pintar() {
   const main = $('principal');
   if (!seccionesDe(E.area).some(x => x[0] === v)) { location.hash = '#' + seccionesDe(E.area)[0][0]; return; }
   $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas'
-    : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
+    : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'merma' ? 'Merma · lo que se pierde' : v === 'turno' ? 'Bitácora de turno · ' + M.fechaLarga(M.hoyTxt()) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
     : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
-  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
+  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
   if (v === 'recetas' && E.editor) ED.actualizarCalculos();
   if (guardado && $(guardado.id)) {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
@@ -1149,6 +1157,16 @@ $('principal').addEventListener('click', async ev => {
     return;
   }
   if (ds.anotar) { dialogoAnotar(ds.anotar); return; }
+  if (ds.periodo) { E[ds.periodoDe] = ds.periodo; pintar(); return; }
+  if (ds.mermaNueva) { dialogoMerma(); return; }
+  if (ds.turnoNuevo) { dialogoTurno(ds.turnoNuevo); return; }
+  if (ds.anularReg) {
+    const [campo, fecha, id] = ds.anularReg.split('|');
+    if (!confirm('¿Anular esta anotación? Queda en el registro como anulada y deja de contar.')) return;
+    guardarSinEsperar(guardarDia(fecha, { [campo]: { [id]: { anulado: { por: quien(), en: ahoraIso() } } }, registrosPendientes: true }), 'Anotación anulada.');
+    programarRegistros();
+    return;
+  }
   if (ds.anular) {
     if (!confirm('¿Anular esta anotación? Queda en el registro como anulada y deja de contar.')) return;
     guardarSinEsperar(guardarDia(E.fecha, { bitacora: { [ds.anular]: { anulado: { por: quien(), en: ahoraIso() } } } }), 'Anotación anulada.');
@@ -1363,6 +1381,209 @@ function dialogoAjuste(rid) {
   };
 }
 // Se guardan hasta 30 períodos (los más viejos que ya terminaron se van primero)
+// ═══════════════ Merma (las cuatro áreas) ═══════════════
+// Sin precios: Sistema Fën la valoriza con los costos de la planilla. Se anota en el día de hoy.
+const PERIODOS = [['hoy', 'Hoy'], ['semana', 'Esta semana'], ['semana_ant', 'Semana pasada'], ['mes', 'Este mes'], ['mes_ant', 'Mes pasado']];
+function chipsPeriodo(clave, valor, cuales) {
+  return `<div class="botones-n" role="group" aria-label="Período">${PERIODOS.filter(([k]) => cuales.includes(k)).map(([k, t]) => `<button type="button" class="btn-sec" data-periodo="${k}" data-periodo-de="${clave}" aria-pressed="${valor === k}">${t}</button>`).join('')}</div>`;
+}
+function avisoCopia() {
+  const r = reg(); return r.error ? `<p class="ayuda">La copia a la planilla quedó pendiente (${esc(r.error)}). Se reintenta sola; lo anotado está guardado.</p>` : '';
+}
+function lineaAnot(campo, a, texto, detalle) {
+  return `<div class="anot ${a.anulado ? 'anulada' : ''}">
+      <div><b>${texto}</b><span class="ayuda">${detalle}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
+      ${a.anulado ? '' : `<button type="button" class="btn-link" data-anular-reg="${esc(campo)}|${esc(a.fecha)}|${esc(a.id)}">Anular</button>`}
+    </div>`;
+}
+function vistaMerma() {
+  if (!E.cargado.recetas || !E.cargado.mps || !E.cargado.diasArea) return '<div class="vacio">Cargando…</div>';
+  const per = R.periodo(E.periodoMerma), lista = R.delPeriodo(E.diasArea, 'merma', per), resumen = R.resumenMerma(lista);
+  const rango = per.desde === per.hasta ? M.fechaCorta(per.desde) : `${M.fechaCorta(per.desde)} al ${M.fechaCorta(per.hasta)}`;
+  return `
+    <div class="cab-seccion">
+      <p class="ayuda">Anoten lo que se pierde: productos, preparaciones o materias primas, con el motivo. Administración lo ve valorizado en Sistema Fën.</p>
+      <button type="button" class="btn btn-fuerte" data-merma-nueva="1">${ic('merma')}Anotar merma</button>
+    </div>
+    ${chipsPeriodo('periodoMerma', E.periodoMerma, ['hoy', 'semana', 'semana_ant', 'mes', 'mes_ant'])}
+    <div class="caja">
+      <span class="rotulo">Lo perdido · ${esc(rango)}</span>
+      ${resumen.length ? `<div class="lista-mini">${resumen.map(x => `<div class="fila sub"><span>${esc(x.nombre)}${x.tipo === 'mp' ? ' <small class="ayuda">(materia prima)</small>' : ''}</span><span>${esc(R.cantidadTexto(x.cantidad, x.unidad))}${x.veces > 1 ? ` · ${x.veces} veces` : ''}</span></div>`).join('')}</div>` : '<span class="ayuda">Nada anotado en este período.</span>'}
+    </div>
+    <h2 class="titulo">Anotaciones</h2>
+    ${lista.length ? `<div class="lista-bit">${lista.map(a => lineaAnot('merma', a,
+      `${esc(a.nombre)} · ${esc(R.cantidadTexto(a.cantidad, a.unidad))}`,
+      `${esc(R.MOTIVOS[a.motivo] || a.motivo || '')}${a.congelado ? ' · se perdió congelado' : ''}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin anotaciones.</p>'}
+    ${avisoCopia()}`;
+}
+// Lo que se puede anotar como merma en el área
+function itemsMerma() {
+  const area = E.area;
+  const recetas = E.recetas.filter(r => r.area === area && r.estado !== 'anulada').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const mps = E.mps.filter(m => ED.habilitada(m, area) && (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  return [
+    ...recetas.filter(r => r.tipo !== 'sub_receta').map(r => ({ tipo: 'receta', x: r, grupo: 'Productos' })),
+    ...recetas.filter(r => r.tipo === 'sub_receta').map(r => ({ tipo: 'receta', x: r, grupo: 'Preparaciones (sub recetas)', sub: true })),
+    ...mps.map(m => ({ tipo: 'mp', x: m, grupo: 'Materias primas' }))
+  ];
+}
+function dialogoMerma() {
+  const d = $('dialogo'), items = itemsMerma();
+  // Bollería: qué se puede perder congelado (masas base y productos que van al congelador)
+  const masas = E.area === 'BOL' ? B.masasBase(E.recetas, E.area).map(r => r.id) : [];
+  const congelables = E.area === 'BOL' ? productosBol().map(r => r.id) : [];
+  let elegido = null, motivo = 'derrame_error';
+  const lista = filtro => {
+    const q = String(filtro || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const vis = items.filter(it => !q || it.x.nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)).slice(0, 40);
+    let grupo = '';
+    $('mm-lista').innerHTML = vis.length ? vis.map(it => {
+      const cab = it.grupo !== grupo ? `<div class="rotulo mm-grupo">${esc(it.grupo)}</div>` : ''; grupo = it.grupo;
+      const k = it.tipo + ':' + it.x.id;
+      return `${cab}<button type="button" class="mm-op" data-mm="${esc(k)}" aria-pressed="${elegido && elegido.k === k}">${esc(it.x.nombre)}</button>`;
+    }).join('') : '<p class="ayuda">No hay nada con ese nombre.</p>';
+  };
+  const marcar = () => {
+    const u = elegido ? R.unidadDe(elegido.tipo, elegido.x) : 'un';
+    $('mm-u').textContent = elegido ? R.textoUnidad(u, 2) : '';
+    $('mm-elegido').textContent = elegido ? elegido.x.nombre : 'Elige qué se perdió';
+    d.querySelectorAll('[data-motivo]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.motivo === motivo)));
+    const cong = elegido && elegido.tipo === 'receta' && (masas.includes(elegido.x.id) || congelables.includes(elegido.x.id));
+    $('mm-cong-caja').classList.toggle('oculto', !cong);
+    if (!cong) $('mm-cong').checked = false;
+  };
+  d.innerHTML = `<form method="dialog" class="dlg">
+      <h2>Anotar merma · hoy</h2>
+      <div class="campo"><label for="mm-buscar">¿Qué se perdió?</label><input id="mm-buscar" autocomplete="off" placeholder="Buscar producto, preparación o materia prima"></div>
+      <div class="mm-lista" id="mm-lista" role="group" aria-label="Opciones"></div>
+      <p class="mm-elegido"><b id="mm-elegido"></b></p>
+      <div class="fila-aj"><label for="mm-cant">Cantidad</label><input id="mm-cant" inputmode="decimal" autocomplete="off"><span class="gr" id="mm-u"></span></div>
+      <h3 class="rotulo">Motivo</h3>
+      <div class="botones-n" role="group" aria-label="Motivo">${Object.entries(R.MOTIVOS).map(([k, t]) => `<button type="button" class="btn-sec" data-motivo="${k}" aria-pressed="false">${esc(t)}</button>`).join('')}</div>
+      <div id="mm-cong-caja" class="oculto">
+        <label class="check"><input type="checkbox" id="mm-cong"> Se perdió estando congelado (sale del stock congelado)</label>
+        <p class="ayuda">Márquenlo solo si estaba en el congelador (por ejemplo, vencido o dañado ahí). Si ya lo habían descongelado o sacado para hornear, no lo marquen: ya salió del stock cuando lo anotaron en la bitácora.</p>
+      </div>
+      <div class="campo"><label for="mm-nota">Nota (opcional)</label><input id="mm-nota" maxlength="200" autocomplete="off"></div>
+      <div class="error" id="mm-error" role="alert"></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Anotar</button></div>
+    </form>`;
+  lista(''); marcar(); d.showModal();
+  d.onsubmit = ev => ev.preventDefault();
+  d.onchange = null;
+  d.oninput = ev => { $('mm-error').textContent = ''; if (ev.target.id === 'mm-buscar') lista(ev.target.value); };
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (b.dataset.mm) { const it = items.find(x => x.tipo + ':' + x.x.id === b.dataset.mm); elegido = it ? { ...it, k: b.dataset.mm } : null; lista($('mm-buscar').value); marcar(); $('mm-cant').focus(); return; }
+    if (b.dataset.motivo) { motivo = b.dataset.motivo; marcar(); return; }
+    if (!b.dataset.guardar) return;
+    const err = t => { $('mm-error').textContent = t; };
+    if (!elegido) return err('Elige qué se perdió.');
+    const t = $('mm-cant').value.trim();
+    if (!/^\d+([.,]\d+)?$/.test(t) || !(M.num(t) > 0)) return err('Escribe la cantidad (un número mayor que 0).');
+    const u = R.unidadDe(elegido.tipo, elegido.x), n = M.num(t);
+    if (u === 'un' && elegido.tipo === 'receta' && n !== Math.round(n) && !confirm(`¿${M.unidades(n)} unidades? Normalmente se pierden unidades enteras.`)) return;
+    const cong = $('mm-cong').checked;
+    const a = { tipo: elegido.tipo, item: elegido.x.id, nombre: elegido.x.nombre, sub: !!elegido.sub, cantidad: n, unidad: u, motivo, nota: $('mm-nota').value.trim().slice(0, 200), por: quien(), en: ahoraIso() };
+    if (cong) { a.congelado = true; a.congeladoDe = masas.includes(elegido.x.id) ? 'masa' : 'producto'; }
+    d.close();
+    guardarSinEsperar(guardarDia(M.hoyTxt(), { merma: { [idAnot()]: a }, registrosPendientes: true }), 'Merma anotada.');
+    programarRegistros();
+  };
+}
+
+// ═══════════════ Cafetería: bitácora de turno ═══════════════
+// Calibraciones (shots × gramos por shot), café botado y pruebas de receta, en gramos de café.
+// Queda a nombre de quien entró con su PIN; si anota por otra persona de Cafetería, la elige.
+const gPorShot = () => M.num((E.config || {}).gramos_por_shot) || R.GRAMOS_SHOT;
+function vistaTurno() {
+  if (!E.cargado.diasArea) return '<div class="vacio">Cargando…</div>';
+  const per = R.periodo(E.periodoTurno), lista = R.delPeriodo(E.diasArea, 'turno', per), t = R.totalesCafe(lista);
+  const tiles = [['calibracion', 'Calibración'], ['merma', 'Café botado'], ['prueba_receta', 'Pruebas de receta']].map(([k, n]) =>
+    `<div class="caja cifra"><span class="rotulo">${n}</span><b>${esc(M.gramos(t[k]))}</b>${k === 'calibracion' && t.shots ? `<span class="ayuda">${M.miles(t.shots)} shots</span>` : ''}</div>`).join('');
+  return `
+    <div class="botones-bit">${Object.entries(R.TIPOS_CAF).map(([k, n]) => `<button type="button" class="btn-sec" data-turno-nuevo="${k}">${ic(k === 'calibracion' ? 'cafe' : k === 'merma' ? 'merma' : 'libro')}${esc(n)}</button>`).join('')}</div>
+    ${chipsPeriodo('periodoTurno', E.periodoTurno, ['hoy', 'semana', 'mes', 'mes_ant'])}
+    <section class="resumen resumen-cafe">${tiles}<div class="caja cifra total"><span class="rotulo">Total de café</span><b>${esc(M.gramos(t.total))}</b><span class="ayuda">${esc(gPorShot())} g por shot</span></div></section>
+    <h2 class="titulo">Anotaciones</h2>
+    ${lista.length ? `<div class="lista-bit">${lista.map(a => lineaAnot('turno', a,
+      `${esc(R.TIPOS_CAF[a.tipo] || a.tipo)} · ${a.tipo === 'calibracion' ? `${M.miles(a.shots)} ${M.num(a.shots) === 1 ? 'shot' : 'shots'} × ${esc(M.unidades(a.gPorShot))} g = ` : ''}${esc(M.gramos(a.gramos))}`,
+      `${esc((a.barista && a.barista.nombre) || a.por || '')}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin anotaciones en este período.</p>'}
+    ${avisoCopia()}`;
+}
+function dialogoTurno(tipo) {
+  const d = $('dialogo'), cal = tipo === 'calibracion', gps = gPorShot();
+  const personas = personasDelArea(), yo = E.persona || {};
+  const opciones = personas.some(p => p.id === yo.email) ? personas : [{ id: yo.email || '', nombre: yo.nombre || '' }, ...personas];
+  d.innerHTML = `<form method="dialog" class="dlg">
+      <h2>${esc(R.TIPOS_CAF[tipo])} · hoy</h2>
+      <div class="campo"><label for="tu-barista">Barista</label><select id="tu-barista">${opciones.map(p => `<option value="${esc(p.id)}" ${p.id === yo.email ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+      <div class="filas-aj">
+        ${cal ? `<div class="fila-aj"><label for="tu-shots">Shots</label><input id="tu-shots" inputmode="numeric" value="1" autocomplete="off"><span class="gr"></span></div>
+          <div class="fila-aj"><label for="tu-gps">Gramos por shot<small>De la configuración: ${esc(M.unidades(gps))} g</small></label><input id="tu-gps" inputmode="decimal" value="${esc(String(gps).replace('.', ','))}" autocomplete="off"><span class="gr">g</span></div>`
+          : `<div class="fila-aj"><label for="tu-g">Gramos de café</label><input id="tu-g" inputmode="decimal" autocomplete="off"><span class="gr">g</span></div>`}
+      </div>
+      <p class="ayuda" id="tu-total"></p>
+      <div class="campo"><label for="tu-nota">Nota (opcional)</label><input id="tu-nota" maxlength="200" autocomplete="off" placeholder="${cal ? 'Ej: molienda 2,5, extracción 28 s' : tipo === 'merma' ? 'Ej: se botó por molienda gruesa' : 'Ej: prueba de latte de temporada'}"></div>
+      <div class="error" id="tu-error" role="alert"></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Anotar</button></div>
+    </form>`;
+  const total = () => cal ? R.gramosCafe(tipo, $('tu-shots').value, M.num($('tu-gps').value)) : R.gramosCafe(tipo, 0, 0, M.num($('tu-g').value));
+  const pintarTotal = () => { $('tu-total').textContent = `Total: ${M.gramos(total())} de café.`; };
+  pintarTotal(); d.showModal();
+  d.onsubmit = ev => ev.preventDefault();
+  d.onchange = null;
+  d.oninput = () => { $('tu-error').textContent = ''; pintarTotal(); };
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (!b.dataset.guardar) return;
+    const err = t => { $('tu-error').textContent = t; };
+    const dec = id => { const t = $(id).value.trim(); return /^\d+([.,]\d+)?$/.test(t) ? M.num(t) : NaN; };
+    let a;
+    if (cal) {
+      const sh = $('tu-shots').value.trim(), g = dec('tu-gps');
+      if (!/^\d+$/.test(sh) || !(Number(sh) > 0)) return err('Escribe cuántos shots (número entero).');
+      if (!(g > 0)) return err('Escribe los gramos por shot.');
+      a = { tipo, shots: Number(sh), gPorShot: g, gramos: R.gramosCafe(tipo, sh, g) };
+    } else {
+      const g = dec('tu-g'); if (!(g > 0)) return err('Escribe los gramos de café.');
+      a = { tipo, gramos: R.gramosCafe(tipo, 0, 0, g) };
+    }
+    const sel = $('tu-barista'), p = opciones.find(x => x.id === sel.value) || { id: '', nombre: '' };
+    Object.assign(a, { barista: { email: p.id, nombre: p.nombre }, nota: $('tu-nota').value.trim().slice(0, 200), por: quien(), en: ahoraIso() });
+    d.close();
+    guardarSinEsperar(guardarDia(M.hoyTxt(), { turno: { [idAnot()]: a }, registrosPendientes: true }), 'Anotado.');
+    programarRegistros();
+  };
+}
+
+// La merma y la bitácora de Cafetería se copian a la planilla ("Registro_merma" y "CAF_registros"): el
+// script lee los días con registrosPendientes y no duplica (cada anotación lleva su id).
+// Un reloj por área (una tablet con varias áreas no pisa el reintento de otra)
+E.registros = {};
+const reg = (area = E.area) => E.registros[area] || (E.registros[area] = { t: 0, corriendo: false, error: '' });
+function programarRegistros(ms = 10000, area = E.area) { const r = reg(area); clearTimeout(r.t); r.t = setTimeout(() => pasarRegistros(area), ms); }
+function revisarRegistros() { const r = reg(); if (Object.values(E.diasArea).some(d => d && d.registrosPendientes) && !r.t && !r.corriendo) programarRegistros(5000); }
+async function pasarRegistros(area) {
+  const deArea = typeof area === 'string' ? area : E.area, R0 = reg(deArea);
+  R0.t = 0;
+  if (R0.corriendo || !E.usuario || navigator.onLine === false) { programarRegistros(60000, deArea); return; }
+  R0.corriendo = true;
+  try {
+    const r = await llamarScript({ action: 'cocina_registros', area: deArea });
+    if (!r || r.ok !== true) throw new Error((r && (r.error || r.msg)) || 'sin respuesta');
+    R0.error = '';
+  } catch (e) { R0.error = e.message || String(e); programarRegistros(120000, deArea); }
+  finally {
+    R0.corriendo = false;
+    // Si se anotó algo mientras copiaba, ese día quedó pendiente: se vuelve a revisar
+    if (deArea === E.area) revisarRegistros();
+    repintar();
+  }
+}
+
 function recortar(lista) { return lista.slice(-30); }
 
 // El formulario de recetas (editor.js) usa estas piezas de la app

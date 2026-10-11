@@ -1,6 +1,6 @@
-# fën · Cocina · v0.5.1
+# fën · Cocina · v0.6.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.5.1: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.6.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,47 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.6.0 · Merma en las cuatro áreas y Cafetería entra a la app nueva (P4b)
+**Qué cambia:**
+- **GitHub (fen-cocina):** `registros.js` (**nuevo**), `app.js`, `bolleria.js`, `estilos.css`, `index.html`, `config.js`, `README.md` y los demás `.js` (solo versión).
+- **Reglas:** no cambian (siguen las v1.4.0).
+- **Script de Producción v2.7.0:** copia la merma y la bitácora de café a la planilla, y le da a Sistema Fën los costos de la merma.
+- **Sistema Fën v0.36.0:** la merma valorizada y los gramos por shot de Cafetería.
+
+**Merma (Panadería, Bollería, Pastelería y Cafetería):** sección nueva **Merma**.
+- **Anotar merma**: se busca qué se perdió (producto, preparación o materia prima del área) y se anotan la cantidad, el motivo y una nota opcional. Queda a nombre de quien entró con PIN.
+  - La unidad la pone la app: unidades o gramos según la receta; g, ml o unidades según la materia prima.
+  - Motivos: derrame o error, quemado o mal horneado, vencimiento, devolución de cliente, prueba de receta, otro.
+- Se ve lo perdido por **hoy, semana o mes**, sumado por ítem, y cada anotación se puede **anular** (no se borra).
+- **Sin precios:** las jefas no ven costos. Tú la ves valorizada en Sistema Fën.
+- **Bollería y el congelado:** al elegir un producto que va al congelador o una masa base, aparece "Se perdió estando congelado".
+  - **Marcado:** baja el stock congelado. Una masa deja su empaste.
+  - **Sin marcar:** no toca el stock.
+  - Ejemplo: descongelan 100 croissant y se queman 10. Los 100 ya salieron del stock al anotar "Descongelé", así que esos 10 **no** se marcan.
+
+**Cafetería · Bitácora de turno** (Cafetería entra a la app nueva: Bitácora de turno, Merma y Recetas):
+- **Calibración** (shots × gramos por shot), **Café botado** y **Prueba de receta**, en gramos de café, con nota.
+- La anotación queda a nombre de **quien entró con PIN**. Si anota por un compañero, lo elige de la lista de personas de Cafetería (las de Asistencia). Ya no hay lista de baristas aparte ni turno mañana/tarde.
+- Totales de **hoy, la semana o el mes**: calibración, café botado, pruebas y total de café.
+- Los gramos por shot salen de la configuración de Cafetería en Sistema Fën (14 g si está vacía, como la app actual). Se pueden cambiar en cada calibración.
+
+**Planilla:** la merma va sola a **Registro_merma** (con su costo, como la app actual) y la bitácora de café a **CAF_registros**.
+- Se agregan las columnas id_cocina, anotado_por y anulado.
+- Copiar dos veces no duplica, y una anotación anulada queda marcada en "anulado".
+
+**Orden:**
+1. Script v2.7.0 (Seguridad y SistemaFen → Nueva versión). Ping: 2.7.0.
+2. Sistema Fën v0.36.0. Opcional: Producción → Configuración → Cafetería → gramos por shot.
+3. Cocina v0.6.0.
+4. Para que la tablet de Cafetería entre: Sistema Fën → Producción → Cuentas de las áreas (una cuenta de Cafetería, o "También entra a" en una tablet existente). Sus personas salen de Asistencia ("Leer la planilla" → "Copiar").
+
+**Lista de verificación v0.6.0**
+- [ ] Abajo dice **Cocina v0.6.0**. Cada área tiene la sección **Merma**.
+- [ ] Anotar una merma de prueba y anularla. En la planilla, Registro_merma tiene la fila con "anulado = si" (tarda unos segundos).
+- [ ] Bollería: una merma marcada "se perdió congelado" baja el congelado en la Bitácora; una sin marcar, no.
+- [ ] Cafetería: anotar una calibración. El total cuadra y aparece en CAF_registros.
+- [ ] Sistema Fën → Producción → Merma → "Ver": aparece valorizada.
 
 ## Novedades v0.5.1 · una tablet en más de un área
 **Qué cambia:**

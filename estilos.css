@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.5.1 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.6.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -303,3 +303,17 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
 .btn-area-op small { color: var(--suave); font-size: 13px; }
 .btn-area-op[aria-current="true"] { background: var(--tinte); border-color: var(--acento); cursor: default; }
 .pin-caja .btn-link { margin-top: 14px; }
+
+/* v0.6.0 · Merma y bitácora de turno de Cafetería */
+.cab-seccion { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cab-seccion .ayuda { flex: 1; min-width: 240px; margin: 0; }
+.mm-lista { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; border: 1px solid var(--linea); border-radius: 12px; padding: 8px; margin: 6px 0 4px; background: #fff; }
+.mm-grupo { margin: 8px 4px 2px; font-size: 12px; }
+.mm-grupo:first-child { margin-top: 0; }
+.mm-op { min-height: 44px; text-align: left; padding: 0 12px; border: 1px solid transparent; border-radius: 10px; background: none; font-size: 15px; cursor: pointer; color: inherit; }
+.mm-op:hover { background: var(--tinte); }
+.mm-op[aria-pressed="true"] { background: var(--tinte); border-color: var(--acento); font-weight: 600; }
+.mm-elegido { margin: 4px 0 10px; min-height: 22px; }
+.resumen-cafe { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-top: 4px; }
+.caja.cifra b { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.caja.cifra.total { border-color: var(--acento); background: var(--tinte); }
