@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.6.0
+//  fën · Cocina — la app de las jefas  v0.7.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,9 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.7.0 (P5): Bodega en las cuatro áreas: "Llegó mercadería" y "Conteo de bodega" de las materias primas
+//  críticas (bodega común: lo que cuenta un área vale para todas). El stock y las alertas los calcula Sistema Fën
+//  con lo hecho en Cocina; aquí se ve lo que está bajo el mínimo.
 //  v0.6.0 (P4b): Merma en las cuatro áreas (sin precios; Sistema Fën la valoriza) y Cafetería entra a la app
 //  nueva con su Bitácora de turno (calibración, café botado, pruebas). Ambas se copian solas a la planilla.
 //  En Bollería, la merma marcada "se perdió congelado" baja el stock congelado (la que no, no: ya había salido).
@@ -30,11 +33,12 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.6.0';
-import * as M from './modelo.js?v=0.6.0';
-import * as B from './bolleria.js?v=0.6.0';
-import * as ED from './editor.js?v=0.6.0';
-import * as R from './registros.js?v=0.6.0';
+} from './firebase.js?v=0.7.0';
+import * as M from './modelo.js?v=0.7.0';
+import * as B from './bolleria.js?v=0.7.0';
+import * as ED from './editor.js?v=0.7.0';
+import * as R from './registros.js?v=0.7.0';
+import * as K from './consumo.js?v=0.7.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -47,10 +51,10 @@ const ESTADOS = { consolidada: 'Aprobada', en_prueba: 'En prueba', borrador: 'Bo
 const K_PERSONA = 'fen_cocina_persona', K_AREA = 'fen_cocina_area';
 // Secciones de cada área (las que no están, solo Recetas)
 const SECCIONES = {
-  PAN: [['hoy', 'Hoy', 'hoy'], ['plan', 'Planificación', 'plan'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']],
-  BOL: [['hoy', 'Hoy', 'hoy'], ['bitacora', 'Bitácora', 'bitacora'], ['metas', 'Metas', 'meta'], ['masas', 'Masas', 'capas'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']],
-  PAS: [['hoy', 'Hoy', 'hoy'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']],
-  CAF: [['turno', 'Bitácora de turno', 'bitacora'], ['merma', 'Merma', 'merma'], ['recetas', 'Recetas', 'libro']]
+  PAN: [['hoy', 'Hoy', 'hoy'], ['plan', 'Planificación', 'plan'], ['merma', 'Merma', 'merma'], ['bodega', 'Bodega', 'bodega'], ['recetas', 'Recetas', 'libro']],
+  BOL: [['hoy', 'Hoy', 'hoy'], ['bitacora', 'Bitácora', 'bitacora'], ['metas', 'Metas', 'meta'], ['masas', 'Masas', 'capas'], ['merma', 'Merma', 'merma'], ['bodega', 'Bodega', 'bodega'], ['recetas', 'Recetas', 'libro']],
+  PAS: [['hoy', 'Hoy', 'hoy'], ['merma', 'Merma', 'merma'], ['bodega', 'Bodega', 'bodega'], ['recetas', 'Recetas', 'libro']],
+  CAF: [['turno', 'Bitácora de turno', 'bitacora'], ['merma', 'Merma', 'merma'], ['bodega', 'Bodega', 'bodega'], ['recetas', 'Recetas', 'libro']]
 };
 const seccionesDe = a => SECCIONES[a] || [['recetas', 'Recetas', 'libro']];
 
@@ -58,7 +62,7 @@ const E = {
   usuario: null, area: null, areas: [], persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
-  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7), periodoMerma: 'semana', periodoTurno: 'hoy',
+  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7), periodoMerma: 'semana', periodoTurno: 'hoy', stockmp: {},
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -90,6 +94,7 @@ const IC = {
   bitacora: '<path d="M6 4h11a1 1 0 0 1 1 1v15H7a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   copo: '<path d="M12 3v18M4.5 7.5l15 9M19.5 7.5l-15 9"/>',
   merma: '<path d="M5 7h14M10 4h4M7 7l1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12"/><path d="M10 11v5M14 11v5"/>',
+  bodega: '<path d="M4 9l8-5 8 5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M8 20v-7h8v7M8 16h8"/>',
   imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -276,7 +281,7 @@ function escuchar(clave, ref, cb, alFallar) {
   if (E.escuchas[clave]) return;
   E.escuchas[clave] = onSnapshot(ref, cb, err => {
     delete E.escuchas[clave];
-    if (alFallar) alFallar(err);
+    if (alFallar && alFallar(err) === 'silencio') return;
     if (/permission-denied/.test(err.code || '')) avisar('Este equipo perdió el permiso para leer. Pide a Administración que revise la cuenta del área.', true);
   });
 }
@@ -286,6 +291,8 @@ function iniciarEscuchas() {
   escuchar('recetas', collection(db, 'recetas'), sn => { E.recetas = sn.docs.map(d => ({ id: d.id, ...d.data() })); E.cargado.recetas = true; repintar(); });
   escuchar('mps', collection(db, 'mps'), sn => { E.mps = sn.docs.map(d => ({ id: d.id, ...d.data() })); E.cargado.mps = true; repintar(); });
   escuchar('config', doc(db, 'config', E.area), sn => { E.config = sn.exists() ? sn.data() : {}; E.cargado.config = true; repintar(); });
+  escuchar('stockmp', collection(db, 'stockmp'), sn => { E.stockmp = {}; sn.docs.forEach(d => { E.stockmp[d.id] = d.data(); }); E.cargado.stockmp = true; repintar(); },
+    () => { E.stockmp = {}; E.cargado.stockmp = true; repintar(); return 'silencio'; });   // sin las reglas v1.5.0: se usa lo de la planilla (sin avisar)
   escuchar('personas', collection(db, 'personas'), sn => {
     E.personas = sn.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.activa !== false); E.cargado.personas = true;
     if (!$('v-pin').classList.contains('oculto')) pintarPin();
@@ -383,9 +390,9 @@ function pintar() {
   const main = $('principal');
   if (!seccionesDe(E.area).some(x => x[0] === v)) { location.hash = '#' + seccionesDe(E.area)[0][0]; return; }
   $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas'
-    : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'merma' ? 'Merma · lo que se pierde' : v === 'turno' ? 'Bitácora de turno · ' + M.fechaLarga(M.hoyTxt()) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
+    : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'merma' ? 'Merma · lo que se pierde' : v === 'bodega' ? 'Bodega · materias primas críticas' : v === 'turno' ? 'Bitácora de turno · ' + M.fechaLarga(M.hoyTxt()) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · se elaboran del ${M.fechaCorta(M.sumarDias(E.lunesMeta, -7))} al ${M.fechaCorta(M.sumarDias(E.lunesMeta, -3))}`
     : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
-  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
+  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'bodega' ? vistaBodega() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
   if (v === 'recetas' && E.editor) ED.actualizarCalculos();
   if (guardado && $(guardado.id)) {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
@@ -1159,6 +1166,7 @@ $('principal').addEventListener('click', async ev => {
   if (ds.anotar) { dialogoAnotar(ds.anotar); return; }
   if (ds.periodo) { E[ds.periodoDe] = ds.periodo; pintar(); return; }
   if (ds.mermaNueva) { dialogoMerma(); return; }
+  if (ds.bodega) { dialogoBodega(ds.bodega); return; }
   if (ds.turnoNuevo) { dialogoTurno(ds.turnoNuevo); return; }
   if (ds.anularReg) {
     const [campo, fecha, id] = ds.anularReg.split('|');
@@ -1555,6 +1563,78 @@ function dialogoTurno(tipo) {
     Object.assign(a, { barista: { email: p.id, nombre: p.nombre }, nota: $('tu-nota').value.trim().slice(0, 200), por: quien(), en: ahoraIso() });
     d.close();
     guardarSinEsperar(guardarDia(M.hoyTxt(), { turno: { [idAnot()]: a }, registrosPendientes: true }), 'Anotado.');
+    programarRegistros();
+  };
+}
+
+// ═══════════════ Bodega (P5): llegadas y conteo de las materias primas críticas ═══════════════
+// Bodega común: un stock por materia prima. Lo que cuenta un área vale para todas. Se anota en el día de hoy
+// del área (dias.bodega) y se copia a la planilla (MP_stock_movimientos). El stock lo calcula Sistema Fën.
+function criticas() {
+  return E.mps.filter(m => (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta' && K.control(m, E.stockmp[m.id]).critica)
+    .sort((a, b) => (ED.habilitada(b, E.area) - ED.habilitada(a, E.area)) || a.nombre.localeCompare(b.nombre, 'es'));
+}
+function vistaBodega() {
+  if (!E.cargado.mps || !E.cargado.diasArea || !E.cargado.stockmp) return '<div class="vacio">Cargando…</div>';
+  const cr = criticas(), hoy = M.hoyTxt();
+  const per = { desde: M.sumarDias(hoy, -13), hasta: hoy }, movs = R.delPeriodo(E.diasArea, 'bodega', per);
+  // Lo que calculó Sistema Fën (stock teórico y alertas)
+  const est = m => (E.stockmp[m.id] || {}).estado || null;
+  const bajos = cr.filter(m => { const e = est(m); return e && (e.bajoAhora || e.bajoDesde); });
+  const fila = m => {
+    const c = K.control(m, E.stockmp[m.id]), e = est(m);
+    const txt = !e ? 'Sin calcular todavía' : !e.contado ? 'Falta un conteo' : `${K.texto(e.stock, c.unidad)}${e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : ''}`;
+    return `<div class="fila sub"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}</span><span class="${e && (e.bajoAhora || e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
+  };
+  const calculado = cr.map(est).filter(Boolean).map(e => e.en).sort().pop();
+  return `
+    <div class="cab-seccion">
+      <p class="ayuda">Bodega común: lo que entra y lo que cuentan aquí vale para todas las áreas. El consumo se descuenta solo con lo que marcan como hecho.</p>
+      <div class="botones-bit"><button type="button" class="btn btn-fuerte" data-bodega="llegada">${ic('bodega')}Llegó mercadería</button><button type="button" class="btn-sec" data-bodega="conteo">${ic('pasos')}Conteo de bodega</button></div>
+    </div>
+    ${bajos.length ? `<div class="nota ojo">${ic('alerta')}<span>${bajos.map(m => { const e = est(m); return `<b>${esc(m.nombre)}</b> ${e.bajoAhora ? 'está bajo el mínimo' : 'queda bajo el mínimo el ' + esc(M.fechaLarga(e.bajoDesde).toLowerCase())}`; }).join(' · ')}. Avísale a Administración si no viene un pedido.</span></div>` : ''}
+    <div class="caja">
+      <span class="rotulo">Materias primas críticas</span>
+      ${cr.length ? `<div class="lista-mini">${cr.map(fila).join('')}</div>` : '<span class="ayuda">Administración todavía no marca materias primas críticas.</span>'}
+      ${calculado ? `<span class="ayuda">Calculado en Sistema Fën: ${esc(M.fechaCorta(M.hoyTxt(new Date(calculado))))} ${esc(horaDe(calculado))}.</span>` : ''}
+    </div>
+    <h2 class="titulo">Llegadas y conteos de ${esc(AREAS[E.area].nombre)} (14 días)</h2>
+    ${movs.length ? `<div class="lista-bit">${movs.map(a => lineaAnot('bodega', a,
+      `${a.tipo === 'conteo' ? 'Conteo' : 'Llegó'}: ${esc(a.nombre)} · ${esc(K.texto(a.cantidad, a.unidad))}`,
+      `${a.nota ? esc(a.nota) + ' · ' : ''}${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin llegadas ni conteos.</p>'}
+    ${avisoCopia()}`;
+}
+function dialogoBodega(tipo) {
+  const d = $('dialogo'), cr = criticas(), conteo = tipo === 'conteo';
+  if (!cr.length) { avisar('Administración todavía no marca materias primas críticas (Sistema Fën → Producción → Bodega).', true); return; }
+  const campo = m => { const u = K.unidadMp(m); return `<div class="fila-aj"><label for="bo-${esc(m.id)}">${esc(m.nombre)}${!ED.habilitada(m, E.area) ? '<small>De otra área</small>' : ''}</label><input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off"><span class="gr">${K.unidadEntrada(u)}</span></div>`; };
+  d.innerHTML = `<form method="dialog" class="dlg">
+      <h2>${conteo ? 'Conteo de bodega' : 'Llegó mercadería'} · hoy</h2>
+      <p class="ayuda">${conteo ? 'Cuenten lo que hay ahora de cada una (en kg, litros o unidades). Las que no cuenten, déjenlas vacías. El conteo reemplaza lo que decía la cuenta desde este momento.' : 'Escriban lo que llegó (en kg, litros o unidades). Lo demás, vacío.'}</p>
+      <div class="filas-aj">${cr.map(campo).join('')}</div>
+      ${conteo ? '' : '<div class="campo"><label for="bo-nota">Proveedor o factura (opcional)</label><input id="bo-nota" maxlength="120" autocomplete="off"></div>'}
+      <div class="error" id="bo-error" role="alert"></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">${conteo ? 'Guardar conteo' : 'Anotar llegada'}</button></div>
+    </form>`;
+  d.showModal();
+  d.onsubmit = ev => ev.preventDefault();
+  d.onchange = null;
+  d.oninput = () => { $('bo-error').textContent = ''; };
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (!b.dataset.guardar) return;
+    const entradas = {}, nota = conteo ? '' : $('bo-nota').value.trim().slice(0, 120);
+    for (const m of cr) {
+      const t = $('bo-' + m.id).value.trim(); if (t === '') continue;
+      if (!/^\d+([.,]\d+)?$/.test(t)) { $('bo-error').textContent = `${m.nombre}: escribe solo el número.`; return; }
+      if (!conteo && !(M.num(t) > 0)) { $('bo-error').textContent = `${m.nombre}: la cantidad que llegó tiene que ser mayor que 0.`; return; }
+      const u = K.unidadMp(m);
+      entradas[idAnot()] = { tipo, mp: m.id, nombre: m.nombre, cantidad: Math.round(K.aBase(t, u) * 100) / 100, unidad: u, nota, por: quien(), en: ahoraIso() };
+    }
+    if (!Object.keys(entradas).length) { $('bo-error').textContent = conteo ? 'Escribe al menos un conteo.' : 'Escribe lo que llegó.'; return; }
+    d.close();
+    guardarSinEsperar(guardarDia(M.hoyTxt(), { bodega: entradas, registrosPendientes: true }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
     programarRegistros();
   };
 }

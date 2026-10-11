@@ -1,6 +1,6 @@
-# fën · Cocina · v0.6.0
+# fën · Cocina · v0.7.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.6.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.7.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,42 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.7.0 · Bodega: llegadas, conteo y stock de las materias primas críticas (P5)
+**Qué cambia:**
+- **GitHub (fen-cocina):** `consumo.js` (**nuevo**), `app.js`, `modelo.js`, `bolleria.js`, `estilos.css`, `index.html`, `config.js`, `firestore-produccion.rules`, `README.md` y los demás `.js` (solo versión).
+- **Reglas v1.5.0:** las áreas pueden **leer** `stockmp` (qué materias primas son críticas, su mínimo y cómo están). Solo Administración lo cambia.
+- **Script de Producción v2.8.0:** copia llegadas y conteos a `MP_stock_movimientos`.
+- **Sistema Fën v0.37.0:** el stock, el consumo por área y las alertas.
+
+**Cómo funciona (bodega común: un stock por materia prima):**
+- Sección nueva **Bodega** en las cuatro áreas:
+  - **Llegó mercadería:** qué llegó y cuánto (en kg, litros o unidades), con proveedor o factura.
+  - **Conteo de bodega:** lo que hay ahora. El conteo reemplaza lo que decía la cuenta desde ese momento.
+  - Lo que cuenta o recibe un área vale para todas.
+- **El stock baja solo con lo que marcan como hecho:**
+  - Panadería: recetas terminadas.
+  - Bollería: masas elaboradas con su empaste, y productos formados (bitácora).
+  - Pastelería: recetas terminadas.
+  - Además, la merma de materias primas.
+  - Las recetas se bajan por sus sub recetas hasta las materias primas. Una preparación de otra área la cuenta el área que la hace (la crema pastelera la cuenta Pastelería, no Bollería al rellenar). El pie de masa madre no se cuenta.
+  - Cafetería todavía no descuenta: eso irá con las ventas.
+- **Aviso arriba** cuando una materia prima crítica está bajo el mínimo, o va a quedar bajo el mínimo en los próximos días con lo planificado.
+- **Las jefas ven cantidades, nunca precios.** El stock lo calcula Sistema Fën; la tablet muestra el último cálculo.
+
+**Orden:**
+1. Reglas v1.5.0 (consola de Firebase de fen-produccion → Firestore → Reglas → Publicar).
+2. Script v2.8.0 (Seguridad y SistemaFen → Nueva versión). Ping: 2.8.0.
+3. Sistema Fën v0.37.0 → Producción → Bodega → **Calcular**, y marca las críticas con su mínimo (harina, mantequilla, leche…).
+4. Cocina v0.7.0.
+5. Primer **conteo de bodega** de cada crítica: desde ahí la cuenta se mueve sola.
+
+**Lista de verificación v0.7.0**
+- [ ] Abajo dice **Cocina v0.7.0**. Cada área tiene **Bodega**.
+- [ ] En Bodega aparecen las críticas que marcaste en Sistema Fën, con "Falta un conteo".
+- [ ] Hacer el conteo. En Sistema Fën → Bodega → Calcular, el stock es lo contado.
+- [ ] Marcar una receta terminada, volver a calcular: el stock baja.
+- [ ] Anotar una llegada: sube, y aparece en la hoja MP_stock_movimientos.
 
 ## Novedades v0.6.0 · Merma en las cuatro áreas y Cafetería entra a la app nueva (P4b)
 **Qué cambia:**

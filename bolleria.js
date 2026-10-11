@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — cálculos de Bollería (sin pantalla)  v0.6.0
+//  fën · Cocina — cálculos de Bollería (sin pantalla)  v0.7.0
 //  Metas semanales de productos → masas base y empastes que hay que elaborar la semana
 //  ANTERIOR, en masas enteras, y tandas según la amasadora.
 //
@@ -10,12 +10,12 @@
 //  · Producto: receta del área que lleva una masa base. Ej. Croissant XL = 0,1 un de Masa Base
 //    (1 masa rinde 10) + 30 g de Empaste (300 g por masa).
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.6.0';
+import * as M from './modelo.js?v=0.7.0';
 
 const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 // (el empaste y el poolish no son masas base aunque en la planilla tengan esa clasificación)
 export const esMasaBase = r => !!r && r.clasificacion === 'masa_base' && r.planificable !== false && !/empaste|poolish/.test(norm(r.nombre));
-const esEmpaste = (r, nombre) => (!!r && r.clasificacion === 'masa_base' && r.planificable === false) || /empaste/.test(norm(nombre || (r && r.nombre)));
+export const esEmpaste = (r, nombre) => (!!r && r.clasificacion === 'masa_base' && r.planificable === false) || /empaste/.test(norm(nombre || (r && r.nombre)));
 
 // Peso de 1 masa (g): el "peso por unidad" de la receta o, si no está, el lote ÷ rendimiento
 export const pesoMasa = r => M.num(r && r.pesoUnidad) > 1 ? M.num(r.pesoUnidad) : M.pesoBase(r && r.ingredientes) / M.porciones(r);

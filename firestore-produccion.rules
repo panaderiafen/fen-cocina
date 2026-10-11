@@ -1,6 +1,6 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.4.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.5.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
@@ -16,6 +16,8 @@ rules_version = '2';
 //    rellenos según lo que planificaron Bollería y Panadería.
 //  · v1.4.0: una cuenta puede entrar a más de un área (cuentas/{uid} = { area: 'PAS', areas: ['PAS', 'BOL'] }).
 //    "area" es la principal; "areas" (opcional) suma las otras. En cada área ve y cambia lo mismo que su cuenta propia.
+//  · v1.5.0: stockmp/{mpId} (qué materias primas llevan stock, su mínimo y cómo están): lo escribe
+//    Administración; las áreas lo leen. Las llegadas y conteos de la bodega van en el día del área (dias).
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -43,6 +45,8 @@ service cloud.firestore {
     // Recetas y materias primas: las cambia Administración (y más adelante las jefas con versiones)
     match /recetas/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
     match /mps/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
+    // Bodega: materias primas con stock (críticas), su mínimo y el último cálculo de Sistema Fën
+    match /stockmp/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
 
     // Configuración: config/{AREA} (masa madre, poolish, capacidades). La jefa lee la suya.
     match /config/{id} { allow read: if admin() || (deArea() && tengo(id)); allow write: if admin(); }

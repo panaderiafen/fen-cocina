@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — cálculos (sin pantalla)  v0.6.0
+//  fën · Cocina — cálculos (sin pantalla)  v0.7.0
 //  Semanas por fechas, escalado de recetas, ajuste de harina/agua del día,
 //  tandas, elaboraciones previas (sub recetas), insumos y pie de masa madre.
 //  Todo es función pura: recibe los datos y devuelve el resultado.
@@ -136,7 +136,7 @@ export function pesoAjustado(r, harina, pcts) {
 // Cómo baja una sub receta desde la receta que la usa: por UNIDADES si la sub receta rinde unidades y el
 // ingrediente las trae (Ciabatta → 1 un de Masa ciabatta: se mantiene la harina por unidad); si no, por
 // GRAMOS (se mantienen los gramos que pide la receta; con un ajuste cambian las proporciones).
-function bajadaSub(i, f, rs, ingsA) {
+export function bajadaSub(i, f, rs, ingsA) {
   const u = num(i.unidades);
   if (rs.unidad !== 'g' && u > 0) return { f: u * f / porciones(rs), unidades: u * f };
   const pb = pesoBase(ingsA);
