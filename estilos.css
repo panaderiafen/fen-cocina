@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.5.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.5.1 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -294,3 +294,12 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
 .cant-pas input { height: 48px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--borde); font: inherit; font-size: 16px; text-align: right; width: 100%; box-sizing: border-box; }
 .cant-pas span { color: var(--suave); font-size: 14px; }
 @media (max-width: 520px) { .fila-pas { grid-template-columns: 1fr; } }
+
+/* v0.5.1 · Cambiar de área (tablet con más de un área) */
+.lista-areas { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.btn-area-op { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; border: 1px solid var(--borde); border-radius: 12px; background: #fff; font-size: 16px; cursor: pointer; text-align: left; }
+.btn-area-op svg.ic { width: 24px; height: 24px; color: var(--acento); flex: none; }
+.btn-area-op span { flex: 1; font-weight: 600; }
+.btn-area-op small { color: var(--suave); font-size: 13px; }
+.btn-area-op[aria-current="true"] { background: var(--tinte); border-color: var(--acento); cursor: default; }
+.pin-caja .btn-link { margin-top: 14px; }

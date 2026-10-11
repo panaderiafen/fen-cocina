@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.5.0
+//  fën · Cocina — la app de las jefas  v0.5.1
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,14 +21,16 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.5.1: una tablet puede entrar a más de un área (la cuenta tiene "areas"): botón "Cambiar de área".
+//  Antes de cambiar se guarda lo pendiente; en cada área se pide el PIN de una persona de esa área.
 // ═══════════════════════════════════════════════
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.5.0';
-import * as M from './modelo.js?v=0.5.0';
-import * as B from './bolleria.js?v=0.5.0';
-import * as ED from './editor.js?v=0.5.0';
+} from './firebase.js?v=0.5.1';
+import * as M from './modelo.js?v=0.5.1';
+import * as B from './bolleria.js?v=0.5.1';
+import * as ED from './editor.js?v=0.5.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -48,7 +50,7 @@ const SECCIONES = {
 const seccionesDe = a => SECCIONES[a] || [['recetas', 'Recetas', 'libro']];
 
 const E = {
-  usuario: null, area: null, persona: null,
+  usuario: null, area: null, areas: [], persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
   metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7),
@@ -115,26 +117,74 @@ onAuthStateChanged(auth, async u => {
   if (!u) { pararEscuchas(); E.area = null; mostrar('v-autorizar'); return; }
   // El área se recuerda en el equipo para abrir al tiro; se confirma con la base en segundo plano.
   const guardada = leerLS(K_AREA, null);
-  if (guardada && guardada.uid === u.uid && AREAS[guardada.area]) entrarArea(guardada.area);
+  if (guardada && guardada.uid === u.uid && AREAS[guardada.area]) { E.areas = Array.isArray(guardada.areas) ? guardada.areas : [guardada.area]; entrarArea(guardada.area); }
   try {
     const sn = await getDoc(doc(db, 'cuentas', u.uid));
-    const area = sn.exists() ? sn.data().area : null;
+    const areas = sn.exists() ? areasDeCuenta(sn.data()) : [];
+    // Vuelve al área en que quedó la tablet, si la cuenta todavía la tiene; si no, a la principal
+    const area = guardada && guardada.uid === u.uid && areas.includes(guardada.area) ? guardada.area : areas[0];
+    E.areas = areas; pintarBotonArea();
     if (!AREAS[area]) {
       guardarLS(K_AREA, null); mostrar('v-autorizar');
       $('a-error').textContent = 'Esta cuenta no tiene un área asignada. Se asigna en Sistema Fën → Producción → Cuentas de las áreas.';
       await signOut(auth); return;
     }
-    guardarLS(K_AREA, { uid: u.uid, area });
-    if (area !== E.area) entrarArea(area);
+    guardarLS(K_AREA, { uid: u.uid, area, areas });
+    if (area !== E.area) { if (E.area) antesDeSalirDelArea(); entrarArea(area); }
   } catch (e) {
     if (!E.area) { mostrar('v-autorizar'); $('a-error').textContent = 'No se pudo leer el área de esta cuenta: ' + mensajeError(e); }
   }
 });
 
+// Áreas de la cuenta: la principal (area) primero y después las de "areas" (Sistema Fën → Cuentas de las áreas)
+function areasDeCuenta(c) { return [...new Set([c && c.area, ...((c && Array.isArray(c.areas)) ? c.areas : [])])].filter(a => AREAS[a]); }
+function pintarBotonArea() {
+  const b = $('btn-area'); if (!b) return;
+  b.classList.toggle('oculto', E.areas.length < 2);
+}
+// Lo que está por guardarse se guarda en el área en que se escribió, antes de cambiar
+function antesDeSalirDelArea() {
+  const a = document.activeElement; if (a && a.blur && $('principal').contains(a)) a.blur();   // focusout guarda celdas y cantidades
+  const n = $('notas-dia');
+  if (tiempos.notas && n) guardarSinEsperar(guardarDia(E.fecha, { notas: { texto: n.value.slice(0, 2000), por: quien(), en: ahoraIso() } }));
+  Object.values(tiempos).forEach(t => clearTimeout(t)); tiempos = {};
+  if (E.editor) ED.cerrarEditor();
+  const dlg = $('dialogo'); if (dlg.open) dlg.close();
+  if (E.planilla.t) { clearTimeout(E.planilla.t); E.planilla.t = 0; pasarPlanilla(E.area); }   // el plan cambiado pasa a la planilla de su área
+}
+function dialogoArea() {
+  const d = $('dialogo');
+  d.innerHTML = `<form method="dialog" class="dlg">
+      <h2>Cambiar de área</h2>
+      <p class="ayuda">Lo que estabas escribiendo queda guardado en ${esc(AREAS[E.area].nombre)}. En el área nueva se pide el PIN de una persona de esa área (si ${E.persona ? esc(E.persona.nombre) + ' también es de ella, sigue' : 'ya estaba alguien, sigue'}).</p>
+      <div class="lista-areas">${E.areas.map(a => `<button type="button" class="btn-area-op" data-ir-area="${a}" ${a === E.area ? 'aria-current="true"' : ''}>${ic(AREAS[a].icono)}<span>${esc(AREAS[a].nombre)}</span>${a === E.area ? '<small>Aquí estás</small>' : ''}</button>`).join('')}</div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button></div>
+    </form>`;
+  d.onsubmit = ev => ev.preventDefault();
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (b.dataset.irArea) { d.close(); cambiarArea(b.dataset.irArea); }
+  };
+  d.showModal();
+}
+function cambiarArea(area) {
+  if (!AREAS[area] || !E.areas.includes(area) || area === E.area) return;
+  antesDeSalirDelArea();
+  // La persona sigue si también es de la otra área; si no, se pide el PIN ahí
+  const p = E.persona, reg = p && E.personas.find(x => x.id === p.email || (x.email && x.email === p.email));
+  if (p && p.hasta > Date.now() && reg && (reg.areas || []).includes(area)) guardarLS(K_PERSONA, { ...p, area });
+  guardarLS(K_AREA, { uid: E.usuario.uid, area, areas: E.areas });
+  location.hash = '#hoy';
+  entrarArea(area);
+}
+$('btn-area').addEventListener('click', dialogoArea);
+
 function entrarArea(area) {
   E.area = area; E.recetaVista = null; E.cantidadVista = null; E.buscar = ''; E.editor = null;
   E.fecha = M.hoyTxt(); E.lunesPlan = M.lunesDe(E.fecha); E.lunesMeta = M.sumarDias(E.lunesPlan, 7);   // cada área parte en hoy
-  document.body.dataset.area = area;
+  E.pin = { email: '', digitos: '', enviando: false, error: '' };
+  document.body.dataset.area = area; pintarBotonArea();
   $('area-icono').innerHTML = ic(AREAS[area].icono);
   $('area-nombre').textContent = AREAS[area].nombre;
   $('pie-version').textContent = `Cocina v${C.VERSION} · ${AREAS[area].nombre}`;
@@ -164,11 +214,13 @@ function pintarPin() {
           <button type="button" class="tecla" data-tecla="0" ${P.enviando ? 'disabled' : ''}>0</button>
           <span></span></div>
         ${P.enviando ? '<p class="ayuda">Revisando el PIN…</p>' : ''}` : ''}
+      ${E.areas.length > 1 ? `<button type="button" class="btn-link" data-pin-area="1">Cambiar de área</button>` : ''}
     </div>`;
 }
 $('v-pin').addEventListener('click', ev => {
   const b = ev.target.closest('button'); if (!b) return;
   const P = E.pin;
+  if (b.dataset.pinArea) { dialogoArea(); return; }
   if (b.dataset.persona) { P.email = b.dataset.persona; P.digitos = ''; P.error = ''; pintarPin(); return; }
   if (b.dataset.tecla && !P.enviando) {
     if (b.dataset.tecla === 'borrar') P.digitos = P.digitos.slice(0, -1);
@@ -193,7 +245,7 @@ async function revisarPin() {
 // El Apps Script de Producción (revisa la sesión de Firebase de esta cuenta)
 async function llamarScript(cuerpo) {
   const token = await auth.currentUser.getIdToken();
-  const body = JSON.stringify({ ...cuerpo, idToken: token });
+  const body = JSON.stringify({ area: E.area, ...cuerpo, idToken: token });   // el área en que está la tablet (cuentas con varias áreas)
   const conTiempo = (pr, ms) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error('El servidor no respondió a tiempo. Intenta de nuevo.')), ms))]);
   let r;
   try { r = await conTiempo(fetch(C.SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body }).then(x => x.json()), 30000); }
@@ -1021,17 +1073,18 @@ async function copiarSemanaAnterior() {
 
 // La planilla (copia para Looker y la app antigua): el Apps Script lee los planes cambiados y los escribe
 E.planilla = { t: 0, corriendo: false, error: '' };
-function programarPlanilla(ms = 15000) { clearTimeout(E.planilla.t); E.planilla.t = setTimeout(pasarPlanilla, ms); }
+function programarPlanilla(ms = 15000, area = E.area) { clearTimeout(E.planilla.t); E.planilla.t = setTimeout(() => pasarPlanilla(area), ms); }
 function revisarPlanilla() { if (Object.values(E.planes).some(p => p && p.planillaPendiente) && !E.planilla.t && !E.planilla.corriendo) programarPlanilla(5000); }
-async function pasarPlanilla() {
+async function pasarPlanilla(area) {
   E.planilla.t = 0;
-  if (E.planilla.corriendo || !E.usuario || navigator.onLine === false) { programarPlanilla(60000); return; }
+  const deArea = typeof area === 'string' ? area : E.area;
+  if (E.planilla.corriendo || !E.usuario || navigator.onLine === false) { programarPlanilla(60000, deArea); return; }
   E.planilla.corriendo = true;
   try {
-    const r = await llamarScript({ action: 'cocina_planilla' });
+    const r = await llamarScript({ action: 'cocina_planilla', area: deArea });
     if (!r || r.ok !== true) throw new Error((r && (r.error || r.msg)) || 'sin respuesta');
     E.planilla.error = '';
-  } catch (e) { E.planilla.error = e.message || String(e); programarPlanilla(120000); }
+  } catch (e) { E.planilla.error = e.message || String(e); programarPlanilla(120000, deArea); }
   finally { E.planilla.corriendo = false; repintar(); }
 }
 

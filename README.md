@@ -1,6 +1,6 @@
-# fën · Cocina · v0.5.0
+# fën · Cocina · v0.5.1
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.5.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.5.1: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,33 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.5.1 · una tablet en más de un área
+**Qué cambia:**
+- **GitHub (fen-cocina):** `app.js`, `index.html`, `estilos.css`, `config.js`, `README.md` y los demás `.js` (solo versión).
+- **Reglas v1.4.0** (`firestore-produccion.rules`): una cuenta puede tener varias áreas (`areas`). En cada una ve y cambia lo mismo que una cuenta propia de esa área. Las cuentas de una sola área siguen igual.
+- **Script de Producción v2.6.0**: el PIN y la copia a la planilla usan el área en que está la tablet.
+- **Sistema Fën v0.35.0**: ahí se marca a qué otras áreas entra cada cuenta.
+
+**Cómo funciona en la tablet:**
+- Arriba aparece **Cambiar de área** (solo si la cuenta tiene más de una). Elige el área y listo.
+- Antes de cambiar se guarda lo que estaba escrito (cantidades, plan, notas, receta en edición) **en el área donde se escribió**.
+- En el área nueva se pide el **PIN de una persona de esa área**. Si la persona que estaba también es de esa área (en Asistencia), sigue sin PIN.
+- La pantalla del PIN también tiene "Cambiar de área", por si entraste a la equivocada.
+- Al recargar, la tablet vuelve a la última área en que estuvo.
+
+**Orden:**
+1. Reglas v1.4.0 (consola de Firebase de fen-produccion → Firestore → Reglas → pegar → Publicar).
+2. Script v2.6.0 (Seguridad y SistemaFen → Nueva versión). Ping: 2.6.0.
+3. Sistema Fën v0.35.0 → Producción → Cuentas de las áreas → **Cambiar** en la cuenta → marca "También entra a" → Guardar.
+4. Cocina v0.5.1. En la tablet, recarga la página.
+
+**Lista de verificación v0.5.1**
+- [ ] Abajo dice **Cocina v0.5.1**.
+- [ ] En la tablet compartida aparece "Cambiar de área"; en las de una sola área, no.
+- [ ] Cambiar a la segunda área: pide el PIN de alguien de esa área y se ven sus secciones (por ejemplo, Bollería con Bitácora, Metas y Masas).
+- [ ] En la segunda área se carga todo (no sale "Este equipo perdió el permiso…"). Si sale, revisa que las reglas publicadas sean las v1.4.0.
+- [ ] Escribir algo, cambiar de área y volver: quedó guardado donde se escribió.
 
 ## Novedades v0.5.0 · Pastelería entra a la app nueva (P4a)
 **Qué cambia:**

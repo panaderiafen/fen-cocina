@@ -1,6 +1,6 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.3.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.4.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
@@ -14,6 +14,8 @@ rules_version = '2';
 //    de las recetas (solo Administración).
 //  · v1.3.0: cada área puede LEER (no cambiar) el plan y las metas de las otras: Pastelería sugiere sus
 //    rellenos según lo que planificaron Bollería y Panadería.
+//  · v1.4.0: una cuenta puede entrar a más de un área (cuentas/{uid} = { area: 'PAS', areas: ['PAS', 'BOL'] }).
+//    "area" es la principal; "areas" (opcional) suma las otras. En cada área ve y cambia lo mismo que su cuenta propia.
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -22,11 +24,14 @@ service cloud.firestore {
     function admin() { return dentro() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
     function cuenta() { return get(/databases/$(database)/documents/cuentas/$(request.auth.uid)).data; }
     function deArea() { return dentro() && exists(/databases/$(database)/documents/cuentas/$(request.auth.uid)); }
-    function miArea() { return cuenta().area; }
-    // El documento es de mi área (id "PAN_…" y campo area = PAN). Para listar (consultas) se
-    // exige filtrar por area: las reglas no pueden revisar el id en una consulta.
-    function idDeMiArea(id) { return id.matches('^' + miArea() + '_.+'); }
-    function areaDeDatos(d) { return d.area == miArea(); }
+    // Áreas de la cuenta: la principal (area) más las de la lista areas, si la tiene
+    function misAreas() { return cuenta().get('areas', []).concat([cuenta().area]); }
+    function tengo(a) { return a in misAreas(); }
+    function areaDelId(id) { return id.split('_')[0]; }
+    // El documento es de un área mía (id "PAN_…") y sus datos dicen la misma área. Para listar (consultas)
+    // se exige filtrar por area: las reglas no pueden revisar el id en una consulta.
+    function idDeMiArea(id) { return id.matches('^[A-Z]+_.+') && tengo(areaDelId(id)); }
+    function areaDeDatos(id, d) { return d.area == areaDelId(id); }
     function texto(v, max) { return v is string && v.size() <= max; }
 
     match /admins/{uid} { allow read: if dentro() && request.auth.uid == uid; allow write: if false; }
@@ -40,13 +45,13 @@ service cloud.firestore {
     match /mps/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
 
     // Configuración: config/{AREA} (masa madre, poolish, capacidades). La jefa lee la suya.
-    match /config/{id} { allow read: if admin() || (deArea() && id == miArea()); allow write: if admin(); }
+    match /config/{id} { allow read: if admin() || (deArea() && tengo(id)); allow write: if admin(); }
 
     // Plan semanal: planes/{AREA}_{lunes}. Cada celda se guarda por separado.
     match /planes/{id} {
       allow get: if admin() || deArea();
-      allow list: if admin() || (deArea() && resource.data.area == miArea());
-      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+      allow list: if admin() || (deArea() && tengo(resource.data.area));
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
         && request.resource.data.lunes is string && request.resource.data.filas is map);
       allow delete: if false;
     }
@@ -54,8 +59,8 @@ service cloud.firestore {
     // El día: dias/{AREA}_{fecha} (hechos, notas, tandas)
     match /dias/{id} {
       allow get: if admin() || (deArea() && idDeMiArea(id));
-      allow list: if admin() || (deArea() && resource.data.area == miArea());
-      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+      allow list: if admin() || (deArea() && tengo(resource.data.area));
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
         && request.resource.data.fecha is string);
       allow delete: if false;
     }
@@ -63,8 +68,8 @@ service cloud.firestore {
     // Bollería: metas/{AREA}_{lunes de la meta} (piezas por producto y masas a elaborar la semana anterior). Cada celda por separado.
     match /metas/{id} {
       allow get: if admin() || deArea();
-      allow list: if admin() || (deArea() && resource.data.area == miArea());
-      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+      allow list: if admin() || (deArea() && tengo(resource.data.area));
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
         && request.resource.data.lunes is string);
       allow delete: if false;
     }
@@ -73,12 +78,12 @@ service cloud.firestore {
     // "devuelta", "aprobando" y "aprobada" las pone Administración.
     match /propuestas/{id} {
       allow get: if admin() || (deArea() && idDeMiArea(id));
-      allow list: if admin() || (deArea() && resource.data.area == miArea());
-      allow create: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+      allow list: if admin() || (deArea() && tengo(resource.data.area));
+      allow create: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
         && request.resource.data.estado in ['borrador', 'en_prueba', 'en_revision']);
       // En revisión no se cambian los datos (solo retirarla o anularla); "aprobando" (mientras Administración
       // la aprueba), aprobada y anulada ya no se tocan.
-      allow update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+      allow update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
         && !(resource.data.estado in ['aprobando', 'aprobada', 'anulada'])
         && request.resource.data.estado in ['borrador', 'en_prueba', 'en_revision', 'devuelta', 'anulada']
         && (request.resource.data.estado != 'devuelta' || resource.data.estado == 'devuelta')
@@ -90,8 +95,8 @@ service cloud.firestore {
     // Materias primas pedidas: solicitudes/{AREA}_{id}. La jefa solo crea (pendiente); Administración resuelve.
     match /solicitudes/{id} {
       allow get: if admin() || (deArea() && idDeMiArea(id));
-      allow list: if admin() || (deArea() && resource.data.area == miArea());
-      allow create: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+      allow list: if admin() || (deArea() && tengo(resource.data.area));
+      allow create: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
         && request.resource.data.estado == 'pendiente' && texto(request.resource.data.nombre, 80));
       allow update: if admin();
       allow delete: if false;
@@ -100,8 +105,8 @@ service cloud.firestore {
     // Ajustes de harina/agua por receta: ajustes/{AREA}_{recetaId} (períodos; el último que cubre un día vale)
     match /ajustes/{id} {
       allow get: if admin() || (deArea() && idDeMiArea(id));
-      allow list: if admin() || (deArea() && resource.data.area == miArea());
-      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(request.resource.data)
+      allow list: if admin() || (deArea() && tengo(resource.data.area));
+      allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
         && texto(request.resource.data.recetaId, 60) && request.resource.data.periodos is list && request.resource.data.periodos.size() <= 30);
       allow delete: if false;
     }
