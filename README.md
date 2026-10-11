@@ -1,6 +1,6 @@
-# fën · Cocina · v0.12.3
+# fën · Cocina · v0.13.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.12.3: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,30 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.13.0 · Bollería: stock inicial, sobre stock y empastes al laminar (decisiones de Emmanuel, 11-oct)
+**Metas, por producto:**
+- **Meta**: lo que sale en la semana (lunes a sábado o domingo).
+- **Stock inicial**: los productos formados y congelados con que parte la semana. Desde el domingo antes sale solo de la Bitácora (dice "congelado"); antes es el **previsto**: lo que planearon dejar la semana anterior.
+- **Dejar próx. semana**: el sobre stock que quieren dejar congelado para la semana siguiente (ej. 200 XL). Si no lo cambian, vale lo de la semana anterior ("como la semana pasada").
+- **A formar = meta − stock inicial + dejar.** Ejemplo: 720 − 220 + 200 = 700 XL = 70 masas.
+- El **PEM** y "Hay que elaborar" salen de "a formar". Las masas que sobran en el congelador se descuentan como antes, ahora comparando contra todo lo que hay que formar en la semana en curso (con la merma de laminado) menos lo ya descongelado para ella.
+- **Cierre del viernes**: el sábado sugerido ya no toca lo que quieren dejar.
+
+**Empastes:**
+- No se descongelan: viven en el refri y se gastan **al laminar**, que se anota con **"Formé"** (empastes = piezas × masas por pieza de los productos con empaste). La anotación muestra "Empastes usados al laminar".
+- "Descongelé masas" ya no resta empastes y avisa cuántos se necesitan para laminar esas masas y cuántos hay en el refri.
+- "Congelado al cierre" dice "N empastes en el refri". Si quedan en negativo, avisa.
+- Las anotaciones antiguas de "Descongelé" (antes de esta versión) siguen restando sus empastes, como cuando se anotaron.
+
+**Rendimiento real de la semana:** las masas descongeladas el domingo cuentan para la semana que empieza.
+
+**Archivos:** `app.js`, `congelado.js`, `estilos.css`, `README.md` y los demás (solo versión): `editor.js`, `config.js`, `firebase.js`, `index.html`. Reglas, script y Sistema Fën sin cambios (los cálculos compartidos siguen en v0.11.0).
+
+**Revisar:**
+- [ ] Metas de la próxima semana: poner "Dejar próx. semana" (ej. 200 XL) → "A formar" cambia y el PEM pide las masas de eso.
+- [ ] Bitácora: "Descongelé masas" no baja los empastes; "Formé" sí, con "Empastes usados al laminar".
+- [ ] Domingo, después del inventario: la meta que empieza el lunes muestra el stock inicial "congelado".
 
 ## Novedades v0.12.3 · título corto en Masas
 - El título de Masas ahora es **"PEM · lun 5 al vie 9 oct"** (Plan de elaboración de masas), más corto para que no se desarme en el celular o la tablet. Abajo sigue "Para la meta del…".

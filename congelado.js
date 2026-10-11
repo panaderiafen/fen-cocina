@@ -1,48 +1,116 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — Bollería: masas que ya hay en el congelador y se descuentan de la meta (sin pantalla)  v0.12.0
+//  fën · Cocina — Bollería: stock inicial, sobre stock y masas que ya hay en el congelador (sin pantalla)  v0.13.0
 //
-//  La meta de la semana L se elabora la semana anterior (E = L − 7). Al empezar E, el congelador tiene
-//  masas para la meta de E (se descongelan durante E). Lo que quede después de esa meta sobra, y se
-//  descuenta de lo que hay que elaborar para L:
+//  Semana de una meta (lunes W): la meta es lo que sale en la semana. Se parte con un STOCK INICIAL de
+//  productos formados y congelados, y se quiere DEJAR un sobre stock para la semana siguiente:
 //
-//    sobran = congelado al cierre de "hasta"            (Bitácora: inventario + elaboré − descongelé − merma)
-//           − elaboradas desde el lunes de E            (esas ya son para la meta L)
-//           − lo que falta descongelar para la meta de E (necesarias de esa meta − descongeladas para ella)
+//    a formar = meta − stock inicial + dejar para la próxima semana        (por producto, nunca menos de 0)
 //
-//  Se descongela la víspera: lo de la meta de E se descongela del domingo antes de E al sábado de E
-//  (el domingo de E ya es para la meta L). Por eso "hasta" = hoy, o el sábado de E si ya pasó (entonces
-//  no falta nada por descongelar). El número no cambia en la semana mientras se anote lo que pasa:
-//  elaborar suma al congelado y a "elaboradas"; descongelar resta al congelado y a "lo que falta".
-//  Sin inventario del congelador no se descuenta nada. Antes de que empiece E, tampoco (se pide la meta completa).
+//  · Stock inicial: desde el domingo antes de W, el real (productos congelados al cierre de ese domingo,
+//    Bitácora). Antes, el previsto: lo que planearon dejar la semana anterior.
+//  · Dejar: se planifica en Metas (metas/BOL_{W}.dejar = { producto: piezas }). Si no lo cambian, vale lo
+//    de la semana anterior.
+//
+//  Las masas de la meta L se elaboran la semana anterior (E = L − 7). Al empezar E, el congelador tiene
+//  masas para lo que falta formar en E. Las que sobren se descuentan de lo que hay que elaborar para L:
+//
+//    sobran = masas congeladas al cierre de "hasta"   (inventario + elaboré − descongelé − merma congelada)
+//           − elaboradas desde el lunes de E          (esas ya son para L)
+//           − lo que falta descongelar para E        = masas para todo lo que hay que formar en E (con la merma
+//                                                       de laminado, en masas enteras) − masas descongeladas para E
+//
+//  Se descongela la víspera: lo descongelado del domingo antes de E al sábado de E es para E. Por eso
+//  "hasta" = hoy, o el sábado de E si ya pasó (entonces no falta nada). Sin inventario no se descuenta nada.
+//
+//  Empastes (v0.13.0): no se descongelan; viven en el refri y se gastan AL LAMINAR, que se anota con lo
+//  formado ("Formé": empastes = piezas × masas por pieza, de los productos que llevan empaste).
 // ═══════════════════════════════════════════════
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
 
-// diasDocs: días de Bollería { fecha: doc }; necActual: { masaId: masas necesarias para la meta de E }
+const sumar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + M.num(n); };
+const r2 = n => Math.round(M.num(n) * 100) / 100;
+
+// Stock congelado (B.stock) + los empastes que se gastaron al laminar lo formado después del último inventario
+export function stock(diasDocs, hasta) {
+  const s = B.stock(diasDocs, hasta), lista = B.anotaciones(diasDocs, hasta);
+  let ini = -1; lista.forEach((a, i) => { if (a.tipo === 'inventario') ini = i; });
+  lista.slice(ini + 1).forEach(a => { if (a.tipo === 'formo' && a.masa && M.num(a.empastes)) s.empastes[a.masa] = r2((s.empastes[a.masa] || 0) - M.num(a.empastes)); });
+  return s;
+}
+
+// Empastes que gasta lo formado (al laminar): { masa, empastes } o null si el producto no lleva empaste
+export function empastesDe(productoId, piezas, ctx) {
+  const p = B.productos(ctx.recetas, ctx).find(x => x.receta.id === productoId);
+  return p && p.empasteG > 0 ? { masa: p.masa.id, empastes: r2(M.num(piezas) * p.masas) } : null;
+}
+
+// Rendimiento real de una semana: masas descongeladas (domingo antes al sábado) vs piezas formadas (lunes a domingo)
+export function rendimiento(diasDocs, lunes, ctx) {
+  const prods = B.productos(ctx.recetas, ctx), r = {}, x = id => r[id] || (r[id] = { masas: 0, esperadas: 0 });
+  B.anotaciones(diasDocs, M.sumarDias(lunes, 6)).forEach(a => {
+    if (a.tipo === 'descongelo' && a.fecha >= M.sumarDias(lunes, -1) && a.fecha <= M.sumarDias(lunes, 5)) x(a.masa).masas += M.num(a.n);
+    if (a.tipo === 'formo' && a.fecha >= lunes) { const p = prods.find(y => y.receta.id === a.producto); if (p) x(p.masa.id).esperadas += M.num(a.n) * p.masas; }
+  });
+  return r;
+}
+
+// Lo que quieren dejar para la semana siguiente: lo de esta meta o, si no lo pusieron, lo de la anterior
+// (y así hacia atrás con las metas que se pasen, de la más nueva a la más vieja)
+export function dejarDe(metas, ...anteriores) {
+  const d = {}, propio = (metas && metas.dejar) || {};
+  [...anteriores].reverse().forEach(x => Object.entries((x && x.dejar) || {}).forEach(([id, n]) => { d[id] = M.num(n); }));
+  Object.entries(propio).forEach(([id, n]) => { d[id] = M.num(n); });
+  return { dejar: d, propio };
+}
+
+// Plan de la semana de una meta, por producto: { id: { meta, inicial, fuente: 'real'|'previsto', dejar, heredado, aFormar } }
+// docs: { metas (W), metasAnt (W−7), metasAnt2 (W−14), metasAnt3 (W−21) }
+export function planSemana(lunes, docs, diasDocs, hoy = M.hoyTxt()) {
+  const dom = M.sumarDias(lunes, -1);
+  const { dejar, propio } = dejarDe(docs.metas, docs.metasAnt, docs.metasAnt2);
+  const previsto = dejarDe(docs.metasAnt, docs.metasAnt2, docs.metasAnt3).dejar;
+  const st = hoy >= dom ? stock(diasDocs, dom) : null, real = !!(st && st.conInventario);
+  const metas = (docs.metas && docs.metas.productos) || {};
+  const ids = new Set([...Object.keys(metas), ...Object.keys(dejar), ...(real ? Object.keys(st.productos) : Object.keys(previsto))]);
+  const plan = {};
+  ids.forEach(id => {
+    const meta = M.num(metas[id]), inicial = Math.max(0, real ? M.num(st.productos[id]) : M.num(previsto[id])), dj = M.num(dejar[id]);
+    plan[id] = { meta, inicial, fuente: real ? 'real' : 'previsto', dejar: dj, heredado: !(id in propio) && dj > 0, aFormar: Math.max(0, meta - inicial + dj) };
+  });
+  return plan;
+}
+export const aFormar = plan => Object.fromEntries(Object.entries(plan).map(([id, p]) => [id, p.aFormar]));
+
+// Masas que sobran en el congelador para la meta L.
+// o = { planE: planSemana de E (la semana en curso de elaboración), ctx, cfg }
 // → { estado: 'ok'|'futuro'|'sinInventario', hasta, porMasa: { masaId: { sobran, congeladas, elaboradas, faltaDescongelar } } }
-export function sobrantes(diasDocs, lunesMeta, necActual, hoy = M.hoyTxt()) {
+export function sobrantes(diasDocs, lunesMeta, o, hoy = M.hoyTxt()) {
   const el = M.sumarDias(lunesMeta, -7), sabEl = M.sumarDias(el, 5), domAntes = M.sumarDias(el, -1);
   if (hoy < el) return { estado: 'futuro', desde: el, porMasa: {} };
   const hasta = hoy < sabEl ? hoy : sabEl, cerrada = hoy > sabEl;
-  const st = B.stock(diasDocs, hasta);
+  const st = stock(diasDocs, hasta);
   if (!st.conInventario) return { estado: 'sinInventario', hasta, porMasa: {} };
   const elab = {}, desc = {};
   B.anotaciones(diasDocs, hasta).forEach(a => {
-    if (a.tipo === 'elaboro' && a.fecha >= el) elab[a.masa] = (elab[a.masa] || 0) + M.num(a.n);
-    if (a.tipo === 'descongelo' && a.fecha >= domAntes) desc[a.masa] = (desc[a.masa] || 0) + M.num(a.n);
+    if (a.tipo === 'elaboro' && a.fecha >= el) sumar(elab, a.masa, a.n);
+    if (a.tipo === 'descongelo' && a.fecha >= domAntes) sumar(desc, a.masa, a.n);
   });
+  // Masas para todo lo que hay que formar en E (en masas enteras, con la merma de laminado, como el PEM):
+  // lo descongelado para E (del domingo antes en adelante) ya está fuera del congelador; falta el resto
+  const masasE = {}; B.necesidades(aFormar(o.planE || {}), o.ctx, o.cfg).masas.forEach(x => { masasE[x.masa.id] = x.masas; });
   const porMasa = {};
   Object.keys(st.masas).forEach(id => {
     const congeladas = Math.max(0, M.num(st.masas[id])), elaboradas = elab[id] || 0;
-    const faltaDescongelar = cerrada ? 0 : Math.max(0, M.num((necActual || {})[id]) - (desc[id] || 0));
+    const faltaDescongelar = cerrada ? 0 : Math.max(0, (masasE[id] || 0) - (desc[id] || 0));
     const sobran = Math.max(0, Math.floor(congeladas - elaboradas - faltaDescongelar + 1e-9));
     porMasa[id] = { sobran, congeladas, elaboradas, faltaDescongelar };
   });
   return { estado: 'ok', hasta, porMasa };
 }
 
-// Las necesidades de la meta (B.necesidades) con lo congelado descontado: cada masa queda con
-// meta (lo que pide la meta), congeladas (lo que se descuenta) y masas (lo que hay que elaborar)
+// Las necesidades de lo que hay que formar (B.necesidades) con lo congelado descontado: cada masa queda con
+// meta (lo que pide lo que hay que formar), congeladas (lo que se descuenta) y masas (lo que hay que elaborar)
 export function descontar(nec, sob) {
   const pm = (sob && sob.porMasa) || {};
   return {
