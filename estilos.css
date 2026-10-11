@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.9.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.10.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -322,3 +322,9 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
 .txt-ojo { color: var(--ojo); font-weight: 600; }
 .ayuda.bloque { display: block; font-weight: 400; }
 .fila-aj label small.txt-ojo { color: var(--ojo); font-weight: 600; }
+/* v0.10.0 · conteo en envases (sacos + lo suelto) */
+.fila-aj.fila-env { grid-template-columns: minmax(0, 1fr) auto; }
+.env-campos { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.env-campos input { width: 72px; }
+.env-campos .mas { color: var(--suave); font-weight: 600; }
+.fila-env .env-total { grid-column: 2; text-align: right; font-weight: 600; }

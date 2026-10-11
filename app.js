@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.9.0
+//  fën · Cocina — la app de las jefas  v0.10.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,8 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.10.0: lo que Administración configura con envase (saco de 25 kg…) se cuenta y se recibe en sacos + lo suelto,
+//  y el stock también se ve en sacos.
 //  v0.9.0: al contar la bodega se ve quién contó cada materia prima la última vez, y avisa si otra área ya la
 //  contó hoy (conteosmp/{mpId}, reglas v1.6.0).
 //  v0.8.0: Cafetería crea y edita sus recetas aquí (como las otras áreas) y su consumo entra a la bodega
@@ -37,12 +39,12 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.9.0';
-import * as M from './modelo.js?v=0.9.0';
-import * as B from './bolleria.js?v=0.9.0';
-import * as ED from './editor.js?v=0.9.0';
-import * as R from './registros.js?v=0.9.0';
-import * as K from './consumo.js?v=0.9.0';
+} from './firebase.js?v=0.10.0';
+import * as M from './modelo.js?v=0.10.0';
+import * as B from './bolleria.js?v=0.10.0';
+import * as ED from './editor.js?v=0.10.0';
+import * as R from './registros.js?v=0.10.0';
+import * as K from './consumo.js?v=0.10.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -1592,7 +1594,7 @@ function vistaBodega() {
   const bajos = cr.filter(m => { const e = est(m); return e && (e.bajoAhora || e.bajoDesde); });
   const fila = m => {
     const c = K.control(m, E.stockmp[m.id]), e = est(m);
-    const txt = !e ? 'Sin calcular todavía' : !e.contado ? 'Falta un conteo' : `${K.texto(e.stock, c.unidad)}${e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : ''}`;
+    const txt = !e ? 'Sin calcular todavía' : !e.contado ? 'Falta un conteo' : `${K.textoEnv(e.stock, c.unidad, c.envase)}${e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : ''}`;
     const uc = ultimoConteo(m.id);
     return `<div class="fila sub"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${e && (e.bajoAhora || e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
   };
@@ -1610,7 +1612,7 @@ function vistaBodega() {
     </div>
     <h2 class="titulo">Llegadas y conteos de ${esc(AREAS[E.area].nombre)} (14 días)</h2>
     ${movs.length ? `<div class="lista-bit">${movs.map(a => lineaAnot('bodega', a,
-      `${a.tipo === 'conteo' ? 'Conteo' : 'Llegó'}: ${esc(a.nombre)} · ${esc(K.texto(a.cantidad, a.unidad))}`,
+      `${a.tipo === 'conteo' ? 'Conteo' : 'Llegó'}: ${esc(a.nombre)} · ${esc(K.texto(a.cantidad, a.unidad))}${a.detalle ? ` (${esc(M.unidades(a.detalle.envases))} ${esc(K.envases(a.detalle.envase, a.detalle.envases))}${a.detalle.sueltos ? ' + ' + esc(K.texto(a.detalle.sueltos, a.unidad)) : ''})` : ''}`,
       `${a.nota ? esc(a.nota) + ' · ' : ''}${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`)).join('')}</div>` : '<p class="ayuda">Sin llegadas ni conteos.</p>'}
     ${avisoCopia()}`;
 }
@@ -1629,10 +1631,18 @@ function dialogoBodega(tipo) {
   const campo = m => {
     const u = K.unidadMp(m), uc = conteo ? ultimoConteo(m.id) : null;
     const notas = [!ED.habilitada(m, E.area) ? 'De otra área' : '', uc ? 'Último conteo: ' + uc.texto : ''].filter(Boolean);
-    return `<div class="fila-aj"><label for="bo-${esc(m.id)}">${esc(m.nombre)}${notas.map(n => `<small>${esc(n)}</small>`).join('')}${uc && uc.hoyOtra ? `<small class="txt-ojo" data-ya-contada="${esc(m.id)}">${esc(uc.hoyOtra)}: si la cuentan de nuevo, vale la última.</small>` : ''}</label><input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off"><span class="gr">${K.unidadEntrada(u)}</span></div>`; };
+    const env = K.control(m, E.stockmp[m.id]).envase;
+    const etiqueta = `<label for="bo-${esc(m.id)}">${esc(m.nombre)}${env ? `<small>En ${esc(K.envases(env.nombre, 2))} de ${esc(K.texto(env.tamano, u))} + lo suelto</small>` : ''}${notas.map(n => `<small>${esc(n)}</small>`).join('')}${uc && uc.hoyOtra ? `<small class="txt-ojo" data-ya-contada="${esc(m.id)}">${esc(uc.hoyOtra)}: si la cuentan de nuevo, vale la última.</small>` : ''}</label>`;
+    if (!env) return `<div class="fila-aj">${etiqueta}<input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off"><span class="gr">${K.unidadEntrada(u)}</span></div>`;
+    return `<div class="fila-aj fila-env">${etiqueta}<div class="env-campos">
+        <input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off" aria-label="${esc(K.envases(env.nombre, 2))}"><span class="gr">${esc(K.envases(env.nombre, 2))}</span>
+        <span class="mas">+</span>
+        <input id="bo-${esc(m.id)}-s" data-bo-suelto="${esc(m.id)}" inputmode="decimal" autocomplete="off" aria-label="${esc(K.unidadEntrada(u))} sueltos"><span class="gr">${K.unidadEntrada(u)} sueltos</span>
+      </div><span class="gr env-total" id="bo-${esc(m.id)}-t"></span></div>`;
+  };
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>${conteo ? 'Conteo de bodega' : 'Llegó mercadería'} · hoy</h2>
-      <p class="ayuda">${conteo ? 'Cuenten lo que hay ahora de cada una (en kg, litros o unidades). Las que no cuenten, déjenlas vacías. El conteo reemplaza lo que decía la cuenta desde este momento.' : 'Escriban lo que llegó (en kg, litros o unidades). Lo demás, vacío.'}</p>
+      <p class="ayuda">${conteo ? 'Cuenten lo que hay ahora de cada una (en sacos, kg, litros o unidades, según diga). Las que no cuenten, déjenlas vacías. El conteo reemplaza lo que decía la cuenta desde este momento.' : 'Escriban lo que llegó (en sacos, kg, litros o unidades, según diga). Lo demás, vacío.'}</p>
       <div class="filas-aj">${cr.map(campo).join('')}</div>
       ${conteo ? '' : '<div class="campo"><label for="bo-nota">Proveedor o factura (opcional)</label><input id="bo-nota" maxlength="120" autocomplete="off"></div>'}
       <div class="error" id="bo-error" role="alert"></div>
@@ -1641,18 +1651,31 @@ function dialogoBodega(tipo) {
   d.showModal();
   d.onsubmit = ev => ev.preventDefault();
   d.onchange = null;
-  d.oninput = () => { $('bo-error').textContent = ''; };
+  // Con envase: sacos × tamaño + lo suelto (en kg, l o un). Devuelve { total, envases, sueltos } o null si está vacío; 'mal' si no es número
+  const leer = m => {
+    const u = K.unidadMp(m), env = K.control(m, E.stockmp[m.id]).envase;
+    const a = ($('bo-' + m.id).value || '').trim(), b = env ? ($('bo-' + m.id + '-s').value || '').trim() : '';
+    if (a === '' && b === '') return null;
+    if ((a && !/^\d+([.,]\d+)?$/.test(a)) || (b && !/^\d+([.,]\d+)?$/.test(b))) return 'mal';
+    if (!env) return { total: K.aBase(a, u) };
+    return { total: M.num(a) * env.tamano + K.aBase(b, u), envases: M.num(a), sueltos: K.aBase(b, u), env };
+  };
+  d.oninput = () => {
+    $('bo-error').textContent = '';
+    cr.forEach(m => { const t = $('bo-' + m.id + '-t'); if (!t) return; const r = leer(m); t.textContent = r && r !== 'mal' ? '= ' + K.texto(r.total, K.unidadMp(m)) : ''; });
+  };
   d.onclick = ev => {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.cerrar) { d.close(); return; }
     if (!b.dataset.guardar) return;
     const entradas = {}, nota = conteo ? '' : $('bo-nota').value.trim().slice(0, 120);
     for (const m of cr) {
-      const t = $('bo-' + m.id).value.trim(); if (t === '') continue;
-      if (!/^\d+([.,]\d+)?$/.test(t)) { $('bo-error').textContent = `${m.nombre}: escribe solo el número.`; return; }
-      if (!conteo && !(M.num(t) > 0)) { $('bo-error').textContent = `${m.nombre}: la cantidad que llegó tiene que ser mayor que 0.`; return; }
-      const u = K.unidadMp(m);
-      entradas[idAnot()] = { tipo, mp: m.id, nombre: m.nombre, cantidad: Math.round(K.aBase(t, u) * 100) / 100, unidad: u, nota, por: quien(), en: ahoraIso() };
+      const r = leer(m); if (r === null) continue;
+      if (r === 'mal') { $('bo-error').textContent = `${m.nombre}: escribe solo números.`; return; }
+      if (!conteo && !(r.total > 0)) { $('bo-error').textContent = `${m.nombre}: la cantidad que llegó tiene que ser mayor que 0.`; return; }
+      const u = K.unidadMp(m), a = { tipo, mp: m.id, nombre: m.nombre, cantidad: Math.round(r.total * 100) / 100, unidad: u, nota, por: quien(), en: ahoraIso() };
+      if (r.env) a.detalle = { envase: r.env.nombre, tamano: r.env.tamano, envases: r.envases, sueltos: Math.round(r.sueltos * 100) / 100 };
+      entradas[idAnot()] = a;
     }
     if (!Object.keys(entradas).length) { $('bo-error').textContent = conteo ? 'Escribe al menos un conteo.' : 'Escribe lo que llegó.'; return; }
     d.close();

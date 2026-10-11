@@ -1,6 +1,6 @@
-# fën · Cocina · v0.9.0
+# fën · Cocina · v0.10.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.9.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.10.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,22 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.10.0 · contar en sacos
+**Qué cambia:**
+- **GitHub (fen-cocina):** `app.js`, `consumo.js`, `estilos.css`, `README.md` y los demás `.js` (solo versión).
+- **Reglas y script:** no cambian.
+- **Sistema Fën v0.41.0:** ahí se configura el envase de cada crítica.
+
+**En Bodega:**
+- Si Administración configuró un envase para una materia prima (por ejemplo, harina en **saco de 25 kg**), el conteo y la llegada se escriben en **sacos + lo suelto**, como "3 sacos + 5 kg". La app muestra el total al tiro: "= 80 kg".
+- En las anotaciones queda el detalle: "Conteo: Harina T80 · 80 kg (3 sacos + 5 kg)".
+- El stock también se ve en sacos: "85 kg · 3,4 sacos".
+- Sin envase, se sigue contando en kg, litros o unidades.
+
+**Lista de verificación v0.10.0**
+- [ ] Abajo dice **Cocina v0.10.0**.
+- [ ] Con la harina configurada en sacos, el conteo pide sacos + kg sueltos y muestra el total.
 
 ## Novedades v0.9.0 · conteo de bodega compartido entre áreas
 **Qué cambia:**
