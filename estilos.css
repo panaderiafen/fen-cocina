@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.2.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.3.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -192,3 +192,24 @@ table.plan td.pasa { color: #9A5B2E; font-weight: 700; background: #FFF4E5; }
 .chip.ojo { background: #FFF4E5; border-color: #F2D7B0; color: #8A5A1F; }
 .chip.ok { background: var(--ok-fondo, #EEF6EF); border-color: var(--ok-borde); color: var(--ok); }
 table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
+
+/* v0.3.0 · Bitácora de Bollería */
+.botones-bit { display: flex; flex-wrap: wrap; gap: 10px; }
+.lista-bit { display: flex; flex-direction: column; gap: 8px; }
+.anot { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--linea); border-radius: 12px; padding: 10px 14px; }
+.anot > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.anot b { font-weight: 500; }
+.anot.anulada { opacity: .55; }
+.anot.anulada b { text-decoration: line-through; }
+.dlg.dlg-ancho { max-width: 640px; }
+.dlg h3.rotulo { margin: 14px 0 4px; }
+#impresion { display: none; }
+@media print {
+  body > *:not(#impresion) { display: none !important; }
+  #impresion { display: block !important; font-family: Figtree, sans-serif; color: #000; }
+  #impresion h1 { font-size: 20px; margin: 0 0 4px; }
+  #impresion h2 { font-size: 16px; margin: 18px 0 6px; }
+  #impresion table { width: 100%; border-collapse: collapse; }
+  #impresion td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 14px; }
+  #impresion td:last-child { text-align: right; }
+}

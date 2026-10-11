@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — cálculos de Bollería (sin pantalla)  v0.2.0
+//  fën · Cocina — cálculos de Bollería (sin pantalla)  v0.3.0
 //  Metas semanales de productos → masas base y empastes que hay que elaborar la semana
 //  ANTERIOR, en masas enteras, y tandas según la amasadora.
 //
@@ -10,7 +10,7 @@
 //  · Producto: receta del área que lleva una masa base. Ej. Croissant XL = 0,1 un de Masa Base
 //    (1 masa rinde 10) + 30 g de Empaste (300 g por masa).
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.2.0';
+import * as M from './modelo.js?v=0.3.0';
 
 const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 // (el empaste y el poolish no son masas base aunque en la planilla tengan esa clasificación)
@@ -93,3 +93,60 @@ export function repartir(n, dias) {
   return out;
 }
 export const sumaDias = obj => Object.values(obj || {}).reduce((s, v) => s + M.num(v), 0);
+
+// ═══════════════ Bitácora (P2b) ═══════════════
+// Cada día de Bollería guarda en dias/BOL_{fecha}.bitacora = { id: anotación }. Nada se borra: se anula.
+// Anotaciones:
+//  · inventario { masas: {masa: n}, empastes: {masa: n}, productos: {producto: n} } → el congelado contado (reemplaza todo)
+//  · elaboro    { masa, n }            → +n masas y +n empastes congelados (cada masa lleva su empaste)
+//  · descongelo { masa, n }            → −n masas y −n empastes (el empaste sale con su masa)
+//  · formo      { producto, n, congelar } → +congelar productos congelados; los demás (n − congelar) se hornean ese día
+//  · horneo     { producto, n }        → −n productos congelados (salen del congelador al horno)
+// El stock parte del último inventario y suma lo que vino después, día por día, en orden de anotación.
+export const TIPOS = {
+  inventario: 'Inventario del congelador', elaboro: 'Elaboré masas', descongelo: 'Descongelé masas',
+  formo: 'Formé', horneo: 'Horneé desde el congelador'
+};
+// diasDocs: { 'AAAA-MM-DD': docDelDia } → lista de anotaciones vigentes ordenadas (fecha, hora)
+export function anotaciones(diasDocs, hasta) {
+  const out = [];
+  Object.entries(diasDocs || {}).forEach(([f, d]) => {
+    if (hasta && f > hasta) return;
+    Object.entries((d && d.bitacora) || {}).forEach(([id, a]) => { if (a && !a.anulado) out.push({ ...a, id, fecha: f }); });
+  });
+  return out.sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.en || '').localeCompare(String(b.en || '')));
+}
+const sumar = (o, k, n) => { if (!k) return; o[k] = (o[k] || 0) + M.num(n); };
+// Congelado al final de un día (incluido)
+export function stock(diasDocs, hasta) {
+  const lista = anotaciones(diasDocs, hasta);
+  let ini = -1; lista.forEach((a, i) => { if (a.tipo === 'inventario') ini = i; });
+  const s = { masas: {}, empastes: {}, productos: {}, desde: ini >= 0 ? lista[ini].fecha : null, conInventario: ini >= 0 };
+  if (ini >= 0) { const a = lista[ini]; ['masas', 'empastes', 'productos'].forEach(k => Object.entries(a[k] || {}).forEach(([id, n]) => sumar(s[k], id, n))); }
+  lista.slice(ini + 1).forEach(a => {
+    if (a.tipo === 'elaboro') { sumar(s.masas, a.masa, a.n); if (a.conEmpaste !== false) sumar(s.empastes, a.masa, a.n); }
+    if (a.tipo === 'descongelo') { sumar(s.masas, a.masa, -a.n); if (a.conEmpaste !== false) sumar(s.empastes, a.masa, -a.n); }
+    if (a.tipo === 'formo') sumar(s.productos, a.producto, a.congelar);
+    if (a.tipo === 'horneo') sumar(s.productos, a.producto, -a.n);
+  });
+  return s;
+}
+// Lo horneado en una semana (lunes a domingo), por producto: lo formado y horneado el mismo día + lo horneado desde el congelador
+export function horneado(diasDocs, lunes) {
+  const fin = M.sumarDias(lunes, 6), r = {};
+  anotaciones(diasDocs, fin).filter(a => a.fecha >= lunes).forEach(a => {
+    if (a.tipo === 'formo') sumar(r, a.producto, Math.max(0, M.num(a.n) - M.num(a.congelar)));
+    if (a.tipo === 'horneo') sumar(r, a.producto, a.n);
+  });
+  return r;
+}
+// Rendimiento real de una semana por masa: masas descongeladas vs piezas formadas (en masas según la receta)
+export function rendimiento(diasDocs, lunes, ctx) {
+  const fin = M.sumarDias(lunes, 6), prods = productos(ctx.recetas, ctx), r = {};
+  anotaciones(diasDocs, fin).filter(a => a.fecha >= lunes).forEach(a => {
+    if (a.tipo === 'descongelo') { const x = r[a.masa] || (r[a.masa] = { masas: 0, esperadas: 0 }); x.masas += M.num(a.n); }
+    if (a.tipo === 'formo') { const p = prods.find(y => y.receta.id === a.producto); if (p) { const x = r[p.masa.id] || (r[p.masa.id] = { masas: 0, esperadas: 0 }); x.esperadas += M.num(a.n) * p.masas; } }
+  });
+  return r;
+}
+export const cajas = (n, porCaja) => M.num(porCaja) > 0 ? Math.ceil(Math.max(0, M.num(n)) / M.num(porCaja) - 1e-9) : null;

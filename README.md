@@ -1,6 +1,6 @@
-# fën · Cocina · v0.2.0
+# fën · Cocina · v0.3.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 y v0.3.0: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,37 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.3.0 · Bitácora de Bollería (P2b)
+**Qué cambia en GitHub (fen-cocina):** `app.js`, `bolleria.js`, `modelo.js`, `index.html`, `config.js`, `estilos.css` y `README.md`. **Las reglas no cambian** (v1.1.0) y Sistema Fën tampoco (v0.32.0).
+
+Nueva sección **Bitácora** en la tablet de Bollería: lo que realmente pasó cada día, con quién lo anotó y a qué hora. La dupla lo ve al instante.
+- **Anotar:**
+  - **Inventario del congelador**: lo que cuentan. Reemplaza lo anterior y desde ahí todo se mueve solo. **Háganlo el primer día.**
+  - **Elaboré masas**: +masas y +empastes congelados.
+  - **Descongelé masas**: −masas y −empastes. El empaste sale con su masa.
+  - **Formé**: piezas formadas, cuántas van al congelador; las demás se hornean ese día.
+  - **Horneé desde el congelador**.
+  - "Marcar terminada" en una masa de **Hoy** la anota sola ("Elaboré 10 masas… (desde Hoy)"). Deshacer la anula.
+- **Nada se borra**: "Anular" deja la anotación tachada, con quién la anuló, y deja de contar.
+- **Congelado al cierre del día**, que sale de la bitácora y no del plan:
+  - masas y empastes por masa base, y productos (en cajas si la receta tiene "unidades por caja");
+  - avisa si no cabe en el congelador (capacidades en Sistema Fën) o si algo queda en negativo;
+  - pasa de una semana a otra sin volver a 0.
+- **Meta de la semana**: "van 35 de 100 · faltan 65". Cuenta lo horneado: lo formado y horneado el mismo día más lo horneado desde el congelador.
+- **Rendimiento real de la semana**: masas descongeladas contra piezas formadas, pasadas a masas según la receta.
+- **Cierre del viernes (para imprimir)**:
+  - congelado al cierre;
+  - qué **hornear el sábado**: se sugiere lo que falta de la meta, sin pasar de lo congelado;
+  - qué **descongelar el domingo** para el lunes: lo deciden ellas.
+  - "Guardar e imprimir" abre la impresión. Para tener PDF, elijan "Guardar como PDF".
+
+**Lista de verificación v0.3.0**
+- [ ] Tablet de Bollería: abajo dice **Cocina v0.3.0**. Aparece **Bitácora**.
+- [ ] Bitácora → **Inventario del congelador** con lo que hay hoy → el congelado lo muestra.
+- [ ] Formé → 10 croissant XL, 6 al congelador: el congelado sube 6 y la meta suma 4.
+- [ ] Anular esa anotación: todo vuelve atrás y la anotación queda tachada.
+- [ ] Viernes → Cierre del viernes → Guardar e imprimir.
 
 ## Novedades v0.2.0 · Bollería, primera parte (P2a)
 **Qué cambia:**
@@ -29,7 +60,7 @@ La tablet de Bollería ahora tiene **Hoy**, **Metas**, **Masas** y **Recetas**:
   - tandas según la amasadora (10 masas con 5 por tanda → 2 tandas de 5), con la receta escalada por tanda; se pueden cambiar con "Tandas";
   - las elaboraciones previas (Poolish Masa Base), los empastes del día y los insumos;
   - "Marcar terminada" y notas del día, compartidas con la dupla.
-- **Formado y horneado** de la meta en curso: por ahora siguen en la app actual. Llegan con la **bitácora** (P2b), junto con el stock congelado, el inventario inicial y el PDF del viernes.
+- **Formado y horneado** de la meta en curso: se anotan en la **Bitácora** (v0.3.0).
 
 Cómo reconoce las recetas:
 - **masa base**: clasificación "Masa Base" con "aparece en la grilla" marcado;
@@ -78,7 +109,7 @@ Cómo reconoce las recetas:
 | Área | Qué tiene |
 |---|---|
 | **Panadería** | **Hoy**, **Planificación** y **Recetas** |
-| Bollería | Desde v0.2.0: **Hoy**, **Metas**, **Masas** y **Recetas** |
+| Bollería | **Hoy**, **Bitácora** (v0.3.0), **Metas**, **Masas** y **Recetas** |
 | Pastelería, Cafetería | Solo **Recetas** (consulta). Siguen planificando en la app actual hasta su etapa |
 
 **Hoy (Panadería)**, para cualquier día (flechas ‹ ›):
@@ -127,7 +158,7 @@ firestore-produccion.rules (v1.1.0) → consola de Firebase de fen-produccion �
 3. **admins:** Firestore → Datos → Iniciar colección `admins` → ID del documento = **tu UID** → campo `ok` (booleano) `true`.
 4. **config.js:** pega tu firebaseConfig (o mándamelo y lo dejo puesto).
 5. **Script de Producción v2.3.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
-6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.2.0**.
+6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.3.0**.
 7. En la tablet de Panadería, abre la dirección, autoriza con la cuenta de Panadería y prueba el PIN.
 
 ## Lista de verificación v0.1.1 y v0.1.2
