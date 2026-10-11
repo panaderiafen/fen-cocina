@@ -1,6 +1,6 @@
-# fën · Cocina · v0.13.0
+# fën · Cocina · v0.13.1
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,12 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.13.1 · el domingo ya es de la semana que viene
+- **Arreglo:** el domingo, después del inventario, Metas y Masas decían "Sin inventario del congelador". Miraban la meta que empieza el lunes, cuyas masas (PEM) se elaboraron la semana pasada, cuando todavía no había inventario. Un PEM que ya pasó ya no muestra ese aviso.
+- **El domingo cuenta como preparación de la semana siguiente:** "La próxima" (y lo que se abre por defecto en Metas y Masas) es la meta cuyo PEM empieza mañana. Ejemplo: el domingo 11 abre la meta del lun 19, con el PEM del lun 12 al vie 16.
+- El descuento de las masas que sobran ya se calcula **desde el domingo**, con el inventario y lo descongelado ese día.
+- Archivos: `app.js`, `congelado.js`, `README.md` y los demás (solo versión): `editor.js`, `config.js`, `firebase.js`, `index.html`, `estilos.css`.
 
 ## Novedades v0.13.0 · Bollería: stock inicial, sobre stock y empastes al laminar (decisiones de Emmanuel, 11-oct)
 **Metas, por producto:**

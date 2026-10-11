@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.13.0
+//  fën · Cocina — la app de las jefas  v0.13.1
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,8 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.13.1: el domingo ya cuenta para la semana siguiente ("La próxima" y el descuento de lo congelado parten el domingo);
+//  el PEM de una semana que ya pasó no pide inventario.
 //  v0.13.0: Metas con stock inicial (del congelador) y "dejar para la próxima semana": a formar = meta − inicial + dejar;
 //  el PEM y lo que sobra en el congelador se calculan con eso. Empastes: no se descongelan, se gastan al laminar (Formé).
 //  v0.12.3: Masas se titula solo "PEM · lun 5 al vie 9 oct" (cabe en el celular).
@@ -50,13 +52,13 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.13.0';
+} from './firebase.js?v=0.13.1';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.13.0';
+import * as ED from './editor.js?v=0.13.1';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.11.0';
-import * as CG from './congelado.js?v=0.13.0';
+import * as CG from './congelado.js?v=0.13.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -80,7 +82,7 @@ const E = {
   usuario: null, area: null, areas: [], persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
-  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: M.sumarDias(M.lunesDe(M.hoyTxt()), 7), periodoMerma: 'semana', periodoTurno: 'hoy', stockmp: {}, conteosmp: {},
+  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: metaProx(), periodoMerma: 'semana', periodoTurno: 'hoy', stockmp: {}, conteosmp: {},
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -214,7 +216,7 @@ $('btn-area').addEventListener('click', dialogoArea);
 
 function entrarArea(area) {
   E.area = area; E.recetaVista = null; E.cantidadVista = null; E.buscar = ''; E.editor = null;
-  E.fecha = M.hoyTxt(); E.lunesPlan = M.lunesDe(E.fecha); E.lunesMeta = M.sumarDias(E.lunesPlan, 7);   // cada área parte en hoy
+  E.fecha = M.hoyTxt(); E.lunesPlan = M.lunesDe(E.fecha); E.lunesMeta = metaProx(E.fecha);   // cada área parte en hoy
   E.pin = { email: '', digitos: '', enviando: false, error: '' };
   document.body.dataset.area = area; pintarBotonArea();
   $('area-icono').innerHTML = ic(AREAS[area].icono);
@@ -383,11 +385,14 @@ function abrirApp() {
 window.addEventListener('hashchange', () => repintar());
 // Una tablet que queda prendida pasa sola al día siguiente (si estaba mirando "hoy")
 E.hoyVisto = M.hoyTxt();
+// v0.13.1: la meta "próxima" es la que se elabora esta semana (su PEM). El domingo no hay producción y ya se
+// prepara la semana que viene: el domingo cuenta como parte de la semana siguiente.
+function metaProx(h = M.hoyTxt()) { return M.sumarDias(M.lunesDe(M.indiceDia(h) === 6 ? M.sumarDias(h, 1) : h), 7); }
 function revisarCambioDeDia() {
   const h = M.hoyTxt(); if (h === E.hoyVisto) return;
   if (E.fecha === E.hoyVisto) E.fecha = h;
   if (E.lunesPlan === M.lunesDe(E.hoyVisto)) E.lunesPlan = M.lunesDe(h);
-  if (E.lunesMeta === M.sumarDias(M.lunesDe(E.hoyVisto), 7)) E.lunesMeta = M.sumarDias(M.lunesDe(h), 7);
+  if (E.lunesMeta === metaProx(E.hoyVisto)) E.lunesMeta = metaProx(h);
   E.hoyVisto = h; repintar();
 }
 setInterval(revisarCambioDeDia, 60000);
@@ -588,7 +593,7 @@ function necesidadesMeta(lunes, m, hoy = M.hoyTxt()) {
   const c = ctx(), plan = planDe(lunes, hoy), el = semanaElab(lunes);
   const base = B.necesidades(plan ? CG.aFormar(plan) : ((m && m.productos) || {}), c, E.config);
   const sinDescontar = estado => ({ nec: CG.descontar(base, null), sob: { estado, desde: el, porMasa: {} }, plan });
-  if (hoy < el) return sinDescontar('futuro');
+  if (hoy < M.sumarDias(el, -1)) return sinDescontar('futuro');
   const planE = planDe(el, hoy);
   if (!planE || !plan) return sinDescontar('cargando');
   const sob = CG.sobrantes(E.diasArea, lunes, { planE, ctx: c, cfg: E.config }, hoy);
@@ -597,8 +602,9 @@ function necesidadesMeta(lunes, m, hoy = M.hoyTxt()) {
 // Aviso (limpio) de por qué se piden menos masas que las de la meta
 function avisoCongelado(lunes, r) {
   const el = semanaElab(lunes), s = r.sob;
+  if (s.estado === 'pasado') return '';
   if (s.estado === 'sinInventario') return `<div class="nota ojo">${ic('alerta')}<span>Sin inventario del congelador no se pueden descontar las masas que ya hay: se pide todo lo del plan. Anótenlo en la <a href="#bitacora">Bitácora</a>.</span></div>`;
-  if (s.estado === 'futuro') return `<p class="ayuda">Desde el ${esc(M.fechaCorta(el))} se descuentan solas las masas que sobren en el congelador.</p>`;
+  if (s.estado === 'futuro') return `<p class="ayuda">Desde el ${esc(M.fechaCorta(M.sumarDias(el, -1)))} (con el inventario del congelador) se descuentan solas las masas que sobren.</p>`;
   const con = r.nec.masas.filter(x => x.congeladas > 0);
   if (s.estado !== 'ok' || !con.length) return '';
   const cierre = M.fechaCorta(s.hasta);
@@ -625,7 +631,7 @@ function navMeta(vista = 'metas') {
       <button type="button" class="btn-flecha" data-meta-sem="-7" aria-label="Semana anterior">${ic('izq')}</button>
       ${titulo}
       <button type="button" class="btn-flecha" data-meta-sem="7" aria-label="Semana siguiente">${ic('der')}</button>
-      ${l !== M.sumarDias(M.lunesDe(M.hoyTxt()), 7) ? '<button type="button" class="btn-sec" data-meta-sem="prox">La próxima</button>' : ''}
+      ${l !== metaProx() ? '<button type="button" class="btn-sec" data-meta-sem="prox">La próxima</button>' : ''}
     </div>`;
 }
 // Un número guardado por celda (meta o masas de un día); lo mal escrito queda marcado
@@ -1293,7 +1299,7 @@ $('principal').addEventListener('click', async ev => {
   const ds = b.dataset;
   if (ED.alClick(b)) return;
   if (ds.dia) { E.fecha = ds.dia === 'hoy' ? M.hoyTxt() : M.sumarDias(E.fecha, Number(ds.dia)); pintar(); return; }
-  if (ds.metaSem) { E.lunesMeta = ds.metaSem === 'prox' ? M.sumarDias(M.lunesDe(M.hoyTxt()), 7) : M.sumarDias(E.lunesMeta, Number(ds.metaSem)); pintar(); return; }
+  if (ds.metaSem) { E.lunesMeta = ds.metaSem === 'prox' ? metaProx() : M.sumarDias(E.lunesMeta, Number(ds.metaSem)); pintar(); return; }
   if (ds.repartir) {
     const n = Number(ds.n); if (!(n > 0)) { avisar('Esa masa no tiene masas necesarias esta semana.', true); return; }
     const plan = (E.metas[E.lunesMeta] || {}).elaboracion || {};

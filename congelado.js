@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — Bollería: stock inicial, sobre stock y masas que ya hay en el congelador (sin pantalla)  v0.13.0
+//  fën · Cocina — Bollería: stock inicial, sobre stock y masas que ya hay en el congelador (sin pantalla)  v0.13.1
 //
 //  Semana de una meta (lunes W): la meta es lo que sale en la semana. Se parte con un STOCK INICIAL de
 //  productos formados y congelados, y se quiere DEJAR un sobre stock para la semana siguiente:
@@ -21,6 +21,7 @@
 //
 //  Se descongela la víspera: lo descongelado del domingo antes de E al sábado de E es para E. Por eso
 //  "hasta" = hoy, o el sábado de E si ya pasó (entonces no falta nada). Sin inventario no se descuenta nada.
+//  v0.13.1: se calcula desde el domingo antes de E (ese día se hace el inventario y se descongela).
 //
 //  Empastes (v0.13.0): no se descongelan; viven en el refri y se gastan AL LAMINAR, que se anota con lo
 //  formado ("Formé": empastes = piezas × masas por pieza, de los productos que llevan empaste).
@@ -87,10 +88,12 @@ export const aFormar = plan => Object.fromEntries(Object.entries(plan).map(([id,
 // → { estado: 'ok'|'futuro'|'sinInventario', hasta, porMasa: { masaId: { sobran, congeladas, elaboradas, faltaDescongelar } } }
 export function sobrantes(diasDocs, lunesMeta, o, hoy = M.hoyTxt()) {
   const el = M.sumarDias(lunesMeta, -7), sabEl = M.sumarDias(el, 5), domAntes = M.sumarDias(el, -1);
-  if (hoy < el) return { estado: 'futuro', desde: el, porMasa: {} };
+  // Desde el domingo antes de E ya se puede calcular (inventario y descongelado del domingo)
+  if (hoy < domAntes) return { estado: 'futuro', desde: el, porMasa: {} };
   const hasta = hoy < sabEl ? hoy : sabEl, cerrada = hoy > sabEl;
   const st = stock(diasDocs, hasta);
-  if (!st.conInventario) return { estado: 'sinInventario', hasta, porMasa: {} };
+  // Sin inventario no se descuenta. Si la semana de elaboración ya pasó, no hay nada que avisar ('pasado').
+  if (!st.conInventario) return { estado: cerrada ? 'pasado' : 'sinInventario', hasta, porMasa: {} };
   const elab = {}, desc = {};
   B.anotaciones(diasDocs, hasta).forEach(a => {
     if (a.tipo === 'elaboro' && a.fecha >= el) sumar(elab, a.masa, a.n);
