@@ -1,6 +1,6 @@
-# fën · Cocina · v0.1.0
+# fën · Cocina · v0.1.1
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,25 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.1.1 (ajustes de Panadería)
+
+**Qué cambia en GitHub:** `app.js`, `modelo.js`, `index.html`, `config.js`, `estilos.css` y `README.md`. Las reglas de Firebase y el script de Producción **no cambian**.
+
+- **Elaboraciones previas con tarjeta completa** (Masa ciabatta, Masa madre blanca, Poolish…). Cada tarjeta muestra:
+  - los ingredientes a la vista;
+  - **Tandas**: en 1 a 6 tandas, o "de hasta N". Va en unidades si la receta rinde unidades (Masa ciabatta: "de hasta 30 un") y en kg si va por peso (masa madre);
+  - **"Dividir siempre así"**: los días siguientes la tarjeta ya sale dividida ("· como siempre"). Lo guardado en un día manda sobre lo de siempre;
+  - **Ajustar harina / agua**, también en las sub recetas:
+    - Masa ciabatta (por unidades) mantiene la harina de cada unidad;
+    - Masa madre (por peso) mantiene los kilos que piden los panes y cambia las proporciones;
+  - **Marcar terminada**.
+- Si una receta no trae % panadero (por ejemplo, la masa madre), los % se calculan de sus gramos.
+- **Producto hecho de una masa** (Ciabatta = 1 un de Masa ciabatta):
+  - la tarjeta muestra "Masa ciabatta 150 un · 29,7 kg", sin el "1 %" que venía de la planilla;
+  - no tiene botón de ajuste; dice que la harina y el agua se ajustan en la masa;
+  - antes el modal de la Ciabatta mostraba "Harina base 100 g · Masa Ciabatta 1 %", que no servía para nada.
+- Un ajuste en la masa (por ejemplo, el agua de la Masa ciabatta) pasa a la masa madre que va dentro, al pie de masa madre y a los insumos.
 
 ## Qué trae la v0.1.0 (etapa P1)
 
@@ -61,11 +80,18 @@ firestore-produccion.rules         → consola de Firebase de fen-produccion →
 2. **Reglas:** Firestore → Reglas → borrar todo → pegar `firestore-produccion.rules` → **Publicar**.
 3. **admins:** Firestore → Datos → Iniciar colección `admins` → ID del documento = **tu UID** → campo `ok` (booleano) `true`.
 4. **config.js:** pega tu firebaseConfig (o mándamelo y lo dejo puesto).
-5. **Script de Producción v2.2.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
-6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.1.0**.
+5. **Script de Producción v2.3.0** (ver su README) y **Sistema Fën v0.31.0** → Producción: conectar, asignar las cuentas de las áreas, "Leer la planilla" → "Copiar". El control de totales debe decir **Todo cuadra**.
+6. **GitHub:** repo `fen-cocina` → sube todos los archivos → Settings → Pages → rama main. Abajo de la app debe decir **Cocina v0.1.1**.
 7. En la tablet de Panadería, abre la dirección, autoriza con la cuenta de Panadería y prueba el PIN.
 
-## Lista de verificación
+## Lista de verificación v0.1.1
+- [ ] Abajo dice **Cocina v0.1.1** (si no, recarga la página una vez).
+- [ ] Hoy: "Elaboraciones previas" muestra Masa ciabatta con sus ingredientes, en unidades y kg.
+- [ ] Masa ciabatta → Tandas → "de hasta 30" → se ve dividida. Con "Dividir siempre así", el día siguiente también.
+- [ ] Masa madre blanca → Tandas → 2 → dos mitades. Ajustar → cambiar el agua → el total no cambia y las proporciones sí.
+- [ ] La Ciabatta ya no tiene el modal raro: dice "se ajustan en Masa ciabatta".
+
+## Lista de verificación v0.1.0
 - [ ] La tablet de Panadería pide el PIN y muestra solo a las personas de Panadería.
 - [ ] Hoy muestra las recetas del plan, el pie de masa madre el martes y el viernes, y los insumos.
 - [ ] Un ajuste de agua cambia la tarjeta y las tandas. En otro equipo de Panadería se ve igual.
@@ -75,6 +101,6 @@ firestore-produccion.rules         → consola de Firebase de fen-produccion →
 
 ## Si algo sale mal
 - **"No se pudo leer el área de esta cuenta"**: falta asignarla en Sistema Fën → Producción → Cuentas de las áreas, o las reglas no están publicadas.
-- **El PIN dice que no hay conexión con el servidor**: revisa que el script de Producción esté en v2.2.0 (`…/exec?action=ping`).
+- **El PIN dice que no hay conexión con el servidor**: revisa que el script de Producción esté en v2.3.0 (`…/exec?action=ping`).
 - **"Planilla pendiente"** en Planificación: el plan está guardado en la base nueva. Solo falta la copia, y se reintenta sola.
 - La app actual de Producción sigue funcionando igual. Volver a ella es usar la dirección de siempre.

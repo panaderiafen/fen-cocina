@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina (app de las jefas) — configuración  v0.1.0
+//  fën · Cocina (app de las jefas) — configuración  v0.1.1
 //  (i) La configuración web de Firebase no es secreta: solo dice cuál es el
 //  proyecto (fen-produccion). Lo que protege los datos son las reglas de
 //  fen-produccion y la cuenta de cada área (cuentas/{uid}).
@@ -7,7 +7,7 @@
 //  revisa la sesión de Firebase en cada pedido.
 // ═══════════════════════════════════════════════
 window.FEN_COCINA = {
-  VERSION: '0.1.0',
+  VERSION: '0.1.1',
   // Proyecto fen-produccion (no es secreto: solo dice cuál es el proyecto)
   firebase: {
     apiKey: 'AIzaSyC1Ea_zVHgPLu3Ij58JRcAQtWHnXIM6MeU',

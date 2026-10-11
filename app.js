@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.1.0
+//  fën · Cocina — la app de las jefas  v0.1.1
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -10,12 +10,14 @@
 //
 //  v0.1.0 (P1): Panadería completa (Hoy y Planificación) y Recetas en consulta para
 //  todas las áreas. Bollería, Pastelería y Cafetería siguen en la app actual por ahora.
+//  v0.1.1: las elaboraciones previas (masa ciabatta, masa madre…) tienen tarjeta completa, con
+//  ingredientes, tandas (por unidades o por kg, y "dividir siempre así") y ajuste de harina/agua.
 // ═══════════════════════════════════════════════
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.1.0';
-import * as M from './modelo.js?v=0.1.0';
+} from './firebase.js?v=0.1.1';
+import * as M from './modelo.js?v=0.1.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -312,16 +314,8 @@ function vistaHoy() {
         <span class="ayuda">Cubre hasta el ${esc(M.fechaCorta(pie.cubiertos[pie.cubiertos.length - 1]))} + reserva ${pie.reservaPct} %.</span>
         ${btnHecho('pie_' + t)}
       </div>`).join('');
-  const cajaSubs = el.subRecetas.map(s => {
-    const d = M.desglose(s.id, s.nombre, s.gramos, c), k = 'sub_' + s.id;
-    return `<div class="caja ${hecho(k) ? 'hecha' : ''}">
-        <span class="rotulo">Elaboración previa</span>
-        <span class="grande num">${esc(s.nombre)} ${M.gramos(s.gramos)}</span>
-        <span class="ayuda">Para ${esc([...new Set(s.usan.map(u => u.nombre))].join(', '))}${planDia.some(x => ajHoy[x.receta.id] && s.usan.some(u => u.nombre === x.receta.nombre)) ? ' · con el ajuste de harina/agua de hoy' : ''}.</span>
-        <details class="desp"><summary>Ver ingredientes</summary><div class="lista-mini">${d.map(x => `<div class="fila sub"><span>${esc(x.nombre)}</span><span>${M.gramos(x.gramos)}</span></div>`).join('')}</div></details>
-        ${btnHecho(k)}
-      </div>`;
-  }).join('');
+  E.tarjetas = {};
+  const elabs = el.subRecetas.map(s => tarjetaElab(s, s.recetaId ? ajHoy[s.recetaId] : null, dia, hecho, c)).join('');
   const ins = Object.entries(el.insumos).filter(([, g]) => g > 0.5).sort((a, b) => b[1] - a[1]);
   const harina = M.harinaDe(el.insumos);
   const cajaIns = ins.length ? `<div class="caja">
@@ -333,7 +327,8 @@ function vistaHoy() {
   const recetas = planDia.map(x => tarjetaReceta(x, ajHoy[x.receta.id], dia, hecho)).join('');
   const notas = dia.notas || {};
   return nav + `
-    <section class="resumen" aria-label="Antes de empezar">${cajaPie}${cajaSubs}${cajaIns}</section>
+    <section class="resumen" aria-label="Antes de empezar">${cajaPie}${cajaIns}</section>
+    ${elabs ? `<h2 class="titulo">Elaboraciones previas · ${el.subRecetas.length}</h2>${elabs}` : ''}
     <h2 class="titulo">Recetas del día · ${planDia.length}</h2>
     ${recetas}
     <section class="caja">
@@ -345,48 +340,85 @@ function vistaHoy() {
 
 function textoAjuste(r, a) {
   if (!a) return '';
-  const partes = [], orig = M.num(r.harinaTotal);
-  if (M.num(a.harina) > 0 && Math.abs(M.num(a.harina) - orig) > 0.1) partes.push(`Harina base ${M.gramos(a.harina)} (receta ${M.gramos(orig)})`);
+  const P = M.panadero(r), partes = [];
+  if (M.num(a.harina) > 0 && Math.abs(M.num(a.harina) - P.harina) > 0.1) partes.push(`Harina base ${M.gramos(a.harina)} (receta ${M.gramos(P.harina)})`);
   Object.entries(a.pct || {}).forEach(([id, p]) => {
     const i = (r.ingredientes || []).find(x => x.id === id);
-    if (i) partes.push(`${i.nombre} ${M.unidades(p)} % (receta ${M.unidades(M.num(i.pct) * 100)} %)`);
+    if (i) partes.push(`${i.nombre} ${M.unidades(p)} % (receta ${M.unidades(P.pct(i))} %)`);
   });
   return partes.join(' · ');
 }
 
-function tarjetaReceta({ receta: r, unidades }, aj, dia, hecho) {
-  const c = ctx(), esPan = E.area === 'PAN';
-  const guardadas = ((dia.tandas || {})[r.id]) || null;
-  const cuadran = guardadas && Math.abs(M.sumaTandas(guardadas) - unidades) < 0.001;
-  const tandas = cuadran ? M.tandasDe(guardadas, unidades) : [unidades];
-  const k = 'rec_' + r.id, h = hecho(k);
-  const columnas = tandas.map((t, i) => {
-    const e = M.escalar(r, t, aj, c);
+// Una fila de ingrediente: "150 un · 29,7 kg" si va por unidades; el % solo si la receta tiene harina propia
+const filaIng = (x, conPct) => `<div class="fila"><span>${esc(x.nombre)}</span><span class="${x.ajustado ? 'aj' : ''}">${x.unidades !== null && x.unidades !== undefined ? M.unidades(x.unidades) + ' un' + (x.gramos > 0 ? ' · ' + M.gramos(x.gramos) : '') : M.gramos(x.gramos)}${conPct && x.pct ? ` · ${M.unidades(x.pct)} %` : ''}</span></div>`;
+
+// Tandas que valen hoy: las guardadas del día; si no hay, las "de siempre" de esa receta; si no, una sola.
+// En gramos (masa madre…), si el total cambió se reparten igual que antes; en unidades se avisa.
+function tandasHoy(clave, total, rid, enGramos, dia) {
+  const guardadas = ((dia.tandas || {})[clave]) || null;
+  const cuadran = guardadas && Math.abs(M.sumaTandas(guardadas) - total) < (enGramos ? 1 : 0.001);
+  if (cuadran) return { tandas: M.tandasDe(guardadas, total) };
+  if (guardadas && enGramos) return { tandas: M.reescalar(guardadas, total) };
+  if (guardadas) return { tandas: [total], descuadre: guardadas };
+  const usual = M.tandasUsual(rid && (E.ajustes[rid] || {}).tandaUsual, total);
+  return { tandas: usual || [total], usual: !!usual };
+}
+
+// Tarjeta común de recetas y elaboraciones previas
+function tarjeta(o) {
+  const enG = o.unidad === 'g', h = o.hecho(o.claveHecho);
+  const fmt = x => enG ? M.gramos(x) : M.unidades(x);
+  const T = tandasHoy(o.clave, o.total, o.rid, enG, o.dia);
+  E.tarjetas[o.clave] = { nombre: o.nombre, total: o.total, unidad: o.unidad, rid: o.rid, escalar: o.escalar, tandas: T.tandas, aj: o.aj };
+  const columnas = T.tandas.map((t, i) => {
+    const e = o.escalar(t);
     return `<div class="tanda">
-        ${tandas.length > 1 ? `<span class="rotulo">Tanda ${i + 1} · ${M.unidades(t)} ${r.unidad === 'g' ? 'g' : 'un'}</span>` : ''}
-        ${e.filas.map(x => `<div class="fila"><span>${esc(x.nombre)}</span><span class="${x.ajustado ? 'aj' : ''}">${x.unidades !== null ? M.unidades(x.unidades) + ' un' : M.gramos(x.gramos)}${esPan && x.pct ? ` · ${M.unidades(x.pct)} %` : ''}</span></div>`).join('')}
+        ${T.tandas.length > 1 ? `<span class="rotulo">Tanda ${i + 1} · ${enG ? M.gramos(t) : M.unidades(t) + ' un'}</span>` : ''}
+        ${e.filas.map(x => filaIng(x, o.conPct)).join('')}
         <div class="fila total"><span>Total masa</span><span>${M.gramos(e.total)}</span></div>
       </div>`;
   }).join('');
-  const pasos = (r.pasos || []).filter(Boolean);
-  return `<article class="receta ${h ? 'terminada' : ''}" data-receta-card="${esc(r.id)}">
+  const pasos = o.receta ? (o.receta.pasos || []).filter(Boolean) : [], proc = o.receta && o.receta.procedimiento;
+  return `<article class="receta ${o.elab ? 'elab' : ''} ${h ? 'terminada' : ''}" ${o.elab ? 'data-elab-card' : 'data-receta-card'}="${esc(o.idCard)}">
       <div class="receta-cab">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
-          <b>${esc(r.nombre)}</b>
-          <span class="det">${M.unidades(unidades)} ${r.unidad === 'g' ? 'g' : 'unidades'}${tandas.length > 1 ? ` · ${tandas.length} tandas (${tandas.map(M.unidades).join(' + ')})` : ''}${h ? ` · terminada por ${esc(h.por)} a las ${esc(horaDe(h.en))}` : ''}</span>
+          ${o.elab ? '<span class="rotulo">Elaboración previa</span>' : ''}
+          <b>${esc(o.nombre)}</b>
+          <span class="det">${o.detalle}${T.tandas.length > 1 ? ` · ${T.tandas.length} tandas (${T.tandas.map(fmt).join(' + ')})${T.usual ? ' · como siempre' : ''}` : ''}${h ? ` · terminada por ${esc(h.por)} a las ${esc(horaDe(h.en))}` : ''}</span>
+          ${o.para ? `<span class="det">${o.para}</span>` : ''}
         </div>
-        ${aj ? `<span class="chip">Ajuste: ${esc(textoAjuste(r, aj))}</span>` : ''}
+        ${o.aj && o.receta ? `<span class="chip">Ajuste: ${esc(textoAjuste(o.receta, o.aj))}</span>` : ''}
       </div>
-      ${guardadas && !cuadran ? `<div class="nota ojo" style="margin:12px 20px 0">${ic('alerta')}<span>El plan cambió a ${M.unidades(unidades)}: las tandas guardadas (${guardadas.map(M.unidades).join(' + ')}) ya no suman eso. Vuelve a dividir.</span></div>` : ''}
+      ${T.descuadre ? `<div class="nota ojo" style="margin:12px 20px 0">${ic('alerta')}<span>El plan cambió a ${fmt(o.total)}: las tandas guardadas (${T.descuadre.map(fmt).join(' + ')}) ya no suman eso. Vuelve a dividir.</span></div>` : ''}
       <div class="tandas">${columnas}</div>
-      ${pasos.length || r.procedimiento ? `<details class="desp" style="padding:0 20px"><summary>${ic('pasos')}&nbsp;Pasos</summary>${pasos.length ? `<ol class="pasos">${pasos.map(p => `<li>${esc(p)}</li>`).join('')}</ol>` : `<p class="texto-proc">${esc(r.procedimiento)}</p>`}</details>` : ''}
+      ${pasos.length || proc ? `<details class="desp" style="padding:0 20px"><summary>${ic('pasos')}&nbsp;Pasos</summary>${pasos.length ? `<ol class="pasos">${pasos.map(p => `<li>${esc(p)}</li>`).join('')}</ol>` : `<p class="texto-proc">${esc(proc)}</p>`}</details>` : ''}
       <div class="receta-pie">
-        ${esPan && M.num(r.harinaTotal) > 0 ? `<button type="button" class="btn-sec" data-ajustar="${esc(r.id)}">${ic('ajuste')}Ajustar harina / agua</button>` : ''}
-        <button type="button" class="btn-sec" data-tandas="${esc(r.id)}" data-total="${unidades}">${ic('capas')}Tandas</button>
-        <span class="der">${h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(k)}" data-valor="0">${ic('check')}Terminada · deshacer</button>`
-          : `<button type="button" class="btn" data-hecho="${esc(k)}" data-valor="1">${ic('check')}Marcar terminada</button>`}</span>
+        ${o.ajustable ? `<button type="button" class="btn-sec" data-ajustar="${esc(o.rid)}">${ic('ajuste')}Ajustar harina / agua</button>` : o.ajusteEn ? `<span class="ayuda">${esc(o.ajusteEn)}</span>` : ''}
+        <button type="button" class="btn-sec" data-tandas="${esc(o.clave)}">${ic('capas')}Tandas</button>
+        <span class="der">${h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(o.claveHecho)}" data-valor="0">${ic('check')}Terminada · deshacer</button>`
+          : `<button type="button" class="btn" data-hecho="${esc(o.claveHecho)}" data-valor="1">${ic('check')}Marcar terminada</button>`}</span>
       </div>
     </article>`;
+}
+
+function tarjetaReceta({ receta: r, unidades }, aj, dia, hecho) {
+  const c = ctx(), esPan = E.area === 'PAN', P = M.panadero(r);
+  // Un producto hecho de una masa (Ciabatta = Masa ciabatta): la harina y el agua se ajustan en la masa
+  const masas = (r.ingredientes || []).filter(i => M.esSub(i, c) && !M.esPieMM(i.nombre)).map(i => i.nombre);
+  return tarjeta({ clave: r.id, idCard: r.id, rid: r.id, receta: r, nombre: r.nombre, unidad: r.unidad === 'g' ? 'g' : 'un', total: unidades, dia, hecho,
+    claveHecho: 'rec_' + r.id, aj, escalar: t => M.escalar(r, t, aj, c), conPct: esPan,
+    detalle: `${M.unidades(unidades)} ${r.unidad === 'g' ? 'g' : 'unidades'}`,
+    ajustable: esPan && P.ajustable, ajusteEn: esPan && !P.ajustable && masas.length ? `Harina y agua: se ajustan en ${masas.join(', ')} (elaboraciones previas)` : '' });
+}
+
+function tarjetaElab(s, aj, dia, hecho, c) {
+  const rs = s.recetaId ? E.recetas.find(r => r.id === s.recetaId) : null, P = rs ? M.panadero(rs) : null;
+  const total = s.porUnidades ? s.unidades : Math.round(s.gramos);
+  const para = [...new Set(s.usan.map(u => u.nombre))];
+  return tarjeta({ clave: 'sub_' + s.id, idCard: s.id, elab: true, rid: rs ? rs.id : null, receta: rs, nombre: s.nombre, unidad: s.porUnidades ? 'un' : 'g', total, dia, hecho,
+    claveHecho: 'sub_' + s.id, aj, escalar: t => M.escalarSub(s, t, aj, c), conPct: E.area === 'PAN',
+    detalle: s.porUnidades ? `${M.unidades(s.unidades)} un · ${M.gramos(s.gramos)}` : M.gramos(s.gramos),
+    para: `Para ${esc(para.join(', '))}`, ajustable: E.area === 'PAN' && !!(P && P.ajustable) });
 }
 
 // ── Planificación ──
@@ -511,8 +543,8 @@ function detalleReceta(r) {
       ${r.estado !== 'consolidada' ? `<span class="estado">${esc(ESTADOS[r.estado] || r.estado || '')}</span>` : ''}</div>
     <div class="caja">
       <div class="campo" style="max-width:260px"><label for="cant-receta">Cantidad (${r.unidad === 'g' ? 'gramos' : 'unidades'})</label><input id="cant-receta" inputmode="decimal" value="${esc(M.unidades(cant))}"></div>
-      <span class="ayuda">La receta base rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}${esPan && M.num(r.harinaTotal) ? ` con ${M.gramos(r.harinaTotal)} de harina` : ''}.</span>
-      <div class="lista-mini">${e.filas.map(x => `<div class="fila"><span>${esc(x.nombre)}</span><span>${x.unidades !== null ? M.unidades(x.unidades) + ' un' : M.gramos(x.gramos)}${esPan && x.pct ? ` · ${M.unidades(x.pct)} %` : ''}</span></div>`).join('')}
+      <span class="ayuda">La receta base rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}${esPan && M.panadero(r).ajustable ? ` con ${M.gramos(M.panadero(r).harina)} de harina` : ''}.</span>
+      <div class="lista-mini">${e.filas.map(x => filaIng(x, esPan)).join('')}
       <div class="fila" style="font-weight:600;border-top:1px solid var(--linea);padding-top:6px"><span>Total</span><span>${M.gramos(e.total)}</span></div></div>
     </div>
     ${pasos.length || r.procedimiento ? `<div class="caja"><span class="rotulo">Pasos</span>${pasos.length ? `<ol class="pasos" style="padding-left:20px">${pasos.map(p => `<li>${esc(p)}</li>`).join('')}</ol>` : `<p class="texto-proc" style="padding:0">${esc(r.procedimiento)}</p>`}</div>` : ''}`;
@@ -529,7 +561,7 @@ $('principal').addEventListener('click', async ev => {
     guardarSinEsperar(guardarDia(E.fecha, { hechos: { [ds.hecho]: ds.valor === '1' ? { por: quien(), en: ahoraIso() } : null } }));
     return;
   }
-  if (ds.tandas) { dialogoTandas(ds.tandas, Number(ds.total)); return; }
+  if (ds.tandas) { dialogoTandas(ds.tandas); return; }
   if (ds.ajustar) { dialogoAjuste(ds.ajustar); return; }
   if (ds.accion === 'agregar') {
     const id = $('agregar-receta').value; if (!id) { avisar('Elige una receta.', true); return; }
@@ -571,39 +603,66 @@ function guardarSinEsperar(promesa, ok) {
 }
 
 // ── Diálogo: tandas ──
-function dialogoTandas(rid, total) {
-  const r = E.recetas.find(x => x.id === rid); if (!r) return;
-  const dia = E.dias[E.fecha] || {}, prev = ((dia.tandas || {})[rid]) || null;
-  let t = prev && Math.abs(M.sumaTandas(prev) - total) < 0.001 ? prev.slice() : [total];
-  const d = $('dialogo'), aj = ajustesDe(E.fecha)[rid];
-  const gramosDe = x => M.gramos(M.escalar(r, x, aj, ctx()).total);
-  const estado = () => {
-    const suma = M.sumaTandas(t), ok = Math.abs(suma - total) < 0.001;
-    const el = $('t-estado'); el.className = ok ? 'ayuda' : 'error';
-    el.textContent = ok ? 'Suman ' + M.unidades(suma) + '.' : `Suman ${M.unidades(suma)} de ${M.unidades(total)}.`;
-    $('t-guardar').disabled = !ok;
-    t.forEach((x, i) => { const g = $('t-g-' + i); if (g) g.textContent = gramosDe(x); });
-  };
-  const pintarT = () => {
-    d.innerHTML = `<form method="dialog" class="dlg" id="f-tandas">
-      <h2>Tandas · ${esc(r.nombre)}</h2>
-      <p class="ayuda">Total del día: <b>${M.unidades(total)}</b> ${r.unidad === 'g' ? 'g' : 'unidades'}. Cada tanda muestra su receta escalada${aj ? ', con el ajuste de harina/agua de hoy' : ''}. La dupla las ve al instante.</p>
-      <div class="botones-n" role="group" aria-label="Cantidad de tandas">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="btn-sec" data-n="${n}" aria-pressed="${t.length === n}">${n} ${n === 1 ? 'tanda' : 'tandas'}</button>`).join('')}</div>
-      <div class="filas-aj">${t.map((x, i) => `<div class="fila-aj"><label for="t-${i}">Tanda ${i + 1}</label><input id="t-${i}" data-t="${i}" inputmode="decimal" value="${enCampo(x)}"><span class="gr" id="t-g-${i}"></span></div>`).join('')}</div>
-      <div id="t-estado" role="status"></div>
-      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1" id="t-guardar">Guardar tandas</button></div>
-    </form>`;
+// En 1 a 6 tandas, o "de hasta N" (unidades, o kg si va en gramos). Cada tanda se puede corregir a mano.
+// "Dividir siempre así" lo guarda en la receta para los próximos días (ajustes/{AREA}_{receta}.tandaUsual).
+function dialogoTandas(clave) {
+  const T = E.tarjetas && E.tarjetas[clave]; if (!T) return;
+  const total = T.total, enG = T.unidad === 'g';
+  const fmt = x => enG ? M.gramos(x) : M.unidades(x) + ' un';
+  const usualPrev = T.rid ? ((E.ajustes[T.rid] || {}).tandaUsual || null) : null;
+  let t = T.tandas.slice();
+  let modo = usualPrev ? { ...usualPrev } : t.length > 1 ? { modo: 'n', valor: t.length } : null;
+  const d = $('dialogo');
+  const lista = () => {
+    $('t-lista').innerHTML = t.map((x, i) => `<div class="fila-aj"><label for="t-${i}">Tanda ${i + 1}</label><input id="t-${i}" data-t="${i}" inputmode="decimal" value="${enCampo(x)}"><span class="gr" id="t-g-${i}"></span></div>`).join('');
+    d.querySelectorAll('[data-n]').forEach(b => b.setAttribute('aria-pressed', String(t.length === Number(b.dataset.n) && !(modo && modo.modo === 'cada'))));
     estado();
   };
-  pintarT(); d.showModal();
+  const estado = () => {
+    const suma = M.sumaTandas(t), ok = Math.abs(suma - total) < (enG ? 1 : 0.001);
+    const el = $('t-estado'); el.className = ok ? 'ayuda' : 'error';
+    el.textContent = ok ? `Suman ${fmt(suma)}.` : `Suman ${fmt(suma)} de ${fmt(total)}.`;
+    $('t-guardar').disabled = !ok;
+    t.forEach((x, i) => { const g = $('t-g-' + i); if (g) g.textContent = M.gramos(T.escalar(x).total); });
+  };
+  d.innerHTML = `<form method="dialog" class="dlg" id="f-tandas">
+      <h2>Tandas · ${esc(T.nombre)}</h2>
+      <p class="ayuda">Total del día: <b>${fmt(total)}</b>. Cada tanda muestra su receta escalada${T.aj ? ', con el ajuste de harina/agua de hoy' : ''}. La dupla las ve al instante.</p>
+      <div class="botones-n" role="group" aria-label="Cantidad de tandas">${[1, 2, 3, 4, 5, 6].map(n => `<button type="button" class="btn-sec" data-n="${n}" aria-pressed="false">${n} ${n === 1 ? 'tanda' : 'tandas'}</button>`).join('')}</div>
+      <div class="fila-aj"><label for="t-cada">O tandas de hasta<small>${enG ? 'Kilos de masa por tanda' : 'Unidades por tanda (por ejemplo, lo que cabe en la amasadora)'}</small></label><input id="t-cada" inputmode="decimal" value="${modo && modo.modo === 'cada' ? enCampo(enG ? modo.valor / 1000 : modo.valor) : ''}"><span class="gr">${enG ? 'kg' : 'un'}</span></div>
+      <div class="filas-aj" id="t-lista"></div>
+      <div id="t-estado" role="status"></div>
+      ${T.rid ? `<label class="check"><input type="checkbox" id="t-siempre" ${usualPrev ? 'checked' : ''}> Dividir siempre así ${esc(T.nombre)} (también los próximos días)</label>` : ''}
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1" id="t-guardar">Guardar tandas</button></div>
+    </form>`;
+  lista(); d.showModal();
   d.onsubmit = ev => ev.preventDefault();
   d.onclick = ev => {
     const b = ev.target.closest('button'); if (!b) return;
-    if (b.dataset.n) { t = M.dividir(total, Number(b.dataset.n)); pintarT(); return; }
+    if (b.dataset.n) { const n = Number(b.dataset.n); t = M.dividir(total, n); modo = { modo: 'n', valor: n }; $('t-cada').value = ''; lista(); return; }
     if (b.dataset.cerrar) { d.close(); return; }
-    if (b.dataset.guardar && !b.disabled) { d.close(); guardarSinEsperar(guardarDia(E.fecha, { tandas: { [rid]: t.length > 1 ? t : null } }), 'Tandas guardadas.'); }
+    if (b.dataset.guardar && !b.disabled) {
+      d.close();
+      guardarSinEsperar(guardarDia(E.fecha, { tandas: { [clave]: t.length > 1 ? t : null } }), 'Tandas guardadas.');
+      const siempre = $('t-siempre') && $('t-siempre').checked;
+      if (T.rid && (siempre || usualPrev)) {
+        const nuevo = siempre && modo && !(modo.modo === 'n' && modo.valor <= 1) ? { modo: modo.modo, valor: modo.valor, por: quien(), en: ahoraIso() } : null;
+        const datos = { area: E.area, recetaId: T.rid, tandaUsual: nuevo };
+        if (!E.ajustes[T.rid]) datos.periodos = [];
+        guardarSinEsperar(setDoc(doc(db, 'ajustes', `${E.area}_${T.rid}`), datos, { merge: true }));
+      }
+    }
   };
-  d.oninput = ev => { const i = ev.target.dataset.t; if (i === undefined) return; t[Number(i)] = M.num(ev.target.value); estado(); };
+  d.oninput = ev => {
+    const el = ev.target;
+    if (el.id === 't-cada') {
+      const v = M.num(el.value) * (enG ? 1000 : 1);
+      if (v > 0) { const n = Math.max(1, Math.ceil(total / v - 1e-9)); t = M.dividir(total, Math.min(n, 30)); modo = { modo: 'cada', valor: v }; }
+      lista(); return;
+    }
+    const i = el.dataset.t; if (i === undefined) return;
+    t[Number(i)] = M.num(el.value); modo = { modo: 'n', valor: t.length }; $('t-cada').value = ''; estado();
+  };
 }
 
 // ── Diálogo: ajuste de harina / agua ──
@@ -612,15 +671,19 @@ function dialogoTandas(rid, total) {
 function dialogoAjuste(rid) {
   const r = E.recetas.find(x => x.id === rid); if (!r) return;
   const f = E.fecha, doc0 = E.ajustes[rid], vig = vigenteDe(doc0, f);
-  const orig = M.num(r.harinaTotal), ingsPct = (r.ingredientes || []).filter(i => M.num(i.pct) > 0);
-  const pctOrig = i => Math.round(M.num(i.pct) * 10000) / 100;
+  // % panadero: los de la receta, o calculados de los gramos si la receta no los trae (masa madre…)
+  const P = M.panadero(r), orig = P.harina;
+  const harinas = (r.ingredientes || []).filter(i => /^harina/i.test(i.nombre));
+  const ingsPct = (r.ingredientes || []).filter(i => P.pct(i) > 0 && !(harinas.length === 1 && harinas[0] === i));
+  const pctOrig = i => Math.round(P.pct(i) * 100) / 100;
+  const esSubR = r.tipo === 'sub_receta';
   let harina = vig && M.num(vig.harina) > 0 ? M.num(vig.harina) : orig;
   const pct = {}; ingsPct.forEach(i => { pct[i.id] = vig && vig.pct && vig.pct[i.id] !== undefined ? M.num(vig.pct[i.id]) : pctOrig(i); });
   let vigencia = vig ? (vig.hasta === vig.desde ? 'dia' : 'seguir') : 'dia';   // uno nuevo parte "solo este día"
   const d = $('dialogo');
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>Ajustar harina / agua · ${esc(r.nombre)}</h2>
-      <p class="ayuda">Para cuando llega una harina que absorbe distinto. La receta original no cambia: el ajuste vale para las tarjetas, las tandas, las elaboraciones previas y los insumos.</p>
+      <p class="ayuda">Para cuando llega una harina que absorbe distinto. La receta original no cambia: el ajuste vale para las tarjetas, las tandas, las elaboraciones previas y los insumos.${esSubR ? (r.unidad !== 'g' ? ' Se mantiene la harina de cada unidad: con más agua, la masa pesa un poco más.' : ' Se mantienen los kilos que piden los panes; cambian las proporciones.') : ''}${P.calculado ? ' Los % se calculan de los gramos de la receta.' : ''}</p>
       <div class="filas-aj">
         <div class="fila-aj"><label for="aj-harina">Harina base (100 %)<small>Receta: ${M.gramos(orig)}</small></label><input id="aj-harina" inputmode="decimal" value="${enCampo(harina)}"><span class="gr">g</span></div>
         ${ingsPct.map(i => `<div class="fila-aj"><label for="aj-${esc(i.id)}">${esc(i.nombre)}<small>Receta: ${M.unidades(pctOrig(i))} %</small></label><input id="aj-${esc(i.id)}" data-pct="${esc(i.id)}" inputmode="decimal" value="${enCampo(pct[i.id])}"><span class="gr" id="aj-g-${esc(i.id)}"></span></div>`).join('')}
@@ -653,7 +716,7 @@ function dialogoAjuste(rid) {
     const terminarDesde = lista => lista.filter(x => x.desde < f).map(x => (!x.hasta || x.hasta >= f) ? { ...x, hasta: M.sumarDias(f, -1) } : x);
     if (b.dataset.quitar) {
       d.close();
-      guardarSinEsperar(setDoc(ref, { area: E.area, recetaId: rid, periodos: recortar(terminarDesde(periodos)), quitado: { por: quien(), en: ahoraIso(), desde: f } }), 'Ajuste quitado: vuelve a la receta original.');
+      guardarSinEsperar(setDoc(ref, { area: E.area, recetaId: rid, periodos: recortar(terminarDesde(periodos)), quitado: { por: quien(), en: ahoraIso(), desde: f } }, { merge: true }), 'Ajuste quitado: vuelve a la receta original.');
       return;
     }
     if (b.dataset.guardar) {
@@ -665,7 +728,7 @@ function dialogoAjuste(rid) {
       // "Hasta que lo quite" reemplaza lo que venía desde ese día; "solo este día" va encima sin borrar lo demás
       const base = vigencia === 'dia' ? periodos : terminarDesde(periodos);
       d.close();
-      guardarSinEsperar(setDoc(ref, { area: E.area, recetaId: rid, periodos: recortar([...base, nuevo]), quitado: null }), 'Ajuste guardado.');
+      guardarSinEsperar(setDoc(ref, { area: E.area, recetaId: rid, periodos: recortar([...base, nuevo]), quitado: null }, { merge: true }), 'Ajuste guardado.');
     }
   };
 }

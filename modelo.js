@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — cálculos (sin pantalla)  v0.1.0
+//  fën · Cocina — cálculos (sin pantalla)  v0.1.1
 //  Semanas por fechas, escalado de recetas, ajuste de harina/agua del día,
 //  tandas, elaboraciones previas (sub recetas), insumos y pie de masa madre.
 //  Todo es función pura: recibe los datos y devuelve el resultado.
@@ -76,32 +76,57 @@ export function esSub(ing, ctx) {
   return /^SR/.test(String(ing.id || '')) || !!recetaDeSub(ing.id, null, { recetas: (ctx.recetas || []).filter(r => r.tipo === 'sub_receta') });
 }
 
+// % panadero de una receta. Si la receta trae % guardados, se usan esos (como siempre). Si no trae
+// ninguno (masa madre, poolish…), se calculan de los gramos: harina = suma de los ingredientes "Harina…".
+// Se puede ajustar solo si la receta tiene harina propia: un producto que es solo "Masa ciabatta" no
+// (su harina y agua se ajustan en la masa).
+const esHarina = i => /^harina/.test(norm(i.nombre));
+export function panadero(r) {
+  const ings = (r && r.ingredientes) || [];
+  const sumH = ings.filter(esHarina).reduce((s, i) => s + num(i.gramos), 0);
+  const explicito = ings.some(i => num(i.pct) > 0);
+  const harina = num(r && r.harinaTotal) > 0 ? num(r.harinaTotal) : sumH;
+  const pct = i => explicito ? (num(i.pct) > 0 ? num(i.pct) * 100 : null) : (harina > 0 && num(i.gramos) > 0 ? num(i.gramos) / harina * 100 : null);
+  return { harina, pct, ajustable: harina > 0 && sumH > 0, calculado: !explicito };
+}
+
 // Ajuste del día (harina base y % panadero). Devuelve los ingredientes del lote base ya ajustados.
 // Solo cambian los ingredientes con % panadero; los demás quedan como en la receta.
 export function ingredientesAjustados(r, ajuste) {
-  const ings = (r && r.ingredientes) || [];
-  if (!ajuste || (!ajuste.harina && !Object.keys(ajuste.pct || {}).length)) return ings.map(i => ({ ...i }));
-  const harinaOrig = num(r.harinaTotal);
-  const harina = num(ajuste.harina) > 0 ? num(ajuste.harina) : harinaOrig;
-  const cambioHarina = harinaOrig > 0 && Math.abs(harina - harinaOrig) > 0.1;
+  const ings = (r && r.ingredientes) || [], P = panadero(r);
+  const con = (i, extra) => ({ ...i, pctEfectivo: P.pct(i), ...(extra || {}) });
+  if (!tieneAjuste(ajuste) || !P.ajustable) return ings.map(i => con(i));
+  const harina = num(ajuste.harina) > 0 ? num(ajuste.harina) : P.harina;
+  const cambioHarina = Math.abs(harina - P.harina) > 0.1;
   return ings.map(i => {
     const nuevo = ajuste.pct && ajuste.pct[i.id] !== undefined ? num(ajuste.pct[i.id]) : null;
-    if (nuevo !== null && harina > 0) return { ...i, gramos: harina * nuevo / 100, pctEfectivo: nuevo, ajustado: true };
-    if (cambioHarina && num(i.pct) > 0) return { ...i, gramos: harina * num(i.pct), pctEfectivo: num(i.pct) * 100, ajustado: true };
-    return { ...i, pctEfectivo: num(i.pct) > 0 ? num(i.pct) * 100 : null };
+    if (nuevo !== null && harina > 0) return con(i, { gramos: harina * nuevo / 100, pctEfectivo: nuevo, ajustado: true });
+    const p = P.pct(i);
+    if (cambioHarina && p > 0) return con(i, { gramos: harina * p / 100, ajustado: true });
+    return con(i);
   });
 }
-export const tieneAjuste = a => !!(a && (num(a.harina) > 0 || Object.keys(a.pct || {}).length));
+export function tieneAjuste(a) { return !!(a && (num(a.harina) > 0 || Object.keys(a.pct || {}).length)); }
 
-// Una receta escalada a N unidades (con el ajuste del día si lo hay)
+// Una receta escalada a N unidades (con el ajuste del día si lo hay). El % se muestra solo si la receta tiene harina propia.
 export function escalar(r, cantidad, ajuste, ctx = {}) {
-  const f = num(cantidad) / porciones(r);
+  const f = num(cantidad) / porciones(r), aj = panadero(r).ajustable;
   const filas = ingredientesAjustados(r, ajuste).map(i => {
     const tieneUn = i.unidades !== undefined && i.unidades !== null && i.unidades !== '';
     return { id: i.id, nombre: i.nombre, gramos: num(i.gramos) * f, unidades: tieneUn ? num(i.unidades) * f : null,
-      pct: i.pctEfectivo ?? (num(i.pct) > 0 ? num(i.pct) * 100 : null), ajustado: !!i.ajustado, esSub: ctx.mps ? esSub(i, ctx) : false };
+      pct: aj ? i.pctEfectivo : null, ajustado: !!i.ajustado, esSub: ctx.mps ? esSub(i, ctx) : false };
   });
   return { filas, total: filas.reduce((s, x) => s + x.gramos, 0), factor: f };
+}
+
+// Cómo baja una sub receta desde la receta que la usa: por UNIDADES si la sub receta rinde unidades y el
+// ingrediente las trae (Ciabatta → 1 un de Masa ciabatta: se mantiene la harina por unidad); si no, por
+// GRAMOS (se mantienen los gramos que pide la receta; con un ajuste cambian las proporciones).
+function bajadaSub(i, f, rs, ingsA) {
+  const u = num(i.unidades);
+  if (rs.unidad !== 'g' && u > 0) return { f: u * f / porciones(rs), unidades: u * f };
+  const pb = pesoBase(ingsA);
+  return { f: pb > 0 ? num(i.gramos) * f / pb : 0, unidades: 0 };
 }
 
 // Tandas: lista de unidades que suma lo planificado. Si no hay, una sola.
@@ -117,6 +142,19 @@ export function dividir(total, n) {
   return Array.from({ length: k }, (_, i) => base + (i < resto ? 1 : 0));
 }
 
+// Tandas de siempre (las guarda la jefa): { modo: 'n', valor: 2 } = en 2 tandas; { modo: 'cada', valor: 30 } = de hasta 30 cada una
+export function tandasUsual(u, total) {
+  if (!u || !(num(u.valor) > 0) || !(num(total) > 0)) return null;
+  const n = u.modo === 'cada' ? Math.ceil(num(total) / num(u.valor) - 1e-9) : Math.round(num(u.valor));
+  return n > 1 ? dividir(total, n) : null;
+}
+// Lleva unas tandas a otro total manteniendo sus proporciones (para las que van en gramos)
+export function reescalar(t, total) {
+  const s = sumaTandas(t); if (!(s > 0)) return [num(total)];
+  const r = t.map(x => Math.round(num(x) * num(total) / s)); r[0] += Math.round(num(total)) - sumaTandas(r);
+  return r;
+}
+
 // ── Lo planificado de un día ──
 export function planDelDia(plan, fecha, recetas) {
   if (!plan || !plan.filas) return [];
@@ -127,37 +165,45 @@ export function planDelDia(plan, fecha, recetas) {
 }
 
 // ── Elaboraciones previas e insumos del día ──
-// planDia: [{ receta, unidades }]; ajustes: { recetaId: ajuste }
-// Recorre los ingredientes; cada sub receta (también las anidadas) suma sus gramos y quién la usa.
-// Los insumos directos se suman solo en el primer nivel; los de las sub recetas salen de su desglose.
+// planDia: [{ receta, unidades }]; ajustes: { recetaId: ajuste } (también los de las sub recetas)
+// Recorre los ingredientes; cada sub receta (también las anidadas) suma su masa y quién la usa, con su
+// propio ajuste. Los insumos se suman en todos los niveles; el pie de masa madre no entra (bloque aparte).
+// Cada sub receta dice si va por unidades (todas las recetas que la usan la piden en unidades) o por gramos.
 export function elaboracionesDia(planDia, ajustes, ctx) {
-  const subs = {}, insumos = {};
-  const bajar = (ings, f, origen, prof) => {
-    ings.forEach(i => {
-      const g = num(i.gramos) * f;
-      if (esPieMM(i.nombre)) return;                 // el pie sale de la masa madre anterior (bloque aparte)
-      if (esSub(i, ctx)) {
-        const s = subs[i.id] || (subs[i.id] = { id: i.id, nombre: i.nombre, gramos: 0, usan: [] });
-        s.gramos += g; s.usan.push({ nombre: origen, gramos: g });
-        const rs = recetaDeSub(i.id, i.nombre, ctx);
-        const pb = rs ? pesoBase(rs.ingredientes) : 0;
-        if (rs && pb > 0 && prof < 6) bajar(rs.ingredientes, g / pb, origen, prof + 1);
-      } else if (prof === 0) {
-        insumos[i.nombre] = (insumos[i.nombre] || 0) + g;
-      }
-    });
-  };
-  planDia.forEach(({ receta, unidades }) => bajar(ingredientesAjustados(receta, (ajustes || {})[receta.id]), num(unidades) / porciones(receta), receta.nombre, 0));
-  // Ingredientes de las sub recetas (masa madre, poolish…) a los insumos. Una sub receta dentro de otra no se
-  // cuenta dos veces: el desglose de la de afuera la salta (es sub receta) y la de adentro suma lo suyo.
-  // El pie no entra: sale de la masa madre anterior.
-  Object.values(subs).forEach(s => {
-    desglose(s.id, s.nombre, s.gramos, ctx).forEach(c => {
-      if (c.esPie || c.esSub) return;
-      insumos[c.nombre] = (insumos[c.nombre] || 0) + c.gramos;
-    });
+  const subs = {}, insumos = {}, aj = ajustes || {};
+  const sumar = (n, g) => { insumos[n] = (insumos[n] || 0) + g; };
+  const bajar = (ings, f, origen, prof) => ings.forEach(i => {
+    const g = num(i.gramos) * f;
+    if (esPieMM(i.nombre)) return;
+    if (!esSub(i, ctx)) { sumar(i.nombre, g); return; }
+    const rs = recetaDeSub(i.id, i.nombre, ctx);
+    const s = subs[i.id] || (subs[i.id] = { id: i.id, nombre: i.nombre, recetaId: rs ? rs.id : null, gramos: 0, unidades: 0, enGramos: 0, usan: [] });
+    const ingsA = rs ? ingredientesAjustados(rs, aj[rs.id]) : null, pbA = ingsA ? pesoBase(ingsA) : 0;
+    if (rs && pbA > 0 && prof < 6) {
+      const b = bajadaSub(i, f, rs, ingsA), masa = b.f * pbA;
+      s.gramos += masa; if (b.unidades) s.unidades += b.unidades; else s.enGramos += masa;
+      s.usan.push({ nombre: origen, gramos: masa });
+      bajar(ingsA, b.f, origen, prof + 1);
+    } else {
+      s.gramos += g; s.enGramos += g; s.usan.push({ nombre: origen, gramos: g });
+      desglose(i.id, i.nombre, g, ctx).forEach(c => { if (!c.esPie && !c.esSub) sumar(c.nombre, c.gramos); });
+    }
   });
-  return { subRecetas: Object.values(subs).sort((a, b) => b.gramos - a.gramos), insumos };
+  planDia.forEach(({ receta, unidades }) => bajar(ingredientesAjustados(receta, aj[receta.id]), num(unidades) / porciones(receta), receta.nombre, 0));
+  const lista = Object.values(subs).map(s => ({ ...s, porUnidades: s.unidades > 0 && s.enGramos < 0.5 }));
+  return { subRecetas: lista.sort((a, b) => b.gramos - a.gramos), insumos };
+}
+
+// Una elaboración previa escalada: cantidad en unidades (si va por unidades) o en gramos de masa
+export function escalarSub(s, cantidad, aj, ctx) {
+  const rs = s.recetaId ? (ctx.recetas || []).find(r => r.id === s.recetaId) : null;
+  if (!rs || !pesoBase(rs.ingredientes)) {
+    const filas = desglose(s.id, s.nombre, num(cantidad), ctx).map(c => ({ id: c.id, nombre: c.nombre, gramos: c.gramos, unidades: null, pct: null }));
+    return { filas, total: filas.reduce((x, c) => x + c.gramos, 0) };
+  }
+  if (s.porUnidades) return escalar(rs, cantidad, aj, ctx);
+  const pb = pesoBase(ingredientesAjustados(rs, aj));
+  return escalar(rs, pb > 0 ? num(cantidad) * porciones(rs) / pb : 0, aj, ctx);
 }
 
 // Componentes de una sub receta para T gramos: con su receta si la tiene; si no, con la configuración de Panadería
@@ -201,16 +247,17 @@ export function pieMasaMadre(fecha, planes, ajustesDe, ctx) {
   const mms = (ctx.mps || []).filter(m => (m.tipo === 'sub_receta' || /^SR/.test(m.id)) && /masa madre/.test(norm(m.nombre)));
   const ids = { blanca: mms.filter(m => !/integral/.test(norm(m.nombre))).map(m => m.id), integral: mms.filter(m => /integral/.test(norm(m.nombre))).map(m => m.id) };
   const idsPie = (ctx.mps || []).filter(m => /pie de mm|pie de masa madre/.test(norm(m.nombre))).map(m => m.id);
-  const buscar = (ings, f, buscados, prof) => ings.reduce((s, i) => {
+  const buscar = (ings, f, buscados, prof, aj) => ings.reduce((s, i) => {
     if (buscados.includes(i.id)) return s + num(i.gramos) * f;
     if (prof > 6 || !esSub(i, ctx)) return s;
-    const rs = recetaDeSub(i.id, i.nombre, ctx), pb = rs ? pesoBase(rs.ingredientes) : 0;
-    return pb > 0 ? s + buscar(rs.ingredientes, num(i.gramos) * f / pb, buscados, prof + 1) : s;
+    const rs = recetaDeSub(i.id, i.nombre, ctx); if (!rs) return s;
+    const ingsA = ingredientesAjustados(rs, aj[rs.id]);
+    return pesoBase(ingsA) > 0 ? s + buscar(ingsA, bajadaSub(i, f, rs, ingsA).f, buscados, prof + 1, aj) : s;
   }, 0);
   const mmDelDia = (t, buscados) => {
     if (!buscados.length) return 0;
     const plan = planes[lunesDe(t)], aj = (ajustesDe && ajustesDe(t)) || {};
-    return planDelDia(plan, t, ctx.recetas).reduce((s, { receta, unidades }) => s + buscar(ingredientesAjustados(receta, aj[receta.id]), unidades / porciones(receta), buscados, 0), 0);
+    return planDelDia(plan, t, ctx.recetas).reduce((s, { receta, unidades }) => s + buscar(ingredientesAjustados(receta, aj[receta.id]), unidades / porciones(receta), buscados, 0, aj), 0);
   };
   // Con una sub receta "Pie de MM" dentro de la masa madre, cuenta solo esa parte; si no, toda la masa madre
   const proporcionPie = buscados => {
