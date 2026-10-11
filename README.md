@@ -1,6 +1,6 @@
-# fën · Cocina · v0.10.0
+# fën · Cocina · v0.10.1
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.10.0: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.10.1: 11 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,12 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.10.1 · arreglos del conteo en sacos
+- **El plural:** decía "sacoses" cuando el envase se escribió en plural en Sistema Fën. Ahora entiende las dos formas: saco / sacos, caja / cajas, bidón / bidones.
+- **El formulario de conteo y llegada:** el nombre va arriba y debajo los sacos + los kg sueltos, en una línea, también en el celular.
+- **Bodega en el celular:** la lista de críticas se salía de la pantalla con textos largos. Ahora corta en líneas.
+- Archivos: `app.js`, `consumo.js`, `estilos.css` y los demás `.js` (solo versión). Reglas y script sin cambios.
 
 ## Novedades v0.10.0 · contar en sacos
 **Qué cambia:**

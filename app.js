@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.10.0
+//  fën · Cocina — la app de las jefas  v0.10.1
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -39,12 +39,12 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.10.0';
-import * as M from './modelo.js?v=0.10.0';
-import * as B from './bolleria.js?v=0.10.0';
-import * as ED from './editor.js?v=0.10.0';
-import * as R from './registros.js?v=0.10.0';
-import * as K from './consumo.js?v=0.10.0';
+} from './firebase.js?v=0.10.1';
+import * as M from './modelo.js?v=0.10.1';
+import * as B from './bolleria.js?v=0.10.1';
+import * as ED from './editor.js?v=0.10.1';
+import * as R from './registros.js?v=0.10.1';
+import * as K from './consumo.js?v=0.10.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -1596,7 +1596,7 @@ function vistaBodega() {
     const c = K.control(m, E.stockmp[m.id]), e = est(m);
     const txt = !e ? 'Sin calcular todavía' : !e.contado ? 'Falta un conteo' : `${K.textoEnv(e.stock, c.unidad, c.envase)}${e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : ''}`;
     const uc = ultimoConteo(m.id);
-    return `<div class="fila sub"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${e && (e.bajoAhora || e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
+    return `<div class="fila sub fila-bod"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${e && (e.bajoAhora || e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
   };
   const calculado = cr.map(est).filter(Boolean).map(e => e.en).sort().pop();
   return `

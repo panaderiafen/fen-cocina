@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.10.0
+//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.10.1
 //  v0.5.0: Pastelería también crea y edita recetas aquí.
 //  Las jefas de Panadería y Bollería crean y editan recetas aquí. Una receta vigente NUNCA
 //  se cambia directo: cada cambio es una PROPUESTA (propuestas/{AREA}_{id}) que pasa por
@@ -11,7 +11,7 @@
 //  · Materia prima que falta: se pide desde aquí (solicitudes/{AREA}_{id}); la crea o habilita
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.10.0';
+import * as M from './modelo.js?v=0.10.1';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }
 export function configurar(api) { A = api; }

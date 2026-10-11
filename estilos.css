@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.10.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.10.1 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -323,8 +323,18 @@ table.masas td .btn-link { display: block; margin-top: 4px; font-size: 12px; }
 .ayuda.bloque { display: block; font-weight: 400; }
 .fila-aj label small.txt-ojo { color: var(--ojo); font-weight: 600; }
 /* v0.10.0 · conteo en envases (sacos + lo suelto) */
-.fila-aj.fila-env { grid-template-columns: minmax(0, 1fr) auto; }
-.env-campos { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-.env-campos input { width: 72px; }
-.env-campos .mas { color: var(--suave); font-weight: 600; }
-.fila-env .env-total { grid-column: 2; text-align: right; font-weight: 600; }
+.fila-aj.fila-env { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.env-campos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.env-campos input { width: 84px; flex: none; }
+.env-campos .gr { min-width: 0; }
+.env-campos .mas { color: var(--suave); font-weight: 600; padding: 0 2px; }
+.fila-env .env-total { text-align: left; font-weight: 600; color: var(--acento-texto); min-height: 1.2em; }
+
+/* Bodega en el celular: el texto largo se corta en líneas y no se sale de la pantalla */
+.fila.fila-bod { flex-wrap: wrap; }
+.fila.fila-bod span:last-child { white-space: normal; }
+@media (max-width: 600px) {
+  .fila.fila-bod span:last-child { text-align: left; }
+  .env-campos input { width: 64px; }
+  .env-campos { gap: 6px; }
+}
