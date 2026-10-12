@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — Bollería: stock inicial, sobre stock y masas que ya hay en el congelador (sin pantalla)  v0.13.1
+//  fën · Cocina — Bollería: stock inicial, sobre stock y masas que ya hay en el congelador (sin pantalla)  v0.14.0
 //
 //  Semana de una meta (lunes W): la meta es lo que sale en la semana. Se parte con un STOCK INICIAL de
 //  productos formados y congelados, y se quiere DEJAR un sobre stock para la semana siguiente:
@@ -25,6 +25,16 @@
 //
 //  Empastes (v0.13.0): no se descongelan; viven en el refri y se gastan AL LAMINAR, que se anota con lo
 //  formado ("Formé": empastes = piezas × masas por pieza, de los productos que llevan empaste).
+//  Empastes (v0.14.0, corrección de Emmanuel): se hacen la MISMA semana en que se laminan, según lo que hay que
+//  formar esa semana (las masas base se siguen elaborando la semana anterior). Por eso:
+//    · "Elaboré masas" nuevas llevan conEmpaste: false → no suman empastes (las antiguas sin marca sí: historia).
+//    · Anotación nueva "Hice empastes": { tipo: 'empaste', masa (id de la masa base), n } → +n empastes en el refri
+//      (aquí, en stock) y descuenta la bodega con la receta del empaste (consumo.js).
+//    · Semana de los empastes (semanaEmpastes): lunes a sábado; el domingo ya cuenta para la semana siguiente
+//      (como metaProx y el descongelado de la víspera), porque ese día se prepara el lunes.
+//    · empastesSemana: por masa, necesarios (lo que hay que formar en la semana, planSemana → empastesDe),
+//      usados al laminar (Formé desde el lunes), en el refri, hechos (desde el domingo antes) y
+//      faltan = máx(0, necesarios − usados − en el refri).
 // ═══════════════════════════════════════════════
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
@@ -32,12 +42,44 @@ import * as B from './bolleria.js?v=0.11.0';
 const sumar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + M.num(n); };
 const r2 = n => Math.round(M.num(n) * 100) / 100;
 
-// Stock congelado (B.stock) + los empastes que se gastaron al laminar lo formado después del último inventario
+// Stock congelado (B.stock) + los empastes hechos ("Hice empastes") − los que se gastaron al laminar lo formado,
+// después del último inventario
 export function stock(diasDocs, hasta) {
   const s = B.stock(diasDocs, hasta), lista = B.anotaciones(diasDocs, hasta);
   let ini = -1; lista.forEach((a, i) => { if (a.tipo === 'inventario') ini = i; });
-  lista.slice(ini + 1).forEach(a => { if (a.tipo === 'formo' && a.masa && M.num(a.empastes)) s.empastes[a.masa] = r2((s.empastes[a.masa] || 0) - M.num(a.empastes)); });
+  lista.slice(ini + 1).forEach(a => {
+    if (a.tipo === 'formo' && a.masa && M.num(a.empastes)) s.empastes[a.masa] = r2((s.empastes[a.masa] || 0) - M.num(a.empastes));
+    if (a.tipo === 'empaste' && a.masa && M.num(a.n) > 0) s.empastes[a.masa] = r2((s.empastes[a.masa] || 0) + M.num(a.n));
+  });
   return s;
+}
+
+// Semana de los empastes de un día (lunes): la de ese día; el domingo, la siguiente
+export const semanaEmpastes = f => M.indiceDia(f) === 6 ? M.sumarDias(f, 1) : M.lunesDe(f);
+
+// Empastes de la semana W (lunes), al cierre de "hasta" (por defecto hoy):
+// { masaId: { necesarios, usados, refri, hechos, faltan, porDia: { fecha: n } } }  (solo masas con empaste)
+// plan: planSemana(W) (o null: sin plan, necesarios = 0)
+export function empastesSemana(diasDocs, W, plan, ctx, hasta = M.hoyTxt()) {
+  const r = {}, x = id => r[id] || (r[id] = { necesarios: 0, usados: 0, refri: 0, hechos: 0, faltan: 0, porDia: {} });
+  const conEmp = B.productos(ctx.recetas, ctx).filter(p => p.empasteG > 0);
+  new Set(conEmp.map(p => p.masa.id)).forEach(id => x(id));
+  const nec = {};
+  Object.entries(plan ? aFormar(plan) : {}).forEach(([pid, n]) => { const e = empastesDe(pid, n, ctx); if (e) nec[e.masa] = (nec[e.masa] || 0) + e.empastes; });
+  Object.entries(nec).forEach(([id, n]) => { x(id).necesarios = Math.ceil(n - 1e-9); });
+  const domAntes = M.sumarDias(W, -1), fin = M.sumarDias(W, 5);
+  B.anotaciones(diasDocs, hasta).forEach(a => {
+    if (a.tipo === 'formo' && a.masa && a.fecha >= W && a.fecha <= M.sumarDias(W, 6) && M.num(a.empastes)) x(a.masa).usados = r2(x(a.masa).usados + M.num(a.empastes));
+    if (a.tipo === 'empaste' && a.masa && a.fecha >= domAntes && a.fecha <= fin && M.num(a.n) > 0) {
+      const y = x(a.masa); y.hechos += M.num(a.n); y.porDia[a.fecha] = (y.porDia[a.fecha] || 0) + M.num(a.n);
+    }
+  });
+  const st = stock(diasDocs, hasta);
+  Object.entries(r).forEach(([id, y]) => {
+    y.refri = r2(st.empastes[id] || 0);
+    y.faltan = Math.max(0, Math.ceil(y.necesarios - y.usados - Math.max(0, y.refri) - 1e-9));
+  });
+  return r;
 }
 
 // Empastes que gasta lo formado (al laminar): { masa, empastes } o null si el producto no lleva empaste

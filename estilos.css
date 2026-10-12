@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.13.1 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.14.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -372,3 +372,34 @@ details.anuladas .lista-bit { margin-top: 8px; }
 /* v0.13.0 · Metas: stock inicial, dejar próx. semana y a formar */
 table.metas td small { display: block; font-size: 12px; color: var(--suave); font-weight: 400; }
 table.metas td.num small { text-align: right; }
+
+/* v0.14.0 · Hoy: el día de hoy se pinta con el color del área; la barra de la fecha queda fija arriba */
+:root { --fondo-hoy: #F5E5D6; }
+body[data-area="BOL"] { --fondo-hoy: #E9E2F3; }
+body[data-area="PAS"] { --fondo-hoy: #DDEADF; }
+body[data-area="CAF"] { --fondo-hoy: #F1DEDB; }
+body { min-height: 100vh; }
+body.dia-hoy { background: var(--fondo-hoy); }
+.nav-dia { position: sticky; top: 0; z-index: 6; background: var(--fondo); margin: -8px -8px 0; padding: 8px; border-radius: 0 0 12px 12px; }
+body.dia-hoy .nav-dia { background: var(--fondo-hoy); }
+.nav-dia.otro-dia { box-shadow: inset 0 -1px 0 var(--linea); }
+.chip-hoy { display: inline-block; vertical-align: middle; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--acento-texto); color: #fff; margin-left: 4px; }
+.btn-volver-hoy { border-color: var(--acento); color: var(--acento-texto); font-weight: 600; background: var(--tinte); }
+@media (max-width: 600px) {
+  .nav-dia { gap: 6px; margin: -6px -6px 0; padding: 6px; }
+  .nav-dia h2 { font-size: 16px; flex: 1 1 0; }
+  .nav-dia .btn-flecha { width: 40px; height: 40px; }
+  .nav-dia .btn-volver-hoy { min-height: 38px; padding: 0 12px; font-size: 14px; }
+}
+
+/* v0.14.0 · Bollería: empastes de la semana */
+.lista-emp { display: flex; flex-direction: column; gap: 8px; }
+.linea-emp { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 52px; padding: 10px 14px; border: 1px solid var(--tinte-borde); border-radius: 12px; background: #fff; text-align: left; cursor: pointer; font-size: 15px; }
+.linea-emp-t { min-width: 0; }
+.linea-emp-t b { font-weight: 600; }
+.emp-receta > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--acento-texto); font-size: 15px; }
+.caja-emp .faltan-emp { border-top: 1px solid var(--linea); padding-top: 6px; margin-top: 4px; }
+.caja-emp .dia-emp { color: var(--suave); font-size: 14px; }
+details.info > summary { display: flex; align-items: center; min-height: 40px; cursor: pointer; color: var(--suave); font-size: 14px; }
+/* v0.14.0 · textos largos a la derecha (Hoy de Bollería): en el celular bajan de línea en vez de salirse */
+.fila.larga span:last-child { white-space: normal; }

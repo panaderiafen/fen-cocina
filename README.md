@@ -1,6 +1,6 @@
-# fën · Cocina · v0.13.1
+# fën · Cocina · v0.14.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0: 12 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,37 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.14.0 · Hoy se nota cuando es hoy · Bollería: los empastes se hacen la semana en que se laminan (corrección de Emmanuel, 12-oct)
+**Hoy (Panadería, Bollería y Pastelería):**
+- Cuando el día elegido es **hoy**, toda la pantalla toma el color del área (más intenso) y la fecha dice **Hoy**.
+- Otro día: fondo normal y el botón **"Volver a hoy"** a la vista, en la barra de la fecha.
+- La **barra de la fecha queda fija arriba** al bajar (también en el celular). Lo mismo en la Bitácora (sin color).
+- Cafetería no tiene Hoy (tiene Bitácora de turno): no cambia.
+
+**Bollería · empastes (cambia la idea anterior):**
+- Las **masas base** se siguen elaborando la semana anterior (PEM). Los **empastes se hacen la misma semana en que se laminan**, según lo que hay que formar esa semana.
+- **"Elaboré masas"** (y "Marcar terminada" en Hoy) ahora anota **solo la masa**: no suma empastes al refri ni descuenta mantequilla de empaste de la bodega. Las anotaciones antiguas quedan como estaban (dicen "anotación antigua: con sus masas").
+- **Masas (PEM)** y **Metas** ya no muestran empastes. **Hoy** ya no tiene tarjetas de empaste por masa.
+- **Bitácora → botón "Empastes"**: panel de la semana (lunes a sábado; el domingo ya cuenta para la semana que empieza, como "La próxima" y el descongelado de la víspera). Por masa base:
+  - **Necesarios esta semana**: lo que hay que formar (meta − stock inicial + dejar) pasado a masas = 1 empaste por masa.
+  - **Ya usados al laminar**: los de "Formé" desde el lunes.
+  - **En el refri**: inventario + hechos − usados.
+  - **Hechos esta semana** (desde el domingo antes), día por día.
+  - **Faltan por hacer** = necesarios − usados − en el refri.
+  - **"Hice empastes"**: cuántos (número entero), en el día elegido. Suma al refri y **descuenta de la bodega** la receta del empaste (300 g × cantidad). Se ve en la Bitácora ("Hice empastes → refri") y se puede **anular** como las demás.
+- **Hoy de Bollería**: la línea **"Empastes de la semana: faltan X (hay Y en el refri)"** abre el panel. Debajo, la **receta del empaste** escalada a lo que falta, para pesarla; su botón "Hice empastes" parte con ese número.
+- El **inventario del congelador** sigue contando los empastes del refri.
+- Sistema Fën (bodega) cuenta "Hice empastes" con el mismo cálculo. La proyección de la bodega pone el empaste con los productos de la meta de la semana, ya no con las masas.
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** `app.js`, `congelado.js`, `consumo.js` (cálculo compartido, v0.14.0), `estilos.css`, `README.md` y los demás (solo versión): `editor.js`, `config.js`, `index.html`. Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `firebase.js`, reglas y script.
+**Sistema Fën:** la copia `cocina/consumo.js` es la misma de Cocina v0.14.0; `produccion.js` y `vista-produccion.js` la importan con `?v=0.14.0` (va con la próxima entrega de Sistema Fën).
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.14.0**. Hoy con el color del área; al pasar a mañana, fondo normal y "Volver a hoy". Al bajar, la fecha queda arriba.
+- [ ] Bollería, Hoy: marcar una masa terminada → en la Bitácora dice "Elaboré masas" sin línea de empastes; el refri no cambia.
+- [ ] Bitácora → Empastes: los números calzan con la meta de la semana; "Hice empastes 10" → el refri sube 10 y faltan baja 10.
+- [ ] Sistema Fën → Bodega → Calcular: la mantequilla baja 3 kg por esos 10 empastes.
 
 ## Novedades v0.13.1 · el domingo ya es de la semana que viene
 - **Arreglo:** el domingo, después del inventario, Metas y Masas decían "Sin inventario del congelador". Miraban la meta que empieza el lunes, cuyas masas (PEM) se elaboraron la semana pasada, cuando todavía no había inventario. Un PEM que ya pasó ya no muestra ese aviso.
@@ -162,7 +193,7 @@ Regla de Fën: la bodega se cuenta **al terminar la producción del día**. En C
   - Lo que cuenta o recibe un área vale para todas.
 - **El stock baja solo con lo que marcan como hecho:**
   - Panadería: recetas terminadas.
-  - Bollería: masas elaboradas con su empaste, y productos formados (bitácora).
+  - Bollería: masas elaboradas con su empaste, y productos formados (bitácora). *(Desde v0.14.0: la masa sola; los empastes con "Hice empastes".)*
   - Pastelería: recetas terminadas.
   - Además, la merma de materias primas.
   - Las recetas se bajan por sus sub recetas hasta las materias primas. Una preparación de otra área la cuenta el área que la hace (la crema pastelera la cuenta Pastelería, no Bollería al rellenar). El pie de masa madre no se cuenta.
@@ -344,7 +375,7 @@ Incluye todo lo de la v0.4.1. Qué cambia en el formulario:
 Nueva sección **Bitácora** en la tablet de Bollería: lo que realmente pasó cada día, con quién lo anotó y a qué hora. La dupla lo ve al instante.
 - **Anotar:**
   - **Inventario del congelador**: lo que cuentan. Reemplaza lo anterior y desde ahí todo se mueve solo. **Háganlo el primer día.**
-  - **Elaboré masas**: +masas y +empastes congelados.
+  - **Elaboré masas**: +masas y +empastes congelados. *(Desde v0.14.0: solo masas; los empastes se anotan con "Hice empastes".)*
   - **Descongelé masas**: −masas y −empastes. El empaste sale con su masa.
   - **Formé**: piezas formadas, cuántas van al congelador; las demás se hornean ese día.
   - **Horneé desde el congelador**.
@@ -378,16 +409,16 @@ Nueva sección **Bitácora** en la tablet de Bollería: lo que realmente pasó c
 La tablet de Bollería ahora tiene **Hoy**, **Metas**, **Masas** y **Recetas**:
 - **Metas** (por semana, "meta del lun 19 al dom 25 oct"): piezas por producto. Se ofrecen las recetas **aprobadas** que llevan una masa base. Para cada una, la app dice cuánto rinde 1 masa (Croissant XL: 0,1 masa → rinde 10). Calcula:
   - **masas base** enteras y kg (600 XL → 60 masas, 96 kg), con la merma de laminado si la configuraste;
-  - **empastes**: 1 por masa, con los gramos que piden las recetas (30 g × 10 = 300 g);
+  - **empastes**: 1 por masa, con los gramos que piden las recetas (30 g × 10 = 300 g); *(desde v0.14.0 no van en Metas ni en el PEM: se hacen la semana de la meta)*
   - avisa si dos productos de la misma masa piden distinto empaste por masa.
 - **Masas** (para esa meta, se elaboran de lunes a viernes de la semana anterior):
   - masas por día, cada número se guarda solo;
   - **Repartir parejo**;
   - "Faltan N", "Sobran N" o "Completo";
-  - por día: tandas (en masas enteras según la amasadora), empastes y kilos. Avisa cuando un día pasa de las tandas normales.
+  - por día: tandas (en masas enteras según la amasadora), empastes y kilos *(v0.14.0: sin empastes)*. Avisa cuando un día pasa de las tandas normales.
 - **Hoy:** las masas del día. Se calculan de las Masas de la meta de la semana siguiente. Muestra:
   - tandas según la amasadora (10 masas con 5 por tanda → 2 tandas de 5), con la receta escalada por tanda; se pueden cambiar con "Tandas";
-  - las elaboraciones previas (Poolish Masa Base), los empastes del día y los insumos;
+  - las elaboraciones previas (Poolish Masa Base), los empastes del día y los insumos *(v0.14.0: en vez de los empastes del día, "Empastes de la semana")*;
   - "Marcar terminada" y notas del día, compartidas con la dupla.
 - **Formado y horneado** de la meta en curso: se anotan en la **Bitácora** (v0.3.0).
 
@@ -476,7 +507,7 @@ Quién entra a cada área sigue saliendo de la app actual (Administración → S
 
 ## Archivos y dónde va cada uno
 ```
-index.html, app.js, modelo.js, bolleria.js, editor.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
+index.html, app.js, modelo.js, bolleria.js, registros.js, consumo.js, congelado.js, editor.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
 config.js                          → GitHub, raíz (lleva el firebaseConfig de fen-produccion)
 README.md                          → GitHub, raíz
 firestore-produccion.rules (v1.3.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)

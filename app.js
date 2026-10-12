@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.13.1
+//  fën · Cocina — la app de las jefas  v0.14.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,10 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.14.0: Hoy (todas las áreas) se pinta con el color del área cuando es el día de hoy; otro día: fondo normal y
+//  "Volver a hoy". La barra de la fecha queda fija arriba al bajar. Bollería: los empastes se hacen la semana en que se
+//  laminan (corrección de Emmanuel): "Elaboré" ya no suma empastes; anotación nueva "Hice empastes" y panel Empastes
+//  de la semana (necesarios, usados al laminar, en el refri, hechos, faltan); el PEM ya no tiene empastes.
 //  v0.13.1: el domingo ya cuenta para la semana siguiente ("La próxima" y el descuento de lo congelado parten el domingo);
 //  el PEM de una semana que ya pasó no pide inventario.
 //  v0.13.0: Metas con stock inicial (del congelador) y "dejar para la próxima semana": a formar = meta − inicial + dejar;
@@ -52,13 +56,13 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.13.1';
+} from './firebase.js?v=0.14.0';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.13.1';
+import * as ED from './editor.js?v=0.14.0';
 import * as R from './registros.js?v=0.11.0';
-import * as K from './consumo.js?v=0.11.0';
-import * as CG from './congelado.js?v=0.13.1';
+import * as K from './consumo.js?v=0.14.0';
+import * as CG from './congelado.js?v=0.14.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -419,6 +423,8 @@ function pintar() {
   $('barra-sub').textContent = v === 'plan' ? 'Planificación · semana ' + M.etiquetaSemana(E.lunesPlan) : v === 'recetas' ? 'Recetas'
     : v === 'bitacora' ? 'Bitácora · ' + M.fechaLarga(E.fecha) : v === 'merma' ? 'Merma · lo que se pierde' : v === 'bodega' ? 'Bodega · materias primas críticas' : v === 'turno' ? 'Bitácora de turno · ' + M.fechaLarga(M.hoyTxt()) : v === 'metas' ? 'Metas · semana ' + M.etiquetaSemana(E.lunesMeta) : v === 'masas' ? `Masas · PEM ${etiquetaPem(E.lunesMeta)}`
     : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
+  // v0.14.0: en Hoy (Panadería, Bollería, Pastelería), si es el día de hoy, toda la pantalla toma el color del área
+  document.body.classList.toggle('dia-hoy', v === 'hoy' && E.fecha === M.hoyTxt());
   main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'bodega' ? vistaBodega() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
   if (v === 'recetas' && E.editor) ED.actualizarCalculos();
   if (guardado && $(guardado.id)) {
@@ -430,16 +436,22 @@ function pintar() {
 }
 
 // ── Hoy ──
+// v0.14.0: barra de la fecha (fija arriba al bajar). Hoy: "Hoy" marcado y el fondo del color del área (lo pone pintar);
+// otro día: "Volver a hoy" a la vista
+function navDia(f) {
+  const esHoy = f === M.hoyTxt();
+  return `<div class="nav-fecha nav-dia ${esHoy ? 'es-hoy' : 'otro-dia'}">
+      <button type="button" class="btn-flecha" data-dia="-1" aria-label="Día anterior">${ic('izq')}</button>
+      <h2>${esc(M.fechaLarga(f))}${esHoy ? ' <span class="chip-hoy">Hoy</span>' : ''}</h2>
+      <button type="button" class="btn-flecha" data-dia="1" aria-label="Día siguiente">${ic('der')}</button>
+      ${esHoy ? '' : `<button type="button" class="btn-sec btn-volver-hoy" data-dia="hoy">${ic('hoy')}Volver a hoy</button>`}
+    </div>`;
+}
 function vistaHoy() {
   if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
   const f = E.fecha, lunes = M.lunesDe(f);
   const plan = asegurarPlan(lunes); asegurarPlan(M.sumarDias(lunes, 7)); asegurarPlan(M.sumarDias(lunes, 14)); const dia = asegurarDia(f) || {};
-  const nav = `<div class="nav-fecha">
-      <button type="button" class="btn-flecha" data-dia="-1" aria-label="Día anterior">${ic('izq')}</button>
-      <h2>${esc(M.fechaLarga(f))}${f === M.hoyTxt() ? ' · hoy' : ''}</h2>
-      <button type="button" class="btn-flecha" data-dia="1" aria-label="Día siguiente">${ic('der')}</button>
-      ${f !== M.hoyTxt() ? '<button type="button" class="btn-sec" data-dia="hoy">Volver a hoy</button>' : ''}
-    </div>`;
+  const nav = navDia(f);
   if (!plan) return nav + '<div class="vacio">Cargando el plan…</div>';
   const c = ctx(), ajHoy = ajustesDe(f), hechos = dia.hechos || {};
   const planDia = M.planDelDia(plan, f, E.recetas);
@@ -547,7 +559,7 @@ function tarjeta(o) {
       <div class="receta-pie">
         ${o.ajustable ? `<button type="button" class="btn-sec" data-ajustar="${esc(o.rid)}">${ic('ajuste')}Ajustar harina / agua</button>` : o.ajusteEn ? `<span class="ayuda">${esc(o.ajusteEn)}</span>` : ''}
         <button type="button" class="btn-sec" data-tandas="${esc(o.clave)}">${ic('capas')}Tandas</button>
-        <span class="der">${h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(o.claveHecho)}" data-valor="0">${ic('check')}Terminada · deshacer</button>`
+        <span class="der">${o.botonFinal ? o.botonFinal : h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(o.claveHecho)}" data-valor="0">${ic('check')}Terminada · deshacer</button>`
           : `<button type="button" class="btn" data-hecho="${esc(o.claveHecho)}" data-valor="1">${ic('check')}Marcar terminada</button>`}</span>
       </div>
     </article>`;
@@ -689,7 +701,6 @@ function vistaMetas() {
       <span class="grande num">${M.miles(x.masas)} masas</span>
       ${x.congeladas ? `<span class="ayuda congeladas">${ic('copo')}${M.miles(x.meta)} del plan − ${M.miles(x.congeladas)} ya congeladas</span>` : ''}
       <span class="ayuda">${M.gramos(x.kg * 1000)} de masa${x.merma ? ` · incluye ${M.unidades(x.merma)} % de merma de laminado` : ''}${Math.abs((x.meta ?? x.masas) - x.exactas) > 0.001 ? ` · exactas ${M.unidades(x.exactas)}, se redondea a masas enteras` : ''}</span>
-      ${x.empastes ? `<div class="fila sub"><span>${esc(x.empaste ? x.empaste.nombre : 'Empaste')}</span><span>${M.miles(x.empastes)} de ${M.gramos(x.gPorEmpaste)} · ${M.gramos(x.empastes * x.gPorEmpaste)}</span></div>` : ''}
       <div class="lista-mini">${x.productos.map(p => `<div class="fila sub"><span>${esc(p.receta.nombre)} · ${M.miles(p.piezas)}</span><span>${M.unidades(p.masas)} masas</span></div>`).join('')}</div>
     </div>`).join('');
   return navMeta() + `
@@ -699,7 +710,8 @@ function vistaMetas() {
       <thead><tr><th scope="col">Producto</th><th scope="col">Meta</th><th scope="col">Stock inicial</th><th scope="col">Dejar próx. semana</th><th scope="col">A formar</th><th scope="col">Masas</th></tr></thead>
       <tbody>${filas || '<tr><td colspan="6" style="text-align:left;color:var(--suave);padding:18px 10px">No hay productos aprobados que lleven una masa base.</td></tr>'}</tbody>
     </table></div>
-    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2>${avisoCongelado(E.lunesMeta, NM)}<section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir en el PEM →</a></p>` : ''}
+    ${resumen ? `<h2 class="titulo">Hay que elaborar</h2>${avisoCongelado(E.lunesMeta, NM)}<section class="resumen">${resumen}</section><p class="ayuda"><a href="#masas">Repartir en el PEM →</a></p>
+    ${nec.masas.some(x => x.gPorEmpaste > 0) ? `<p class="ayuda">Los empastes no van en el PEM: se hacen la semana de la meta (${esc(M.etiquetaSemana(E.lunesMeta))}), según lo que se forma. Se anotan en la Bitácora → Empastes.</p>` : ''}` : ''}
     ${enPrueba.length ? `<p class="ayuda">En prueba (no se ofrecen para metas hasta que se aprueben): ${esc(enPrueba.map(p => p.receta.nombre).join(', '))}.</p>` : ''}
     ${sinMasa.length ? `<p class="ayuda">No entran a las metas porque no llevan una masa base: ${esc(sinMasa.map(r => r.nombre).join(', '))}.</p>` : ''}`;
 }
@@ -724,15 +736,15 @@ function vistaMasas() {
       ${dias.map(d => `<td class="${M.sumarDias(el, d) === hoy ? 'hoy-col' : ''}">${campoNum(`e-${x.id}-${d}`, 'elab', x.id, d, plan['d' + d], `${x.masa.nombre} ${M.DIAS_CORTOS[d]}`)}</td>`).join('')}
       <td class="num"><b>${M.miles(hecho)}</b></td><td>${estado}<button type="button" class="btn-link" data-repartir="${esc(x.id)}" data-n="${necesarias}">Repartir parejo</button></td></tr>`;
   }).join('');
-  // Por día: masas, tandas (masas enteras por tanda) y empastes (1 por masa)
+  // Por día: masas, tandas (masas enteras por tanda) y kilos. v0.14.0: sin empastes (se hacen la semana de la meta)
   const pie = dias.map(d => {
-    let masas = 0, tandas = 0, empastes = 0, kg = 0;
-    filas.forEach(x => { const n = M.num((elab[x.id] || {})['d' + d]); masas += n; tandas += B.tandasMasas(n, porTandaDe(x.masa)).length; kg += n * B.pesoMasa(x.masa) / 1000; if (x.nec && x.nec.gPorEmpaste > 0) empastes += n; });
-    return { masas, tandas, empastes, kg, pasa: tandas > tpd };
+    let masas = 0, tandas = 0, kg = 0;
+    filas.forEach(x => { const n = M.num((elab[x.id] || {})['d' + d]); masas += n; tandas += B.tandasMasas(n, porTandaDe(x.masa)).length; kg += n * B.pesoMasa(x.masa) / 1000; });
+    return { masas, tandas, kg, pasa: tandas > tpd };
   });
   const cap = filas.length ? filas.map(x => `${esc(x.masa.nombre)}: ${porTandaDe(x.masa)} masas por tanda (${M.gramos(B.pesoMasa(x.masa))} c/u)`).join(' · ') : '';
   return navMeta('masas') + `
-    <p class="ayuda">Reparte las masas de la meta en los días de elaboración: cada número se guarda solo. Cada masa lleva su empaste.</p>
+    <p class="ayuda">Reparte las masas de la meta en los días de elaboración: cada número se guarda solo. Los empastes no van aquí: se hacen la semana de la meta, según lo que se forma (Bitácora → Empastes).</p>
     ${nec.avisos.map(a => `<div class="nota ojo">${ic('alerta')}<span>${esc(a)}</span></div>`).join('')}
     ${filas.length ? avisoCongelado(E.lunesMeta, NM) : ''}
     ${!filas.length ? `<div class="vacio">${ic('meta')}<b>Sin metas para esa semana</b><a href="#metas">Poner las metas</a></div>` : `
@@ -741,7 +753,6 @@ function vistaMasas() {
       <tbody>${cuerpo}</tbody>
       <tfoot>
         <tr><td>Tandas</td>${pie.map(p => `<td class="num ${p.pasa ? 'pasa' : ''}">${p.tandas || ''}</td>`).join('')}<td></td><td class="ayuda">${tpd} por día</td></tr>
-        <tr><td>Empastes</td>${pie.map(p => `<td class="num">${p.empastes || ''}</td>`).join('')}<td class="num">${M.miles(pie.reduce((s, p) => s + p.empastes, 0))}</td><td></td></tr>
         <tr><td>Kilos de masa</td>${pie.map(p => `<td class="num">${p.kg ? M.unidades(p.kg) : ''}</td>`).join('')}<td class="num">${M.unidades(pie.reduce((s, p) => s + p.kg, 0))}</td><td></td></tr>
       </tfoot>
     </table></div>
@@ -749,49 +760,32 @@ function vistaMasas() {
     <p class="ayuda">Amasadora: ${cap}. La capacidad y las tandas por día se cambian en Sistema Fën (Configuración de Producción).</p>`}`;
 }
 
-// Hoy de Bollería: las masas que tocan hoy (de la meta de la semana siguiente), sus elaboraciones previas, los empastes y los insumos
+// Hoy de Bollería: las masas que tocan hoy (de la meta de la semana siguiente), sus elaboraciones previas, los insumos
+// y (v0.14.0) los empastes de la semana en curso (se hacen la semana en que se laminan, no con las masas)
 function vistaHoyBol() {
   if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
   const f = E.fecha, idx = M.indiceDia(f), lunesMeta = M.sumarDias(M.lunesDe(f), 7);
   const m = asegurarMetas(lunesMeta), dia = asegurarDia(f) || {};
-  const nav = `<div class="nav-fecha">
-      <button type="button" class="btn-flecha" data-dia="-1" aria-label="Día anterior">${ic('izq')}</button>
-      <h2>${esc(M.fechaLarga(f))}${f === M.hoyTxt() ? ' · hoy' : ''}</h2>
-      <button type="button" class="btn-flecha" data-dia="1" aria-label="Día siguiente">${ic('der')}</button>
-      ${f !== M.hoyTxt() ? '<button type="button" class="btn-sec" data-dia="hoy">Volver a hoy</button>' : ''}
-    </div>`;
+  const nav = navDia(f);
   if (!m) return nav + '<div class="vacio">Cargando…</div>';
   if (m.sinPermiso) return nav + avisoPermiso();
-  const c = ctx(), hechos = dia.hechos || {}, nec = B.necesidades(m.productos || {}, c, E.config), necA = necesidadesMeta(lunesMeta, m, f).nec;   // necA: con lo congelado descontado
+  const c = ctx(), hechos = dia.hechos || {}, necA = necesidadesMeta(lunesMeta, m, f).nec;   // necA: con lo congelado descontado
   const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
   const masasHoy = B.masasBase(E.recetas, E.area).map(rs => ({ rs, n: M.num(((m.elaboracion || {})[rs.id] || {})['d' + idx]) })).filter(x => x.n > 0);
-  const aviso = `<p class="ayuda">"Marcar terminada" en una masa la anota en la <a href="#bitacora">Bitácora</a> (masas elaboradas y congeladas). El formado y el horneado se anotan allá.</p>`;
-  if (!masasHoy.length) return nav + `<div class="vacio">${ic('capas')}<b>Sin masas programadas para este día</b><a href="#masas">Ir a Masas</a></div>` + aviso;
-  // v0.12.0: como en Panadería, el aviso de que marcar terminada descuenta la bodega + "Marcar todo como hecho" (más abajo)
   E.tarjetas = {};
-  // Lo del día: masas + empastes (para elaboraciones previas e insumos)
-  const planDia = [], empastes = [];
-  masasHoy.forEach(x => {
-    planDia.push({ receta: x.rs, unidades: x.n });
-    const ne = nec.masas.find(y => y.masa.id === x.rs.id);
-    if (ne && ne.empastes && ne.gPorEmpaste > 0) {
-      const g = x.n * ne.gPorEmpaste, er = ne.empaste && ne.empaste.ingredientes && ne.empaste.ingredientes.length ? ne.empaste : null;
-      empastes.push({ masa: x.rs, n: x.n, g, gPor: ne.gPorEmpaste, er, nombre: ne.empaste ? ne.empaste.nombre : 'Empaste' });
-      if (er && M.pesoBase(er.ingredientes) > 0) planDia.push({ receta: er, unidades: g * M.porciones(er) / M.pesoBase(er.ingredientes) });
-    }
-  });
+  const empSem = seccionEmpastesHoy(f, dia, hecho);
+  const aviso = `<p class="ayuda">"Marcar terminada" en una masa la anota en la <a href="#bitacora">Bitácora</a> (masas elaboradas y congeladas). El formado, el horneado y los empastes se anotan allá.</p>`;
+  if (!masasHoy.length) return nav + `<div class="vacio">${ic('capas')}<b>Sin masas programadas para este día</b><a href="#masas">Ir a Masas</a></div>` + empSem + aviso;
+  // v0.12.0: como en Panadería, el aviso de que marcar terminada descuenta la bodega + "Marcar todo como hecho" (más abajo)
+  const planDia = masasHoy.map(x => ({ receta: x.rs, unidades: x.n }));
   const el = M.elaboracionesDia(planDia, {}, c);
-  const empIds = new Set(empastes.map(e => e.er && e.er.mpId).filter(Boolean));
-  const previas = el.subRecetas.filter(s => !empIds.has(s.id)).map(s => tarjetaElab(s, null, dia, hecho, c)).join('');
+  const previas = el.subRecetas.map(s => tarjetaElab(s, null, dia, hecho, c)).join('');
   const masas = masasHoy.map(x => {
     const porTanda = B.masasPorTanda(x.rs, E.config);
     return tarjeta({ clave: 'masa_' + x.rs.id, idCard: x.rs.id, attr: 'data-masa-card', rid: x.rs.id, receta: x.rs, nombre: x.rs.nombre, rotulo: 'Masa base', unidad: 'un', un: 'masas', total: x.n, dia, hecho,
       claveHecho: 'masa_' + x.rs.id, escalar: t => M.escalar(x.rs, t, null, c), conPct: false, porTanda,
       detalle: `${M.miles(x.n)} ${x.n === 1 ? 'masa' : 'masas'} · ${M.gramos(x.n * B.pesoMasa(x.rs))}`, defecto: B.tandasMasas(x.n, porTanda), ajustable: false });
   }).join('');
-  const emps = empastes.map(e => tarjeta({ clave: 'emp_' + e.masa.id, idCard: e.masa.id, attr: 'data-empaste-card', rid: e.er ? e.er.id : null, receta: e.er, nombre: e.nombre, rotulo: 'Empastes de ' + e.masa.nombre, unidad: 'g', total: Math.round(e.g), dia, hecho,
-    claveHecho: 'emp_' + e.masa.id, escalar: t => e.er ? M.escalarSub({ id: e.er.mpId || e.er.id, nombre: e.nombre, recetaId: e.er.id, porUnidades: false }, t, null, c) : { filas: [{ nombre: e.nombre, gramos: t, unidades: null, pct: null }], total: t }, conPct: false,
-    detalle: `${M.miles(e.n)} de ${M.gramos(e.gPor)} · ${M.gramos(e.g)}`, ajustable: false })).join('');
   const ins = Object.entries(el.insumos).filter(([, g]) => g > 0.5).sort((a, b) => b[1] - a[1]);
   const cajaIns = ins.length ? `<div class="caja">
       <span class="rotulo">Insumos del día</span>
@@ -801,24 +795,109 @@ function vistaHoyBol() {
     </div>` : '';
   const total = masasHoy.reduce((s, x) => s + x.n, 0);
   const cajaMeta = `<div class="caja"><span class="rotulo">Para la meta del ${esc(M.etiquetaSemana(lunesMeta))}</span><span class="grande num">${M.miles(total)} ${total === 1 ? 'masa' : 'masas'} hoy</span>
-      <div class="lista-mini">${necA.masas.map(x => { const hechas = B.sumaDias((m.elaboracion || {})[x.masa.id]); return `<div class="fila sub"><span>${esc(x.masa.nombre)}</span><span>${M.miles(hechas)} programadas de ${M.miles(x.masas)} necesarias${x.congeladas ? ` (${M.miles(x.congeladas)} ya congeladas)` : ''}</span></div>`; }).join('')}</div></div>`;
+      <div class="lista-mini">${necA.masas.map(x => { const hechas = B.sumaDias((m.elaboracion || {})[x.masa.id]); return `<div class="fila sub larga"><span>${esc(x.masa.nombre)}</span><span>${M.miles(hechas)} programadas de ${M.miles(x.masas)} necesarias${x.congeladas ? ` (${M.miles(x.congeladas)} ya congeladas)` : ''}</span></div>`; }).join('')}</div></div>`;
   const notas = dia.notas || {};
-  // Lo que falta marcar: masas (van a la Bitácora y descuentan la bodega con su empaste), empastes y elaboraciones previas
-  const pendientes = [...masasHoy.map(x => 'masa_' + x.rs.id), ...empastes.map(e => 'emp_' + e.masa.id),
-    ...el.subRecetas.filter(s => !empIds.has(s.id)).map(s => 'sub_' + s.id)].filter(k => !hecho(k));
-  const avisoHecho = `<div class="nota neutra aviso-hecho">${ic('alerta')}<span><b>Marcar terminada descuenta la bodega.</b> Cada masa terminada pasa al congelador en la <a href="#bitacora">Bitácora</a> y descuenta sus materias primas (con su empaste); lo formado se anota allá. Al cerrar el día, que todo lo hecho quede marcado.</span>
+  // Lo que falta marcar: masas (van a la Bitácora y descuentan la bodega) y elaboraciones previas
+  const pendientes = [...masasHoy.map(x => 'masa_' + x.rs.id), ...el.subRecetas.map(s => 'sub_' + s.id)].filter(k => !hecho(k));
+  const avisoHecho = `<div class="nota neutra aviso-hecho">${ic('alerta')}<span><b>Marcar terminada descuenta la bodega.</b> Cada masa terminada pasa al congelador en la <a href="#bitacora">Bitácora</a> y descuenta sus materias primas (solo la masa: los empastes se anotan aparte, con "Hice empastes"); lo formado se anota allá. Al cerrar el día, que todo lo hecho quede marcado.</span>
       ${pendientes.length ? `<button type="button" class="btn-sec" data-todo-hecho="${esc(pendientes.join(','))}">${ic('check')}Marcar todo como hecho (${pendientes.length})</button>` : `<span class="chip-ok">${ic('ok')}Todo marcado</span>`}</div>`;
   return nav + `
     <section class="resumen" aria-label="Antes de empezar">${cajaMeta}${cajaIns}</section>
     ${avisoHecho}
-    ${previas ? `<h2 class="titulo">Elaboraciones previas · ${el.subRecetas.filter(s => !empIds.has(s.id)).length}</h2>${previas}` : ''}
+    ${previas ? `<h2 class="titulo">Elaboraciones previas · ${el.subRecetas.length}</h2>${previas}` : ''}
     <h2 class="titulo">Masas del día · ${masasHoy.length}</h2>${masas}
-    ${emps ? `<h2 class="titulo">Empastes</h2>${emps}` : ''}
+    ${empSem}
     <section class="caja">
       <label class="rotulo" for="notas-dia">Notas del día (las ve la dupla)</label>
       <textarea id="notas-dia" rows="3" style="font: inherit; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; background: var(--suave-fondo)">${esc(notas.texto || '')}</textarea>
       ${notas.por ? `<span class="ayuda">Última nota de ${esc(notas.por)}</span>` : ''}
     </section>`;
+}
+
+// ═══════════════ Bollería: empastes de la semana (v0.14.0) ═══════════════
+// Los empastes se hacen la semana en que se laminan (lunes a sábado; el domingo ya prepara la semana siguiente),
+// según lo que hay que formar esa semana (planSemana). Cálculo en congelado.js (empastesSemana).
+function empastesDeLaSemana(f) {
+  const W = CG.semanaEmpastes(f), c = ctx();
+  if (!E.cargado.diasArea) return null;
+  const plan = planDe(W);
+  if (!plan) return null;
+  const r = CG.empastesSemana(E.diasArea, W, plan, c, f);
+  const filas = Object.entries(r).map(([id, x]) => {
+    const masa = recetaPorId(id), e = K.empGramosPorMasa(id, c);
+    return { id, masa, nombre: masa ? masa.nombre : id, gPor: e ? e.g : 0, receta: e ? e.receta : null, ...x };
+  }).filter(x => x.masa).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  return { W, filas };
+}
+const etiquetaSemEmp = W => { const b = M.sumarDias(W, 5), ma = Number(W.slice(5, 7)) - 1, mb = Number(b.slice(5, 7)) - 1; return `lun ${Number(W.slice(8))}${ma !== mb ? ' ' + MES_C[ma] : ''} al sáb ${Number(b.slice(8))} ${MES_C[mb]}`; };
+// Hoy de Bollería: una línea por masa ("faltan X · hay Y en el refri") que abre el panel, y la receta del empaste
+// escalada a lo que falta, para pesarla ("Hice empastes" desde ahí parte con ese número)
+function seccionEmpastesHoy(f, dia, hecho) {
+  const R0 = empastesDeLaSemana(f);
+  if (!R0) return '';
+  if (!R0.filas.length) return '';
+  const c = ctx();
+  const lineas = R0.filas.map(x => `<button type="button" class="linea-emp" data-empastes="${esc(x.id)}" data-n="${x.faltan}">
+      <span class="linea-emp-t"><b>Empastes de la semana${R0.filas.length > 1 ? ` · ${esc(x.nombre)}` : ''}:</b> ${x.faltan ? `faltan ${M.miles(x.faltan)}` : 'no falta ninguno'} <span class="ayuda">(hay ${M.unidades(Math.max(0, x.refri))} en el refri)</span></span>
+      ${ic('der')}</button>`).join('');
+  const recetas = R0.filas.filter(x => x.faltan > 0 && x.receta && x.gPor > 0).map(x => {
+    const er = x.receta, g = Math.round(x.faltan * x.gPor);
+    return `<details class="desp emp-receta"><summary>${ic('libro')}&nbsp;Receta del empaste para ${M.miles(x.faltan)} (${M.gramos(g)})</summary>${tarjeta({ clave: 'emp_' + x.id, idCard: x.id, attr: 'data-empaste-receta', rid: er.id, receta: er, nombre: er.nombre, rotulo: 'Empastes de ' + x.nombre, unidad: 'g', total: g, dia, hecho,
+      claveHecho: 'emp_' + x.id, escalar: t => M.escalarSub({ id: er.mpId || er.id, nombre: er.nombre, recetaId: er.id, porUnidades: false }, t, null, c), conPct: false,
+      detalle: `${M.miles(x.faltan)} de ${M.gramos(x.gPor)} · ${M.gramos(g)}`, ajustable: false,
+      botonFinal: `<button type="button" class="btn" data-empastes="${esc(x.id)}" data-n="${x.faltan}">${ic('check')}Hice empastes</button>` })}</details>`;
+  }).join('');
+  return `<h2 class="titulo">Empastes · semana del ${esc(etiquetaSemEmp(R0.W))}</h2>
+    <div class="lista-emp">${lineas}</div>${recetas}`;
+}
+// Panel "Empastes" (Bitácora y Hoy): por masa, lo de la semana, y el formulario "Hice empastes" (en el día elegido)
+function dialogoEmpastes(masaSel, nSug) {
+  const d = $('dialogo'), f = E.fecha, R0 = empastesDeLaSemana(f), hoy = M.hoyTxt();
+  if (!R0) { avisar('Cargando… inténtalo de nuevo en un momento.', true); return; }
+  const filas = R0.filas;
+  if (!filas.length) { avisar('Ninguna masa base lleva empaste (revisa las recetas).', true); return; }
+  const sel = filas.find(x => x.id === masaSel) || filas.find(x => x.faltan > 0) || filas[0];
+  const enRefri = f === hoy ? 'En el refri ahora' : `En el refri al cierre del ${M.fechaCorta(f)}`;
+  const fila = (t, v, cls = '') => `<div class="fila sub ${cls}"><span>${esc(t)}</span><span class="num">${v}</span></div>`;
+  const cajas = filas.map(x => `<div class="caja caja-emp" data-emp-masa="${esc(x.id)}">
+      <span class="rotulo">${esc(x.nombre)}${x.gPor ? ` · ${M.gramos(x.gPor)} por empaste` : ''}</span>
+      <div class="lista-mini">
+        ${fila('Necesarios esta semana', M.miles(x.necesarios))}
+        ${fila('Ya usados al laminar', M.unidades(x.usados))}
+        ${fila(enRefri, M.unidades(x.refri))}
+        ${fila('Hechos esta semana', M.miles(x.hechos))}
+        ${Object.keys(x.porDia).sort().map(k => fila('· ' + M.fechaCorta(k), M.miles(x.porDia[k]), 'dia-emp')).join('')}
+        <div class="fila faltan-emp"><span><b>Faltan por hacer</b></span><span class="num"><b>${M.miles(x.faltan)}</b></span></div>
+      </div>
+    </div>`).join('');
+  const v = nSug !== undefined && nSug !== '' ? Math.max(0, Math.round(M.num(nSug))) || '' : (sel.faltan || '');
+  d.innerHTML = `<form method="dialog" class="dlg dlg-ancho">
+      <h2>Empastes · semana del ${esc(etiquetaSemEmp(R0.W))}</h2>
+      <details class="desp info"><summary>${ic('alerta')}&nbsp;Cómo se calcula</summary>
+        <p class="ayuda">Los empastes se hacen la misma semana en que se laminan, según lo que hay que formar esa semana (las masas base se elaboran la semana anterior). El domingo ya cuenta para la semana que empieza el lunes.</p>
+        <p class="ayuda"><b>Necesarios</b>: lo que hay que formar en la semana (Metas: meta − stock inicial + dejar), pasado a masas según la receta (1 empaste por masa). <b>Usados</b>: los de "Formé" desde el lunes. <b>En el refri</b>: el último inventario + hechos − usados. <b>Faltan</b> = necesarios − usados − en el refri.</p>
+      </details>
+      <section class="resumen">${cajas}</section>
+      <h3 class="rotulo">Hice empastes · ${esc(M.fechaLarga(f))}</h3>
+      ${filas.length > 1 ? `<div class="campo"><label for="emp-masa">Masa base</label><select id="emp-masa">${filas.map(x => `<option value="${esc(x.id)}" ${x.id === sel.id ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></div>` : `<input type="hidden" id="emp-masa" value="${esc(sel.id)}">`}
+      <div class="filas-aj"><div class="fila-aj"><label for="emp-n">Empastes hechos${filas.length > 1 ? '' : ` (${esc(sel.nombre)})`}<small>Van al refri y se descuentan de la bodega (receta del empaste)</small></label><input id="emp-n" inputmode="numeric" value="${esc(String(v))}"><span class="gr" id="emp-g"></span></div></div>
+      <div class="error" id="emp-error" role="alert"></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cerrar</button><button type="button" class="btn btn-fuerte" data-guardar="1">${ic('check')}Anotar</button></div>
+    </form>`;
+  const gramos = () => { const x = filas.find(y => y.id === $('emp-masa').value), n = M.num($('emp-n').value); $('emp-g').textContent = x && x.gPor && n > 0 ? M.gramos(n * x.gPor) : ''; };
+  d.showModal(); gramos();
+  d.onsubmit = ev => ev.preventDefault();
+  d.oninput = () => { $('emp-error').textContent = ''; gramos(); }; d.onchange = gramos;
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (!b.dataset.guardar) return;
+    const t = $('emp-n').value;
+    if (!/^\s*\d+\s*$/.test(t) || !(Math.round(M.num(t)) > 0)) { $('emp-error').textContent = 'Escribe cuántos empastes (número entero mayor que 0).'; return; }
+    const a = { tipo: 'empaste', masa: $('emp-masa').value, n: Math.round(M.num(t)), por: quien(), en: ahoraIso() };
+    d.close();
+    guardarSinEsperar(guardarDia(f, { bitacora: { [idAnot()]: a } }), 'Anotado: ' + M.miles(a.n) + ' empastes al refri.');
+  };
 }
 
 
@@ -845,12 +924,7 @@ function sugeridosSemana(lunes) {
 function vistaHoyPas() {
   if (!E.cargado.recetas || !E.cargado.mps) return '<div class="vacio">Cargando…</div>';
   const f = E.fecha, lunes = M.lunesDe(f), dia = asegurarDia(f) || {};
-  const nav = `<div class="nav-fecha">
-      <button type="button" class="btn-flecha" data-dia="-1" aria-label="Día anterior">${ic('izq')}</button>
-      <h2>${esc(M.fechaLarga(f))}${f === M.hoyTxt() ? ' · hoy' : ''}</h2>
-      <button type="button" class="btn-flecha" data-dia="1" aria-label="Día siguiente">${ic('der')}</button>
-      ${f !== M.hoyTxt() ? '<button type="button" class="btn-sec" data-dia="hoy">Volver a hoy</button>' : ''}
-    </div>`;
+  const nav = navDia(f);
   const c = ctx(), hechos = dia.hechos || {}, cant = dia.cantidades || {};
   const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
   const recetas = E.recetas.filter(r => r.area === E.area && r.estado === 'consolidada');
@@ -920,7 +994,8 @@ function anotFilas(a) {
     return { titulo: 'Inventario del congelador', filas: filas.length ? filas : [['Vacío', '']] };
   }
   if (a.tipo === 'elaboro') return { titulo: `Elaboré masas → congelador${a.origen === 'hoy' ? ' (desde Hoy)' : ''}`,
-    filas: [[nombreDe(a.masa), un(a.n, 'masa', 'masas')], ...(a.conEmpaste !== false ? [['Empastes', M.miles(a.n)]] : [])] };
+    filas: [[nombreDe(a.masa), un(a.n, 'masa', 'masas')], ...(a.conEmpaste !== false ? [['Empastes (anotación antigua: con sus masas)', M.miles(a.n)]] : [])] };
+  if (a.tipo === 'empaste') return { titulo: 'Hice empastes → refri', filas: [[`Empastes de ${nombreDe(a.masa)}`, M.miles(a.n)]] };
   if (a.tipo === 'descongelo') return { titulo: 'Descongelé masas',
     filas: [[nombreDe(a.masa), un(a.n, 'masa', 'masas')], ...(a.conEmpaste !== false ? [['Empastes (anotación antigua: salieron con sus masas)', M.miles(a.n)]] : [])] };
   if (a.tipo === 'formo') { const h = M.num(a.n) - M.num(a.congelar); return { titulo: 'Formé',
@@ -933,15 +1008,12 @@ function vistaBitacora() {
   if (!E.cargado.recetas || !E.cargado.mps || !E.cargado.diasArea) return '<div class="vacio">Cargando…</div>';
   const f = E.fecha, lunes = M.lunesDe(f), m = asegurarMetas(lunes), dia = E.diasArea[f] || asegurarDia(f) || {};
   asegurarMetas(M.sumarDias(lunes, -7)); asegurarMetas(M.sumarDias(lunes, -14));   // para lo que quieren dejar (cierre del viernes)
-  const nav = `<div class="nav-fecha">
-      <button type="button" class="btn-flecha" data-dia="-1" aria-label="Día anterior">${ic('izq')}</button>
-      <h2>${esc(M.fechaLarga(f))}${f === M.hoyTxt() ? ' · hoy' : ''}</h2>
-      <button type="button" class="btn-flecha" data-dia="1" aria-label="Día siguiente">${ic('der')}</button>
-      ${f !== M.hoyTxt() ? '<button type="button" class="btn-sec" data-dia="hoy">Volver a hoy</button>' : ''}
-    </div>`;
+  planDe(CG.semanaEmpastes(f));   // v0.14.0: deja listas las metas que usa el panel de Empastes
+  const nav = navDia(f);
   const c = ctx(), st = CG.stock(E.diasArea, f), cfg = E.config || {};
   const delDia = Object.entries(dia.bitacora || {}).map(([id, a]) => ({ ...a, id })).sort((a, b) => String(a.en || '').localeCompare(String(b.en || '')));
-  const botones = Object.entries(B.TIPOS).map(([k, t]) => `<button type="button" class="btn-sec" data-anotar="${k}">${ic(k === 'inventario' ? 'copo' : k === 'formo' || k === 'horneo' ? 'pan' : 'capas')}${esc(t)}</button>`).join('');
+  const botones = Object.entries(B.TIPOS).map(([k, t]) => `<button type="button" class="btn-sec" data-anotar="${k}">${ic(k === 'inventario' ? 'copo' : k === 'formo' || k === 'horneo' ? 'pan' : 'capas')}${esc(t)}</button>`).join('')
+    + `<button type="button" class="btn-sec" data-empastes="1">${ic('capas')}Empastes</button>`;   // v0.14.0: panel de la semana + "Hice empastes"
   const lista = delDia.length ? `${listaAnot(delDia, a => `<div class="anot ${a.anulado ? 'anulada' : ''}">
       <div class="anot-cuerpo">${(f => `<b>${esc(f.titulo)}</b><div class="lista-mini">${f.filas.map(([n, v]) => `<div class="fila sub"><span>${esc(n)}</span><span>${esc(v)}</span></div>`).join('')}</div>`)(anotFilas(a))}<span class="ayuda">${esc(a.por || '')} · ${esc(horaDe(a.en))}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
       ${a.anulado ? '' : `<button type="button" class="btn-link" data-anular="${esc(a.id)}">Anular</button>`}
@@ -1008,7 +1080,7 @@ function dialogoAnotar(tipo) {
     const prog = masas.find(r => M.num(((m.elaboracion || {})[r.id] || {})['d' + idx]));
     const v = tipo === 'elaboro' && prog ? M.num(((m.elaboracion || {})[prog.id] || {})['d' + idx]) : '';
     cuerpo = `<div class="campo"><label for="an-masa">Masa base</label>${sel('an-masa', masas, prog ? prog.id : '')}</div>
-      <div class="filas-aj">${num('an-n', tipo === 'elaboro' ? 'Masas elaboradas y congeladas' : 'Masas descongeladas', v, tipo === 'elaboro' ? 'Cada masa con su empaste (el empaste va al refri)' : 'El empaste no se descongela: se usa al laminar')}</div>
+      <div class="filas-aj">${num('an-n', tipo === 'elaboro' ? 'Masas elaboradas y congeladas' : 'Masas descongeladas', v, tipo === 'elaboro' ? 'Solo la masa: los empastes se hacen la semana en que se laminan (botón Empastes)' : 'El empaste no se descongela: se usa al laminar')}</div>
       ${tipo === 'descongelo' ? `<p class="ayuda" id="an-emp"></p>` : ''}`;
   } else if (tipo === 'formo') {
     cuerpo = `<div class="campo"><label for="an-prod">Producto</label>${sel('an-prod', prods, '')}</div>
@@ -1046,7 +1118,9 @@ function dialogoAnotar(tipo) {
     } else if (tipo === 'elaboro' || tipo === 'descongelo') {
       const n = entero('an-n'); if (!(n > 0)) return err('Escribe cuántas masas (número entero mayor que 0).');
       a = { tipo, masa: $('an-masa').value, n };
-      if (tipo === 'descongelo') a.conEmpaste = false;   // v0.13.0: el empaste no se descongela; se gasta al laminar (con lo formado)
+      // v0.13.0: el empaste no se descongela; se gasta al laminar (con lo formado). v0.14.0: tampoco se hace con la masa
+      // (se hace la semana en que se lamina: "Hice empastes"), así que "Elaboré" ya no suma empastes ni los descuenta de la bodega
+      a.conEmpaste = false;
     } else if (tipo === 'formo') {
       const n = entero('an-n'), cg = $('an-cong').value.trim() === '' ? 0 : entero('an-cong');
       if (!(n > 0)) return err('Escribe cuántas piezas formaron.'); if (isNaN(cg) || cg > n) return err('Las del congelador no pueden ser más que las formadas.');
@@ -1313,15 +1387,16 @@ $('principal').addEventListener('click', async ev => {
   if (ds.hecho) {
     b.disabled = true;
     const cambios = { hechos: { [ds.hecho]: ds.valor === '1' ? { por: quien(), en: ahoraIso() } : null } };
-    // Bollería: terminar una masa del día la anota en la bitácora (+masas y +empastes congelados); deshacer la anula
+    // Bollería: terminar una masa del día la anota en la bitácora (+masas congeladas; v0.14.0: sin empastes); deshacer la anula
     if (E.area === 'BOL' && ds.hecho.startsWith('masa_')) {
       const rid = ds.hecho.slice(5), T = (E.tarjetas || {})['masa_' + rid];
-      cambios.bitacora = { ['hoy_' + rid]: ds.valor === '1' ? { tipo: 'elaboro', masa: rid, n: T ? T.total : 0, origen: 'hoy', por: quien(), en: ahoraIso(), anulado: null } : { anulado: { por: quien(), en: ahoraIso() } } };
+      cambios.bitacora = { ['hoy_' + rid]: ds.valor === '1' ? { tipo: 'elaboro', masa: rid, n: T ? T.total : 0, conEmpaste: false, origen: 'hoy', por: quien(), en: ahoraIso(), anulado: null } : { anulado: { por: quien(), en: ahoraIso() } } };
     }
     guardarSinEsperar(guardarDia(E.fecha, cambios));
     return;
   }
   if (ds.anotar) { dialogoAnotar(ds.anotar); return; }
+  if (ds.empastes) { dialogoEmpastes(ds.empastes, ds.n); return; }
   if (ds.todoHecho) {
     const ks = ds.todoHecho.split(',').filter(Boolean);
     if (!confirm(`¿Marcar como hecho todo lo que falta hoy (${ks.length})? ${E.area === 'BOL' ? 'Las masas pasan al congelador (Bitácora) y se descuentan de la bodega.' : 'Las recetas se descuentan de la bodega.'} Se puede deshacer una por una.`)) return;
@@ -1329,7 +1404,7 @@ $('principal').addEventListener('click', async ev => {
     // Bollería: cada masa terminada se anota en la bitácora, igual que con "Marcar terminada"
     if (E.area === 'BOL') ks.filter(k => k.startsWith('masa_')).forEach(k => {
       const rid = k.slice(5), T = (E.tarjetas || {})[k];
-      bit['hoy_' + rid] = { tipo: 'elaboro', masa: rid, n: T ? T.total : 0, origen: 'hoy', por: quien(), en, anulado: null };
+      bit['hoy_' + rid] = { tipo: 'elaboro', masa: rid, n: T ? T.total : 0, conEmpaste: false, origen: 'hoy', por: quien(), en, anulado: null };
     });
     guardarSinEsperar(guardarDia(E.fecha, Object.keys(bit).length ? { hechos: h, bitacora: bit } : { hechos: h }), 'Todo marcado como hecho.');
     return;
