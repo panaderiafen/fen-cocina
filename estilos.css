@@ -403,3 +403,23 @@ body.dia-hoy .nav-dia { background: var(--fondo-hoy); }
 details.info > summary { display: flex; align-items: center; min-height: 40px; cursor: pointer; color: var(--suave); font-size: 14px; }
 /* v0.14.0 · textos largos a la derecha (Hoy de Bollería): en el celular bajan de línea en vez de salirse */
 .fila.larga span:last-child { white-space: normal; }
+
+/* v0.15.0 · Cafetería: Bitácora de turno solo de hoy, calibración diaria y derramado */
+.nav-turno { box-shadow: inset 0 -1px 0 var(--linea); margin-bottom: 10px; }
+.cal-diaria { margin-bottom: 12px; border-color: var(--tinte-borde); }
+.cal-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.cal-fila > div { min-width: 0; flex: 1 1 220px; }
+.cal-fila b { font-weight: 600; font-size: 17px; }
+.cal-diaria details.info p { margin: 4px 0; }
+.fila-aj.dr-fila { grid-template-columns: minmax(0, 1fr) 80px 28px 48px; }
+.campo-fecha input[type="date"] { min-height: 44px; max-width: 220px; }
+@media (max-width: 600px) {
+  .fila-aj.dr-fila { grid-template-columns: minmax(0, 1fr) 70px 24px 44px; gap: 8px; }
+  .fila-aj.dr-fila .btn-x { width: 44px; height: 44px; }
+}
+
+/* v0.16.0 · bodegas separadas: aviso de bajo el mínimo (Bodega) y la línea en Hoy / Bitácora de turno */
+.banner-bodega { margin-bottom: 12px; }
+.linea-bodega { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 10px 14px; border-radius: 12px; background: var(--ojo-fondo); color: var(--ojo); font-size: 14px; line-height: 1.4; text-decoration: none; }
+.linea-bodega svg { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+.linea-bodega:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

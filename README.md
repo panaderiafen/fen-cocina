@@ -1,6 +1,6 @@
-# fën · Cocina · v0.14.0
+# fën · Cocina · v0.16.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0: 12 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.0: 12 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,103 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.16.0 · Bodegas separadas y avisos de bajo el mínimo (pedido de Emmanuel, 12-oct)
+**Esta entrega incluye la v0.15.0** (Cafetería, parte 1: calibración diaria, derramado, merma con fecha; ver abajo), que no alcanzó a instalarse. Se instalan juntas.
+
+**Decisión:** el stock va por **bodega** (el lugar físico), no por área.
+- **Producción**: Panadería, Bollería y Pastelería, igual que hoy (lo que cuenta un área vale para las tres).
+- **Cafetería**: solo Cafetería.
+- Más adelante se pueden agregar bodegas (por ejemplo, una por área con las harinas compartidas) sin rehacer nada: es cambiar el mapa área → bodega (`config/bodegas`).
+
+**En Cocina → Bodega:**
+- Cada área ve **solo su bodega**. Cafetería ve la de Cafetería; Panadería, Bollería y Pastelería, la de Producción.
+- **Llegó mercadería** y **Conteo de bodega** muestran solo las materias primas críticas de esa bodega. El título dice cuál: "Conteo de bodega · Cafetería · hoy".
+- **Bajo el mínimo:** arriba de la Bodega aparece el aviso "Bajo el mínimo en la bodega Cafetería: Leche (hay 3 l, mínimo 5 l)". Sin precios.
+  - Si contaron o recibió mercadería después del último cálculo de Sistema Fën, el aviso usa ese conteo (y suma las llegadas), así se ve al tiro.
+- **En Hoy** (y en la Bitácora de turno de Cafetería) aparece una línea chica "Bodega: Leche bajo el mínimo (hay 3 l)" que lleva a Bodega.
+- **Correo:** cuando algo queda bajo el mínimo, la tablet le pide al script que avise por correo a Administración y a las jefas de esa bodega. Llega **uno por día por materia prima** (aunque se abra mil veces).
+- **Límite:** se revisa cuando se abre Cocina o Sistema Fën, o cuando se cuenta o recibe. No hay revisión automática de noche.
+
+**Cafetería (seguimiento de la v0.15.0):**
+- Editar la calibración diaria ahora pasa a la planilla (**CAF_registros**, una fila por día; si la vuelven a editar, se corrige la misma fila).
+
+**Lo de antes:** todo lo que ya existía queda en **Producción**. Si hoy algo es crítico solo por Cafetería (leche, café, vasos), Emmanuel lo pasa con **"Pasar a Cafetería"** en Sistema Fën. Las llegadas y conteos viejos no se mueven ni se borran.
+
+**Cómo queda guardado (para el que venga):**
+- `stockmp/{mpId}` = Producción (como siempre); `stockmp/CAF__{mpId}` = Cafetería, con `{ bodega, mp, critica, seguridad, envase, estado }`. Lo mismo `conteosmp`.
+- Cada llegada o conteo lleva `bodega: 'CAF'` o `'PROD'` (sin el campo = Producción). Un área solo mueve su bodega.
+- `config/bodegas = { areas: { PAN: 'PROD', BOL: 'PROD', PAS: 'PROD', CAF: 'CAF' }, nombres: { … } }` (opcional; vacío = eso mismo).
+- El cálculo compartido es `consumo.js` v0.16.0 (copia exacta en Sistema Fën v0.54.0).
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** lo más simple es subir **todos** los del zip. Comparado con la v0.14.0 (la instalada):
+- Cambian `app.js`, `consumo.js`, `estilos.css`, `config.js`, `index.html`, `README.md` y `firestore-produccion.rules` (v1.7.0, va también a la consola: paso 1).
+- De la v0.15.0: `editor.js`, `cafeteria.js` (nuevo) y `congelado.js` (versión).
+- Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `firebase.js`, `logo-fen.png`.
+
+**Orden de instalación (importante):**
+1. **Reglas v1.7.0** (`firestore-produccion.rules`, está en este zip): consola de Firebase → proyecto **fen-produccion** → Firestore Database → **Reglas** → pegar todo → **Publicar**.
+2. **Script de Producción v2.9.0** (`produccion-script-v2.9.0.zip`): reemplaza Seguridad y SistemaFen → Implementar → Gestionar implementaciones → ✏️ → **Nueva versión**. Ping: `"version":"2.9.0"`. Opcional: propiedad del script `ALERTAS_ADMIN` (tu correo; si no está, llega al dueño del script).
+3. **Sistema Fën v0.54.0** → Producción → Bodega → Calcular. Pestaña **Cafetería**: marca sus críticas con su mínimo (o usa "Pasar a Cafetería").
+4. **Cocina v0.16.0** (este zip). Recarga las tablets.
+5. **Primer conteo** de cada crítica de Cafetería, desde la tablet de Cafetería.
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.16.0**.
+- [ ] Cafetería → Bodega: dice "Bodega Cafetería (solo de esta área)" y **no** aparece la harina. El conteo solo ofrece lo de Cafetería.
+- [ ] Panadería → Bodega: dice "Bodega Producción (la comparten Panadería, Bollería y Pastelería…)" y no aparece lo de Cafetería.
+- [ ] Contar en Cafetería algo por debajo del mínimo → aparece el aviso arriba; en la Bitácora de turno, la línea "Bodega: … bajo el mínimo".
+- [ ] Llega el correo (a ti y a las jefas de Cafetería). Abrir de nuevo no manda otro el mismo día.
+- [ ] Editar la calibración diaria → en unos segundos aparece en CAF_registros como `calibracion_diaria`.
+- [ ] Y todo lo de la lista de la v0.15.0 (abajo).
+
+**Si algo sale mal:** vuelve a subir la v0.14.0 de Cocina (las reglas v1.7.0 pueden quedar). Con ella vuelve la bodega común; en Cafetería el "último conteo" compartido no se guarda (sale un aviso), pero el conteo sí.
+
+## Novedades v0.15.0 · Cafetería, parte 1 (pedidos de Emmanuel, 12-oct)
+**Recetas:** Cafetería crea y cambia sus recetas en Cocina como las otras áreas (ya era así desde v0.8.0: "Nueva receta" y "Editar (nueva versión)" → propuesta → la apruebas en Sistema Fën → Desde Cocina). Ahora el formulario habla como Cafetería:
+- Tipo: "Receta (se vende en la caja)" o "Sub receta (jarabe, cold brew…)".
+- **Cada tamaño es una receta aparte** ("Latte 8 oz" y "Latte 12 oz").
+- El café va en gramos: "1 shot = 18 g (configuración de Cafetería), 2 shots = 36 g". La leche también en gramos.
+- Insumos: vasos, tapas, mangas (por unidad).
+- Las reglas ya permiten propuestas y pedidos de materias primas de Cafetería.
+
+**Bitácora de turno:**
+- **Solo hoy:** sin cambiar de día ni de período. La fecha queda fija arriba al bajar.
+- **Calibración diaria automática:** arriba dice "Calibración diaria: 6 shots (automática) · 108 g de café".
+  - Se cuenta sola **cada día que Cafetería vende en la caja**.
+  - Son 6 shots (después se podrá cambiar en Sistema Fën) × los gramos por shot de la configuración.
+  - **Editar** guarda el número real del día: 8, o 0 si no se calibró (por ejemplo, si estuvo cerrado). Queda quién y a qué hora, y lo anterior se ve en "Cómo funciona" (no se borra).
+  - Solo se cuentan días automáticos **desde que se instala esta versión**, nunca hacia atrás. La primera vez que Cafetería abre la v0.15.0, Cocina deja esa fecha en el día y la repite en los días siguientes.
+- **"Calibración"** ahora se llama **"Calibración extra"**: es para lo que se calibra además de la diaria (cambio de molienda, de café). Se suma aparte, como siempre.
+- **Derramado** (botón nuevo, accidente):
+  - se eligen una o más preparaciones, con cuántas de cada una;
+  - cada una queda como **merma** (motivo "Derrame o error", nota "Derramado"), así que va a Registro_merma y la ves valorizada en Sistema Fën como cualquier merma;
+  - la bodega descuenta **la preparación entera** (café, leche, vaso…), porque se hizo y no se vendió;
+  - en la bitácora va una línea por preparación ("Derramado · Latte · 2 unidades") y cada una se puede **anular**.
+- **Total de café** incluye la calibración diaria.
+
+**Merma de Cafetería:**
+- La lista muestra **solo hoy**.
+- Al anotar hay **Fecha**: parte en hoy y se puede cambiar hasta 7 días atrás, nunca a un día que no ha llegado. Se guarda en ese día.
+- Las otras áreas siguen igual. Hacer lo mismo en ellas es fácil (sacar la condición de Cafetería). En Bollería hay que ver qué pasa con la merma "se perdió congelado" anotada en un día anterior: cambia el congelado de los días siguientes.
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):**
+- Cambian `app.js`, `editor.js`, `consumo.js` (cálculo compartido, v0.15.0), `estilos.css` y `README.md`.
+- Nuevo: `cafeteria.js`.
+- Solo cambia la versión: `config.js`, `index.html`, `congelado.js`.
+- Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `firebase.js`, `logo-fen.png`, **reglas** (siguen las v1.6.0) y script.
+
+**Sistema Fën:**
+- Hay que copiar `cocina/consumo.js` (el de esta versión) y que lo importe con `?v=0.16.0`. Mientras no se copie, Sistema Fën no descuenta ni la calibración diaria ni lo derramado. La merma derramada sí se ve valorizada desde ya.
+- Pendientes ahí: cambiar los shots diarios, pasar los días con venta de Cafetería, y mostrar la calibración diaria en el resumen de café.
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.15.0**.
+- [ ] Cafetería → Recetas → Nueva receta: el tipo dice "se vende en la caja" y aparece la ayuda del shot. Enviarla a revisión → aparece en Sistema Fën → Desde Cocina.
+- [ ] Bitácora de turno: no hay flechas ni "Esta semana". Dice "Calibración diaria: 6 shots (automática)". Editar → 8 → dice "editada por…".
+- [ ] Derramado → 2 Latte + 1 Capuccino → tres preparaciones, una línea por preparación. Anular una.
+- [ ] Merma: anotar algo con la fecha de ayer. Sale el aviso "anotada en el … (aquí se ve solo hoy)" y en la planilla queda con la fecha de ayer.
+- [ ] Después de copiar `consumo.js` a Sistema Fën: Bodega → Calcular → el café baja 8 × gramos por shot por hoy, más el café de lo derramado.
 
 ## Novedades v0.14.0 · Hoy se nota cuando es hoy · Bollería: los empastes se hacen la semana en que se laminan (corrección de Emmanuel, 12-oct)
 **Hoy (Panadería, Bollería y Pastelería):**
@@ -507,10 +604,10 @@ Quién entra a cada área sigue saliendo de la app actual (Administración → S
 
 ## Archivos y dónde va cada uno
 ```
-index.html, app.js, modelo.js, bolleria.js, registros.js, consumo.js, congelado.js, editor.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
+index.html, app.js, modelo.js, bolleria.js, registros.js, consumo.js, congelado.js, cafeteria.js, editor.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
 config.js                          → GitHub, raíz (lleva el firebaseConfig de fen-produccion)
 README.md                          → GitHub, raíz
-firestore-produccion.rules (v1.3.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
+firestore-produccion.rules (v1.6.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
 ```
 
 ## Instalación (una vez)

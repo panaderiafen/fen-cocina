@@ -1,6 +1,6 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.6.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.7.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
@@ -20,6 +20,12 @@ rules_version = '2';
 //    Administración; las áreas lo leen. Las llegadas y conteos de la bodega van en el día del área (dias).
 //  · v1.6.0: conteosmp/{mpId} = el último conteo de bodega de cada materia prima (área, quién, cuándo, cuánto),
 //    para que las otras áreas lo vean al contar. Lo escribe el área que cuenta (con su área) y Administración.
+//  · v1.7.0: BODEGAS SEPARADAS (Producción y Cafetería). Qué área usa qué bodega: config/bodegas.areas (si no existe:
+//    PAN, BOL y PAS → 'PROD'; CAF → 'CAF'); las áreas lo pueden leer. stockmp y conteosmp por bodega: Producción en
+//    {mpId} (como siempre), otra bodega en {BODEGA}__{mpId} (ej. CAF__MP090). Un área escribe el último conteo solo en
+//    el documento de SU bodega. Las llegadas y conteos van dentro del día del área (dias/{AREA}_{fecha}.bodega, con su
+//    bodega): cada área ya solo escribe sus días, y el cálculo de Sistema Fën no cuenta lo que un área anote para otra
+//    bodega (las reglas no pueden revisar cada anotación dentro del mapa).
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -37,6 +43,14 @@ service cloud.firestore {
     function idDeMiArea(id) { return id.matches('^[A-Z]+_.+') && tengo(areaDelId(id)); }
     function areaDeDatos(id, d) { return d.area == areaDelId(id); }
     function texto(v, max) { return v is string && v.size() <= max; }
+    // v1.7.0: la bodega de un área (config/bodegas.areas; por defecto PAN/BOL/PAS → PROD, CAF → CAF)
+    function bodegaDeArea(a) {
+      let cfg = /databases/$(database)/documents/config/bodegas;
+      let def = a == 'CAF' ? 'CAF' : 'PROD';
+      return exists(cfg) ? get(cfg).data.get('areas', {}).get(a, def) : def;
+    }
+    // Id del documento de una materia prima en una bodega: PROD = el id de la materia prima; otra = BODEGA__mpId
+    function idEnBodega(b, mp) { return b == 'PROD' ? mp : b + '__' + mp; }
 
     match /admins/{uid} { allow read: if dentro() && request.auth.uid == uid; allow write: if false; }
     match /cuentas/{uid} { allow read: if dentro() && (request.auth.uid == uid || admin()); allow write: if admin(); }
@@ -49,16 +63,19 @@ service cloud.firestore {
     match /mps/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
     // Bodega: materias primas con stock (críticas), su mínimo y el último cálculo de Sistema Fën
     match /stockmp/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
-    // Último conteo de cada materia prima (bodega común: lo ven todas las áreas)
+    // Último conteo de cada materia prima en cada bodega (lo ven todas las áreas). v1.7.0: un área solo escribe el
+    // de SU bodega: conteosmp/{mpId} si es de Producción, conteosmp/CAF__{mpId} si es Cafetería
     match /conteosmp/{id} {
       allow read: if admin() || deArea();
       allow create, update: if admin() || (deArea() && tengo(request.resource.data.area) && request.resource.data.cantidad is number
-        && request.resource.data.fecha is string && texto(request.resource.data.mp, 60));
+        && request.resource.data.fecha is string && texto(request.resource.data.mp, 60)
+        && id == idEnBodega(bodegaDeArea(request.resource.data.area), request.resource.data.mp));
       allow delete: if false;
     }
 
     // Configuración: config/{AREA} (masa madre, poolish, capacidades). La jefa lee la suya.
-    match /config/{id} { allow read: if admin() || (deArea() && tengo(id)); allow write: if admin(); }
+    // v1.7.0: config/bodegas (qué área usa qué bodega) lo leen todas las áreas; lo cambia Administración.
+    match /config/{id} { allow read: if admin() || (deArea() && (tengo(id) || id == 'bodegas')); allow write: if admin(); }
 
     // Plan semanal: planes/{AREA}_{lunes}. Cada celda se guarda por separado.
     match /planes/{id} {

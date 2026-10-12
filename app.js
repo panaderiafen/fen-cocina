@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.14.0
+//  fën · Cocina — la app de las jefas  v0.16.0
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -21,6 +21,11 @@
 //  que aprueba Administración en Sistema Fën; "Llevar a la receta" desde el ajuste; pedir materias primas.
 //  v0.5.0 (P4a): Pastelería entra a la app nueva: Hoy con sus recetas del día (sin plan semanal: cuánto se
 //  sugiere para la semana según lo que planificaron Bollería y Panadería, cuánto llevan, y cuánto hacen hoy).
+//  v0.16.0: BODEGAS SEPARADAS. La Bodega de cada área muestra solo su bodega (Cafetería: la de Cafetería; Panadería,
+//  Bollería y Pastelería: la de Producción, como siempre), y solo cuenta y recibe en ella (config/bodegas, reglas v1.7.0).
+//  Bajo el mínimo: aviso arriba de la Bodega y una línea en Hoy / Bitácora de turno (sin costos), y la tablet pide al
+//  script (v2.9.0, stock_alerta) el correo del día a Administración y a las jefas de esa bodega.
+//  La calibración diaria editada pasa a la planilla (CAF_registros).
 //  v0.14.0: Hoy (todas las áreas) se pinta con el color del área cuando es el día de hoy; otro día: fondo normal y
 //  "Volver a hoy". La barra de la fecha queda fija arriba al bajar. Bollería: los empastes se hacen la semana en que se
 //  laminan (corrección de Emmanuel): "Elaboré" ya no suma empastes; anotación nueva "Hice empastes" y panel Empastes
@@ -42,6 +47,12 @@
 //  y el stock también se ve en sacos.
 //  v0.9.0: al contar la bodega se ve quién contó cada materia prima la última vez, y avisa si otra área ya la
 //  contó hoy (conteosmp/{mpId}, reglas v1.6.0).
+//  v0.15.0 (Cafetería, parte 1): calibración diaria automática en la Bitácora de turno (N shots cada día que se
+//  vende; "Editar" guarda el número real del día en dias/CAF_{fecha}.calibracionDiaria, con historial); "Derramado"
+//  (una o más preparaciones, como merma de receta con derramado: true: Sistema Fën la valoriza y la bodega descuenta
+//  la preparación entera); la Bitácora de turno es solo de hoy (sin cambiar de día ni de período); la Merma de
+//  Cafetería muestra hoy y se puede anotar en un día anterior (hasta 7 días atrás). Las recetas de Cafetería se
+//  crean y cambian aquí (desde v0.8.0), con textos propios del área en el formulario.
 //  v0.8.0: Cafetería crea y edita sus recetas aquí (como las otras áreas) y su consumo entra a la bodega
 //  (lo vendido en la caja + el café de la bitácora de turno; lo calcula Sistema Fën).
 //  v0.7.0 (P5): Bodega en las cuatro áreas: "Llegó mercadería" y "Conteo de bodega" de las materias primas
@@ -56,13 +67,14 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.14.0';
+} from './firebase.js?v=0.16.0';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.14.0';
+import * as ED from './editor.js?v=0.16.0';
 import * as R from './registros.js?v=0.11.0';
-import * as K from './consumo.js?v=0.14.0';
-import * as CG from './congelado.js?v=0.14.0';
+import * as K from './consumo.js?v=0.16.0';
+import * as CG from './congelado.js?v=0.16.0';
+import * as CF from './cafeteria.js?v=0.16.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -86,7 +98,7 @@ const E = {
   usuario: null, area: null, areas: [], persona: null,
   recetas: [], mps: [], config: {}, personas: [], ajustes: {},
   planes: {}, dias: {}, cargado: {}, escuchas: {},
-  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: metaProx(), periodoMerma: 'semana', periodoTurno: 'hoy', stockmp: {}, conteosmp: {},
+  metas: {}, diasArea: {}, ajenos: {}, propuestas: {}, solicitudes: {}, editor: null, lunesMeta: metaProx(), periodoMerma: 'semana', stockmp: {}, conteosmp: {}, mapa: null,
   celdasMalas: {}, fecha: M.hoyTxt(), lunesPlan: M.lunesDe(M.hoyTxt()), filasNuevas: {}, recetaVista: null, cantidadVista: null, buscar: '',
   pin: { email: '', digitos: '', enviando: false, error: '' }
 };
@@ -105,6 +117,8 @@ const IC = {
   ajuste: '<path d="M5 7h9M18 7h1M5 17h3M12 17h7"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
   capas: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   check: '<path d="M6 12.5l4 4 8-9"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>',
+  gota: '<path d="M12 3.5c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6 5.5-10z"/>',
   caja: '<rect x="4" y="4" width="16" height="16" rx="4"/>',
   izq: '<path d="M15 5l-7 7 7 7"/>', der: '<path d="M9 5l7 7-7 7"/>',
   alerta: '<circle cx="12" cy="12" r="8"/><path d="M12 8v5M12 16h.01"/>',
@@ -319,6 +333,9 @@ function iniciarEscuchas() {
   escuchar('config', doc(db, 'config', E.area), sn => { E.config = sn.exists() ? sn.data() : {}; E.cargado.config = true; repintar(); });
   escuchar('stockmp', collection(db, 'stockmp'), sn => { E.stockmp = {}; sn.docs.forEach(d => { E.stockmp[d.id] = d.data(); }); E.cargado.stockmp = true; repintar(); },
     () => { E.stockmp = {}; E.cargado.stockmp = true; repintar(); return 'silencio'; });   // sin las reglas v1.5.0: se usa lo de la planilla (sin avisar)
+  // v0.16.0: qué área usa qué bodega (config/bodegas; reglas v1.7.0). Sin el documento o sin permiso: lo de siempre
+  escuchar('bodegas', doc(db, 'config', 'bodegas'), sn => { E.mapa = K.mapaBodegas(sn.exists() ? sn.data() : null); repintar(); },
+    () => { E.mapa = K.mapaBodegas(null); return 'silencio'; });
   escuchar('conteosmp', collection(db, 'conteosmp'), sn => { E.conteosmp = {}; sn.docs.forEach(d => { E.conteosmp[d.id] = d.data(); }); repintar(); },
     () => { E.conteosmp = {}; return 'silencio'; });   // sin las reglas v1.6.0: el conteo funciona igual, sin el aviso
   escuchar('personas', collection(db, 'personas'), sn => {
@@ -425,7 +442,9 @@ function pintar() {
     : M.fechaLarga(E.fecha) + ' · semana ' + M.etiquetaSemana(M.lunesDe(E.fecha));
   // v0.14.0: en Hoy (Panadería, Bollería, Pastelería), si es el día de hoy, toda la pantalla toma el color del área
   document.body.classList.toggle('dia-hoy', v === 'hoy' && E.fecha === M.hoyTxt());
-  main.innerHTML = v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'bodega' ? vistaBodega() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy();
+  // v0.16.0: en Hoy y en la Bitácora de turno, una línea con lo de la bodega del área que está bajo el mínimo
+  const lb = v === 'hoy' || v === 'turno' ? lineaBodegaHoy() : '';
+  main.innerHTML = lb + (v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'bodega' ? vistaBodega() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy());
   if (v === 'recetas' && E.editor) ED.actualizarCalculos();
   if (guardado && $(guardado.id)) {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
@@ -1413,13 +1432,16 @@ $('principal').addEventListener('click', async ev => {
   if (ds.mermaNueva) { dialogoMerma(); return; }
   if (ds.bodega) { dialogoBodega(ds.bodega); return; }
   if (ds.turnoNuevo) { dialogoTurno(ds.turnoNuevo); return; }
+  if (ds.calEditar) { dialogoCalibracion(); return; }
+  if (ds.derramado) { dialogoDerramado(); return; }
   if (ds.anularReg) {
     const [campo, fecha, id] = ds.anularReg.split('|');
     if (!confirm('¿Anular esta anotación? Queda en el registro como anulada y deja de contar.')) return;
     guardarSinEsperar(guardarDia(fecha, { [campo]: { [id]: { anulado: { por: quien(), en: ahoraIso() } } }, registrosPendientes: true }), 'Anotación anulada.');
     const b0 = campo === 'bodega' ? (((E.diasArea[fecha] || {}).bodega) || {})[id] : null;
-    if (b0 && b0.tipo === 'conteo' && E.conteosmp[b0.mp] && E.conteosmp[b0.mp].id === id && E.conteosmp[b0.mp].area === E.area)
-      guardarSinEsperar(setDoc(doc(db, 'conteosmp', b0.mp), { area: E.area, mp: b0.mp, fecha: E.conteosmp[b0.mp].fecha, cantidad: E.conteosmp[b0.mp].cantidad, anulado: true }, { merge: true }));
+    const kc = b0 ? K.idStock(b0.bodega || K.BODEGA_PRINCIPAL, b0.mp) : '';   // v0.16.0: el último conteo es por bodega
+    if (b0 && b0.tipo === 'conteo' && E.conteosmp[kc] && E.conteosmp[kc].id === id && E.conteosmp[kc].area === E.area)
+      guardarSinEsperar(setDoc(doc(db, 'conteosmp', kc), { area: E.area, mp: b0.mp, ...(kc !== b0.mp ? { bodega: b0.bodega } : {}), fecha: E.conteosmp[kc].fecha, cantidad: E.conteosmp[kc].cantidad, anulado: true }, { merge: true }));
     programarRegistros();
     return;
   }
@@ -1664,14 +1686,16 @@ function lineaAnot(campo, a, texto, detalle) {
 }
 function vistaMerma() {
   if (!E.cargado.recetas || !E.cargado.mps || !E.cargado.diasArea) return '<div class="vacio">Cargando…</div>';
-  const per = R.periodo(E.periodoMerma), lista = R.delPeriodo(E.diasArea, 'merma', per), resumen = R.resumenMerma(lista);
-  const rango = per.desde === per.hasta ? M.fechaCorta(per.desde) : `${M.fechaCorta(per.desde)} al ${M.fechaCorta(per.hasta)}`;
+  // v0.15.0: Cafetería ve solo hoy (lo de otros días lo ve Administración en Sistema Fën)
+  const soloHoy = E.area === 'CAF';
+  const per = soloHoy ? R.periodo('hoy') : R.periodo(E.periodoMerma), lista = R.delPeriodo(E.diasArea, 'merma', per), resumen = R.resumenMerma(lista);
+  const rango = soloHoy ? 'hoy' : per.desde === per.hasta ? M.fechaCorta(per.desde) : `${M.fechaCorta(per.desde)} al ${M.fechaCorta(per.hasta)}`;
   return `
     <div class="cab-seccion">
       <p class="ayuda">Anoten lo que se pierde: productos, preparaciones o materias primas, con el motivo. Administración lo ve valorizado en Sistema Fën.</p>
       <button type="button" class="btn btn-fuerte" data-merma-nueva="1">${ic('merma')}Anotar merma</button>
     </div>
-    ${chipsPeriodo('periodoMerma', E.periodoMerma, ['hoy', 'semana', 'semana_ant', 'mes', 'mes_ant'])}
+    ${soloHoy ? `<p class="ayuda">Aquí se ve lo de hoy. Si se olvidaron de anotar algo de un día anterior (hasta ${DIAS_ATRAS_MERMA} días), al anotar cambien la fecha.</p>` : chipsPeriodo('periodoMerma', E.periodoMerma, ['hoy', 'semana', 'semana_ant', 'mes', 'mes_ant'])}
     <div class="caja">
       <span class="rotulo">Lo perdido · ${esc(rango)}</span>
       ${resumen.length ? `<div class="lista-mini">${resumen.map(x => `<div class="fila sub"><span>${esc(x.nombre)}${x.tipo === 'mp' ? ' <small class="ayuda">(materia prima)</small>' : ''}</span><span>${esc(R.cantidadTexto(x.cantidad, x.unidad))}${x.veces > 1 ? ` · ${x.veces} veces` : ''}</span></div>`).join('')}</div>` : '<span class="ayuda">Nada anotado en este período.</span>'}
@@ -1679,7 +1703,7 @@ function vistaMerma() {
     <h2 class="titulo">Anotaciones</h2>
     ${lista.length ? `${listaAnot(lista, a => lineaAnot('merma', a,
       `${esc(a.nombre)} · ${esc(R.cantidadTexto(a.cantidad, a.unidad))}`,
-      `${esc(R.MOTIVOS[a.motivo] || a.motivo || '')}${a.congelado ? ' · se perdió congelado' : ''}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`))}` : '<p class="ayuda">Sin anotaciones.</p>'}
+      `${esc(R.MOTIVOS[a.motivo] || a.motivo || '')}${a.congelado ? ' · se perdió congelado' : ''}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc((a.barista && a.barista.nombre) || a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`))}` : `<p class="ayuda">Sin anotaciones${soloHoy ? ' hoy' : ''}.</p>`}
     ${avisoCopia()}`;
 }
 // Lo que se puede anotar como merma en el área
@@ -1693,8 +1717,10 @@ function itemsMerma() {
     ...mps.map(m => ({ tipo: 'mp', x: m, grupo: 'Materias primas' }))
   ];
 }
+// v0.15.0: Cafetería puede anotar la merma en un día anterior (hasta 7 días atrás, nunca en el futuro)
+const DIAS_ATRAS_MERMA = CF.DIAS_ATRAS_MERMA;
 function dialogoMerma() {
-  const d = $('dialogo'), items = itemsMerma();
+  const d = $('dialogo'), items = itemsMerma(), conFecha = E.area === 'CAF', hoyM = M.hoyTxt(), minM = M.sumarDias(hoyM, -DIAS_ATRAS_MERMA);
   // Bollería: qué se puede perder congelado (masas base y productos que van al congelador)
   const masas = E.area === 'BOL' ? B.masasBase(E.recetas, E.area).map(r => r.id) : [];
   const congelables = E.area === 'BOL' ? productosBol().map(r => r.id) : [];
@@ -1719,11 +1745,12 @@ function dialogoMerma() {
     if (!cong) $('mm-cong').checked = false;
   };
   d.innerHTML = `<form method="dialog" class="dlg">
-      <h2>Anotar merma · hoy</h2>
+      <h2>Anotar merma${conFecha ? '' : ' · hoy'}</h2>
       <div class="campo"><label for="mm-buscar">¿Qué se perdió?</label><input id="mm-buscar" autocomplete="off" placeholder="Buscar producto, preparación o materia prima"></div>
       <div class="mm-lista" id="mm-lista" role="group" aria-label="Opciones"></div>
       <p class="mm-elegido"><b id="mm-elegido"></b></p>
       <div class="fila-aj"><label for="mm-cant">Cantidad</label><input id="mm-cant" inputmode="decimal" autocomplete="off"><span class="gr" id="mm-u"></span></div>
+      ${conFecha ? `<div class="campo campo-fecha"><label for="mm-fecha">Fecha</label><input id="mm-fecha" type="date" value="${esc(hoyM)}" min="${esc(minM)}" max="${esc(hoyM)}"><small class="ayuda">Hoy, o hasta ${DIAS_ATRAS_MERMA} días atrás si se les olvidó anotar.</small></div>` : ''}
       <h3 class="rotulo">Motivo</h3>
       <div class="botones-n" role="group" aria-label="Motivo">${Object.entries(R.MOTIVOS).map(([k, t]) => `<button type="button" class="btn-sec" data-motivo="${k}" aria-pressed="false">${esc(t)}</button>`).join('')}</div>
       <div id="mm-cong-caja" class="oculto">
@@ -1750,11 +1777,16 @@ function dialogoMerma() {
     if (!/^\d+([.,]\d+)?$/.test(t) || !(M.num(t) > 0)) return err('Escribe la cantidad (un número mayor que 0).');
     const u = R.unidadDe(elegido.tipo, elegido.x), n = M.num(t);
     if (u === 'un' && elegido.tipo === 'receta' && n !== Math.round(n) && !confirm(`¿${M.unidades(n)} unidades? Normalmente se pierden unidades enteras.`)) return;
+    let fecha = hoyM;
+    if (conFecha) {
+      fecha = String($('mm-fecha').value || '').trim();
+      const mal = CF.validarFechaMerma(fecha, hoyM); if (mal) return err(mal);
+    }
     const cong = $('mm-cong').checked;
     const a = { tipo: elegido.tipo, item: elegido.x.id, nombre: elegido.x.nombre, sub: !!elegido.sub, cantidad: n, unidad: u, motivo, nota: $('mm-nota').value.trim().slice(0, 200), por: quien(), en: ahoraIso() };
     if (cong) { a.congelado = true; a.congeladoDe = masas.includes(elegido.x.id) ? 'masa' : 'producto'; }
     d.close();
-    guardarSinEsperar(guardarDia(M.hoyTxt(), { merma: { [idAnot()]: a }, registrosPendientes: true }), 'Merma anotada.');
+    guardarSinEsperar(guardarDia(fecha, { merma: { [idAnot()]: a }, registrosPendientes: true }), fecha === hoyM ? 'Merma anotada.' : `Merma anotada en el ${M.fechaCorta(fecha)} (aquí se ve solo hoy).`);
     programarRegistros();
   };
 }
@@ -1762,28 +1794,155 @@ function dialogoMerma() {
 // ═══════════════ Cafetería: bitácora de turno ═══════════════
 // Calibraciones (shots × gramos por shot), café botado y pruebas de receta, en gramos de café.
 // Queda a nombre de quien entró con su PIN; si anota por otra persona de Cafetería, la elige.
-const gPorShot = () => M.num((E.config || {}).gramos_por_shot) || R.GRAMOS_SHOT;
+// v0.15.0: solo hoy (sin cambiar de día). Arriba, la calibración diaria automática (Editar = el número real del día)
+// y "Derramado" (preparaciones que se botaron: merma de receta con derramado: true, una anotación por preparación).
+const gPorShot = () => K.gPorShotCaf(E.config);
+const TXT_TURNO = { calibracion: 'Calibración extra', merma: 'Café botado', prueba_receta: 'Prueba de receta' };
+// La primera vez que Cafetería abre la v0.15.0 deja la fecha de inicio de la calibración automática en el día de hoy
+// (y la arrastra a los días siguientes): Sistema Fën no cuenta días automáticos antes de esa fecha (consumo.js)
+function marcarInicioCalibracion() {
+  const h = M.hoyTxt(), d = E.diasArea[h];
+  if (E.area !== 'CAF' || !E.persona || (d && d.calibracionDesde) || E.inicioCalMarcado === h) return;
+  E.inicioCalMarcado = h;
+  const ini = Object.values(E.diasArea).map(x => x && x.calibracionDesde).filter(v => typeof v === 'string' && v <= h).sort()[0] || h;
+  guardarSinEsperar(guardarDia(h, { calibracionDesde: ini }));
+}
 function vistaTurno() {
   if (!E.cargado.diasArea) return '<div class="vacio">Cargando…</div>';
-  const per = R.periodo(E.periodoTurno), lista = R.delPeriodo(E.diasArea, 'turno', per), t = R.totalesCafe(lista);
-  const tiles = [['calibracion', 'Calibración'], ['merma', 'Café botado'], ['prueba_receta', 'Pruebas de receta']].map(([k, n]) =>
+  marcarInicioCalibracion();
+  const hoy = M.hoyTxt(), per = R.periodo('hoy', hoy), lista = R.delPeriodo(E.diasArea, 'turno', per), t = R.totalesCafe(lista);
+  const cal = K.calibracionDelDia(hoy, E.diasArea[hoy], E.config), ed = cal.editada;
+  const derr = R.delPeriodo(E.diasArea, 'merma', per).filter(a => a.derramado).map(a => ({ ...a, campo: 'merma' }));
+  const nDerr = derr.filter(a => !a.anulado).reduce((s, a) => s + (a.unidad === 'un' ? M.num(a.cantidad) : 1), 0);
+  const todas = [...lista.map(a => ({ ...a, campo: 'turno' })), ...derr].sort((a, b) => String(b.en || '').localeCompare(String(a.en || '')));
+  const tiles = [['calibracion', 'Calibración extra'], ['merma', 'Café botado'], ['prueba_receta', 'Pruebas de receta']].map(([k, n]) =>
     `<div class="caja cifra"><span class="rotulo">${n}</span><b>${esc(M.gramos(t[k]))}</b>${k === 'calibracion' && t.shots ? `<span class="ayuda">${M.miles(t.shots)} shots</span>` : ''}</div>`).join('');
+  const shotsTxt = n => `${M.miles(n)} ${M.num(n) === 1 ? 'shot' : 'shots'}`;
+  const hist = ed ? [...(ed.historial || [])].reverse() : [];
+  const fila = a => a.campo === 'merma'
+    ? lineaAnot('merma', a, `Derramado · ${esc(a.nombre)} · ${esc(R.cantidadTexto(a.cantidad, a.unidad))}`,
+      `${esc((a.barista && a.barista.nombre) || a.por || '')}${a.notaTurno ? ' · ' + esc(a.notaTurno) : ''} · ${esc(horaDe(a.en))}`)
+    : lineaAnot('turno', a,
+      `${esc(TXT_TURNO[a.tipo] || R.TIPOS_CAF[a.tipo] || a.tipo)} · ${a.tipo === 'calibracion' ? `${shotsTxt(a.shots)} × ${esc(M.unidades(a.gPorShot))} g = ` : ''}${esc(M.gramos(a.gramos))}`,
+      `${esc((a.barista && a.barista.nombre) || a.por || '')}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(horaDe(a.en))}`);
   return `
-    <div class="botones-bit">${Object.entries(R.TIPOS_CAF).map(([k, n]) => `<button type="button" class="btn-sec" data-turno-nuevo="${k}">${ic(k === 'calibracion' ? 'cafe' : k === 'merma' ? 'merma' : 'libro')}${esc(n)}</button>`).join('')}</div>
-    ${chipsPeriodo('periodoTurno', E.periodoTurno, ['hoy', 'semana', 'mes', 'mes_ant'])}
-    <section class="resumen resumen-cafe">${tiles}<div class="caja cifra total"><span class="rotulo">Total de café</span><b>${esc(M.gramos(t.total))}</b><span class="ayuda">${esc(gPorShot())} g por shot</span></div></section>
-    <h2 class="titulo">Anotaciones</h2>
-    ${lista.length ? `${listaAnot(lista, a => lineaAnot('turno', a,
-      `${esc(R.TIPOS_CAF[a.tipo] || a.tipo)} · ${a.tipo === 'calibracion' ? `${M.miles(a.shots)} ${M.num(a.shots) === 1 ? 'shot' : 'shots'} × ${esc(M.unidades(a.gPorShot))} g = ` : ''}${esc(M.gramos(a.gramos))}`,
-      `${esc((a.barista && a.barista.nombre) || a.por || '')}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`))}` : '<p class="ayuda">Sin anotaciones en este período.</p>'}
+    <div class="nav-fecha nav-dia nav-turno"><h2>${esc(M.fechaLarga(hoy))} <span class="chip-hoy">Hoy</span></h2></div>
+    <section class="caja cal-diaria" aria-labelledby="cal-diaria-t">
+      <div class="cal-fila">
+        <div><b id="cal-diaria-t">Calibración diaria: ${esc(shotsTxt(cal.shots))}</b> <span class="ayuda">${ed ? `(editada por ${esc(ed.por || '')}${ed.en ? ' a las ' + esc(horaDe(ed.en)) : ''})` : '(automática)'} · ${esc(M.gramos(cal.gramos))} de café</span></div>
+        <button type="button" class="btn-sec" data-cal-editar="1">${ic('ajuste')}Editar</button>
+      </div>
+      <details class="desp info"><summary>${ic('info')}&nbsp;Cómo funciona</summary>
+        <p class="ayuda">Cada día que Cafetería vende en la caja se cuentan solos ${esc(shotsTxt(K.shotsCalibracionDef(E.config)))} de calibración (${esc(M.unidades(gPorShot()))} g por shot) y se descuentan del café de la bodega. Si hoy calibraron otra cantidad, toquen "Editar" y pongan el número real (0 si no se calibró, por ejemplo si estuvo cerrado). Lo anterior queda guardado. Si calibran de nuevo durante el día (cambio de molienda, de café), anótenlo con "Calibración extra": se suma aparte.</p>
+        ${hist.length ? `<p class="ayuda">Antes: ${hist.map(h => `${esc(shotsTxt(h.shots))} (${h.auto ? 'automática' : esc(h.por || '') + ' ' + esc(horaDe(h.en))})`).join(' · ')}</p>` : ''}
+      </details>
+    </section>
+    <div class="botones-bit">${Object.keys(R.TIPOS_CAF).map(k => `<button type="button" class="btn-sec" data-turno-nuevo="${k}">${ic(k === 'calibracion' ? 'cafe' : k === 'merma' ? 'merma' : 'libro')}${esc(TXT_TURNO[k] || R.TIPOS_CAF[k])}</button>`).join('')}<button type="button" class="btn-sec" data-derramado="1">${ic('gota')}Derramado</button></div>
+    <section class="resumen resumen-cafe">${tiles}<div class="caja cifra"><span class="rotulo">Derramado</span><b>${esc(M.miles(nDerr))}</b><span class="ayuda">${nDerr === 1 ? 'preparación' : 'preparaciones'}</span></div><div class="caja cifra total"><span class="rotulo">Total de café</span><b>${esc(M.gramos(t.total + cal.gramos))}</b><span class="ayuda">con la calibración diaria · ${esc(M.unidades(gPorShot()))} g por shot</span></div></section>
+    <h2 class="titulo">Anotaciones de hoy</h2>
+    ${todas.length ? listaAnot(todas, fila) : '<p class="ayuda">Sin anotaciones hoy.</p>'}
     ${avisoCopia()}`;
+}
+// Editar la calibración diaria de hoy: el número real (0 = no se calibró). Lo anterior pasa al historial.
+function dialogoCalibracion() {
+  const d = $('dialogo'), hoy = M.hoyTxt(), cal = K.calibracionDelDia(hoy, E.diasArea[hoy], E.config), ed = cal.editada;
+  d.innerHTML = `<form method="dialog" class="dlg">
+      <h2>Calibración diaria · hoy</h2>
+      <p class="ayuda">Ahora: ${esc(M.miles(cal.shots))} shots ${ed ? `(editada por ${esc(ed.por || '')})` : '(automática)'}. Escriban cuántos shots de calibración se hicieron hoy en realidad. 0 si no se calibró.</p>
+      <div class="filas-aj"><div class="fila-aj"><label for="cd-shots">Shots</label><input id="cd-shots" inputmode="numeric" value="${esc(String(cal.shots))}" autocomplete="off"><span class="gr"></span></div></div>
+      <p class="ayuda" id="cd-total"></p>
+      <div class="error" id="cd-error" role="alert"></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Guardar</button></div>
+    </form>`;
+  const gps = cal.gPorShot;
+  const pintarTotal = () => { const n = $('cd-shots').value.trim(); $('cd-total').textContent = /^\d+$/.test(n) ? `= ${M.gramos(Number(n) * gps)} de café (${M.unidades(gps)} g por shot).` : ''; };
+  pintarTotal(); d.showModal();
+  d.onsubmit = ev => ev.preventDefault();
+  d.onchange = null;
+  d.oninput = () => { $('cd-error').textContent = ''; pintarTotal(); };
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (!b.dataset.guardar) return;
+    const n = $('cd-shots').value.trim();
+    if (!/^\d+$/.test(n) || Number(n) > 200) { $('cd-error').textContent = 'Escribe cuántos shots (número entero, 0 si no se calibró).'; return; }
+    d.close();
+    // v0.16.0: registrosPendientes → el script la copia a CAF_registros (una fila por día; si se vuelve a editar, se corrige)
+    guardarSinEsperar(guardarDia(hoy, { calibracionDiaria: CF.nuevaCalibracion(ed, cal.shots, Number(n), gps, quien(), ahoraIso()), registrosPendientes: true }), `Calibración diaria: ${M.miles(Number(n))} shots.`);
+    programarRegistros();
+  };
+}
+// Derramado (accidente): una o más preparaciones de Cafetería, con cuántas de cada una. Cada una queda como merma de
+// receta (motivo "Derrame o error", derramado: true): Sistema Fën la valoriza y la bodega descuenta la preparación entera.
+function dialogoDerramado() {
+  const d = $('dialogo'), hoy = M.hoyTxt();
+  const items = E.recetas.filter(r => r.area === 'CAF' && r.estado !== 'anulada').sort((a, b) => (a.tipo === 'sub_receta') - (b.tipo === 'sub_receta') || a.nombre.localeCompare(b.nombre, 'es'));
+  const personas = personasDelArea(), yo = E.persona || {};
+  const opciones = personas.some(p => p.id === yo.email) ? personas : [{ id: yo.email || '', nombre: yo.nombre || '' }, ...personas];
+  const elegidos = [];   // [{ r, cant }]
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  d.innerHTML = `<form method="dialog" class="dlg">
+      <h2>Derramado · hoy</h2>
+      <p class="ayuda">Preparaciones que se derramaron o se botaron por un accidente. Se descuenta todo lo que llevan (café, leche, vaso…) y Administración lo ve valorizado.</p>
+      <div class="campo"><label for="dr-barista">Barista</label><select id="dr-barista">${opciones.map(p => `<option value="${esc(p.id)}" ${p.id === yo.email ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+      <div class="campo"><label for="dr-buscar">¿Qué se derramó?</label><input id="dr-buscar" autocomplete="off" placeholder="Buscar preparación"></div>
+      <div class="mm-lista" id="dr-lista" role="group" aria-label="Preparaciones"></div>
+      <div id="dr-elegidos"></div>
+      <div class="campo"><label for="dr-nota">Nota (opcional)</label><input id="dr-nota" maxlength="200" autocomplete="off" placeholder="Ej: se cayó la bandeja"></div>
+      <div class="error" id="dr-error" role="alert"></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Anotar</button></div>
+    </form>`;
+  const lista = () => {
+    const q = norm($('dr-buscar').value);
+    const vis = items.filter(r => !q || norm(r.nombre).includes(q)).slice(0, 30);
+    $('dr-lista').innerHTML = vis.length ? vis.map(r => `<button type="button" class="mm-op" data-dr="${esc(r.id)}" aria-pressed="${elegidos.some(x => x.r.id === r.id)}">${esc(r.nombre)}</button>`).join('')
+      : `<p class="ayuda">${items.length ? 'No hay nada con ese nombre.' : 'Cafetería todavía no tiene recetas aprobadas.'}</p>`;
+  };
+  const pintarElegidos = () => {
+    $('dr-elegidos').innerHTML = elegidos.length ? `<div class="filas-aj">${elegidos.map((x, k) => `<div class="fila-aj dr-fila"><label for="dr-c-${k}">${esc(x.r.nombre)}</label><input id="dr-c-${k}" data-dr-cant="${k}" inputmode="decimal" value="${esc(String(x.cant).replace('.', ','))}" autocomplete="off"><span class="gr">${R.unidadDe('receta', x.r) === 'g' ? 'g' : 'un'}</span><button type="button" class="btn-x" data-dr-quitar="${k}" aria-label="Quitar ${esc(x.r.nombre)}">×</button></div>`).join('')}</div>`
+      : '<p class="ayuda">Elijan una o más preparaciones de la lista.</p>';
+  };
+  lista(); pintarElegidos(); d.showModal();
+  d.onsubmit = ev => ev.preventDefault();
+  d.onchange = null;
+  d.oninput = ev => {
+    $('dr-error').textContent = '';
+    if (ev.target.id === 'dr-buscar') lista();
+    if (ev.target.dataset.drCant !== undefined) { const x = elegidos[Number(ev.target.dataset.drCant)]; if (x) x.cant = ev.target.value; }
+  };
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (b.dataset.dr) {
+      const k = elegidos.findIndex(x => x.r.id === b.dataset.dr);
+      if (k >= 0) elegidos.splice(k, 1); else { const r = items.find(x => x.id === b.dataset.dr); if (r) elegidos.push({ r, cant: 1 }); }
+      lista(); pintarElegidos();
+      const ult = $('dr-c-' + (elegidos.length - 1)); if (k < 0 && ult) ult.focus();
+      return;
+    }
+    if (b.dataset.drQuitar !== undefined) { elegidos.splice(Number(b.dataset.drQuitar), 1); lista(); pintarElegidos(); return; }
+    if (!b.dataset.guardar) return;
+    const err = t => { $('dr-error').textContent = t; };
+    if (!elegidos.length) return err('Elige qué se derramó.');
+    for (const x of elegidos) {
+      const t = String(x.cant).trim();
+      if (!/^\d+([.,]\d+)?$/.test(t) || !(M.num(t) > 0)) return err(`Escribe cuántas de "${x.r.nombre}" (un número mayor que 0).`);
+    }
+    const sel = $('dr-barista'), p = opciones.find(x => x.id === sel.value) || { id: '', nombre: '' };
+    const merma = CF.entradasDerramado(elegidos.map(x => ({ receta: x.r, cantidad: String(x.cant).trim() })),
+      { barista: { email: p.id, nombre: p.nombre }, nota: $('dr-nota').value, por: quien(), en: ahoraIso(), grupo: idAnot() });
+    d.close();
+    guardarSinEsperar(guardarDia(hoy, { merma, registrosPendientes: true }), elegidos.length === 1 ? 'Derramado anotado.' : `Derramado anotado (${elegidos.length} preparaciones).`);
+    programarRegistros();
+  };
 }
 function dialogoTurno(tipo) {
   const d = $('dialogo'), cal = tipo === 'calibracion', gps = gPorShot();
   const personas = personasDelArea(), yo = E.persona || {};
   const opciones = personas.some(p => p.id === yo.email) ? personas : [{ id: yo.email || '', nombre: yo.nombre || '' }, ...personas];
   d.innerHTML = `<form method="dialog" class="dlg">
-      <h2>${esc(R.TIPOS_CAF[tipo])} · hoy</h2>
+      <h2>${esc(TXT_TURNO[tipo] || R.TIPOS_CAF[tipo])} · hoy</h2>
+      ${cal ? '<p class="ayuda">Para calibraciones además de la diaria (cambio de molienda, de café…). La diaria se cuenta sola.</p>' : ''}
       <div class="campo"><label for="tu-barista">Barista</label><select id="tu-barista">${opciones.map(p => `<option value="${esc(p.id)}" ${p.id === yo.email ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
       <div class="filas-aj">
         ${cal ? `<div class="fila-aj"><label for="tu-shots">Shots</label><input id="tu-shots" inputmode="numeric" value="1" autocomplete="off"><span class="gr"></span></div>
@@ -1826,35 +1985,85 @@ function dialogoTurno(tipo) {
 }
 
 // ═══════════════ Bodega (P5): llegadas y conteo de las materias primas críticas ═══════════════
-// Bodega común: un stock por materia prima. Lo que cuenta un área vale para todas. Se anota en el día de hoy
-// del área (dias.bodega) y se copia a la planilla (MP_stock_movimientos). El stock lo calcula Sistema Fën.
+// v0.16.0: BODEGAS SEPARADAS. Cada área ve y mueve solo SU bodega (config/bodegas; por defecto Panadería, Bollería y
+// Pastelería → Producción, Cafetería → Cafetería). Lo que cuenta un área de Producción vale para las tres. Se anota en el
+// día de hoy del área (dias.bodega, con bodega: 'CAF' o 'PROD') y se copia a la planilla (MP_stock_movimientos).
+// El stock lo calcula Sistema Fën (stockmp/{id}.estado; id = idStock(bodega, mp)); la tablet le suma lo contado o
+// recibido después de ese cálculo (stockAhora) para avisar al tiro si queda bajo el mínimo.
+const bodegaArea = () => K.bodegaDe(E.area, E.mapa);
+const smDe = (m, bod = bodegaArea()) => E.stockmp[K.idStock(bod, m.id)];
+const ctrl = m => K.controlEn(bodegaArea(), m, smDe(m));
 function criticas() {
-  return E.mps.filter(m => (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta' && K.control(m, E.stockmp[m.id]).critica)
+  return E.mps.filter(m => (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta' && ctrl(m).critica)
     .sort((a, b) => (ED.habilitada(b, E.area) - ED.habilitada(a, E.area)) || a.nombre.localeCompare(b.nombre, 'es'));
+}
+// Lo de la bodega de esta área que hay ahora (o null) y si está bajo el mínimo
+function ahoraDe(m) {
+  const bod = bodegaArea(), sm = smDe(m) || {}, c = ctrl(m);
+  const llegadas = Object.values(E.diasArea).flatMap(d => Object.values((d && d.bodega) || {})).filter(a => a && a.tipo === 'llegada' && a.mp === m.id && (a.bodega || K.BODEGA_PRINCIPAL) === bod);
+  const conteo = E.conteosmp[K.idStock(bod, m.id)];
+  const a = K.stockAhora(sm.estado, conteo && (conteo.bodega || K.BODEGA_PRINCIPAL) === bod ? conteo : null, llegadas);
+  return { ...(a || {}), sinDatos: !a, bajo: !!a && K.bajoMinimo(a.hay, c.seguridad), c };
+}
+// Las de la bodega de esta área bajo el mínimo ahora: [{ m, hay, minimo, unidad }]
+function bajosAhora() {
+  if (!E.cargado.mps || !E.cargado.stockmp) return [];
+  return criticas().map(m => ({ m, x: ahoraDe(m) })).filter(o => o.x.bajo).map(o => ({ m: o.m, hay: o.x.hay, minimo: o.x.c.seguridad, unidad: o.x.c.unidad, env: o.x.c.envase }));
+}
+// Hoy / Bitácora de turno: una línea chica con lo que está bajo el mínimo (sin costos), que lleva a Bodega
+function lineaBodegaHoy() {
+  const b = bajosAhora(); if (!b.length) return '';
+  avisarStock(b);
+  return `<a class="linea-bodega" href="#bodega">${ic('alerta')}<span>Bodega: ${b.map(o => `<b>${esc(o.m.nombre)}</b> bajo el mínimo (hay ${esc(K.textoEnv(o.hay, o.unidad, o.env))})`).join(' · ')}</span></a>`;
+}
+// Correo a Administración y a las jefas de esta bodega (script v2.9.0, stock_alerta): el script manda uno por día,
+// bodega y materia prima. Aquí se recuerda lo ya pedido hoy en el equipo, para no llamarlo a cada rato.
+const K_ALERTAS = 'fen_cocina_alertas_stock';
+E.alertando = false;
+function avisarStock(bajos) {
+  if (E.alertando || !E.usuario || !(bajos || []).length || navigator.onLine === false) return;
+  const hoy = M.hoyTxt(), bod = bodegaArea();
+  let hechas = {}; try { hechas = JSON.parse(localStorage.getItem(K_ALERTAS) || '{}') || {}; } catch (e) { hechas = {}; }
+  const nuevas = bajos.filter(o => !hechas[K.claveAlerta(hoy, bod, o.m.id)]);
+  if (!nuevas.length) return;
+  E.alertando = true;
+  llamarScript({ action: 'stock_alerta', area: E.area, fecha: hoy, alertas: nuevas.map(o => ({ mp: o.m.id, hay: Math.round(o.hay) })) })
+    .then(r => {
+      if (!r || r.ok !== true) return;
+      const limpio = {}; Object.entries(hechas).forEach(([k, v]) => { if (k.slice(0, 10) >= M.sumarDias(hoy, -3)) limpio[k] = v; });
+      nuevas.forEach(o => { limpio[K.claveAlerta(hoy, bod, o.m.id)] = 1; });
+      try { localStorage.setItem(K_ALERTAS, JSON.stringify(limpio)); } catch (e) {}
+    })
+    .catch(() => {})
+    .finally(() => { E.alertando = false; });
 }
 function vistaBodega() {
   if (!E.cargado.mps || !E.cargado.diasArea || !E.cargado.stockmp) return '<div class="vacio">Cargando…</div>';
-  const cr = criticas(), hoy = M.hoyTxt();
-  const per = { desde: M.sumarDias(hoy, -13), hasta: hoy }, movs = R.delPeriodo(E.diasArea, 'bodega', per);
-  // Lo que calculó Sistema Fën (stock teórico y alertas)
-  const est = m => (E.stockmp[m.id] || {}).estado || null;
-  const bajos = cr.filter(m => { const e = est(m); return e && (e.bajoAhora || e.bajoDesde); });
+  const cr = criticas(), hoy = M.hoyTxt(), bod = bodegaArea(), nomB = K.nombreBodega(bod, E.mapa);
+  const otrasAreas = K.areasDeBodega(bod, E.mapa).filter(a => a !== E.area && AREAS[a]).map(a => AREAS[a].nombre);
+  const per = { desde: M.sumarDias(hoy, -13), hasta: hoy }, movs = R.delPeriodo(E.diasArea, 'bodega', per).filter(a => (a.bodega || K.BODEGA_PRINCIPAL) === bod);
+  // Lo que calculó Sistema Fën (stock teórico y alertas), más lo contado o recibido después
+  const est = m => (smDe(m) || {}).estado || null;
+  const ahora = {}; cr.forEach(m => { ahora[m.id] = ahoraDe(m); });
+  const bajos = cr.filter(m => ahora[m.id].bajo), pronto = cr.filter(m => { const e = est(m); return !ahora[m.id].bajo && e && e.contado && e.bajoDesde; });
+  if (bajos.length) avisarStock(bajos.map(m => ({ m, hay: ahora[m.id].hay, minimo: ahora[m.id].c.seguridad, unidad: ahora[m.id].c.unidad })));
   const fila = m => {
-    const c = K.control(m, E.stockmp[m.id]), e = est(m);
-    const txt = !e ? 'Sin calcular todavía' : !e.contado ? 'Falta un conteo' : `${K.textoEnv(e.stock, c.unidad, c.envase)}${e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : ''}`;
+    const c = ahora[m.id].c, e = est(m), a = ahora[m.id];
+    const txt = a.sinDatos ? (!e ? 'Sin calcular todavía' : 'Falta un conteo') : `${K.textoEnv(a.hay, c.unidad, c.envase)}${a.desde === 'calculo' && e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : a.desde === 'conteo' ? ' · recién contado' : ''}`;
     const uc = ultimoConteo(m.id);
-    return `<div class="fila sub fila-bod"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${e && (e.bajoAhora || e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
+    return `<div class="fila sub fila-bod"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${a.bajo || (e && e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
   };
   const calculado = cr.map(est).filter(Boolean).map(e => e.en).sort().pop();
   return `
+    ${bajos.length ? `<div class="nota ojo banner-bodega" role="alert">${ic('alerta')}<span><b>Bajo el mínimo en la bodega ${esc(nomB)}:</b> ${bajos.map(m => `<b>${esc(m.nombre)}</b> (hay ${esc(K.textoEnv(ahora[m.id].hay, ahora[m.id].c.unidad, ahora[m.id].c.envase))}, mínimo ${esc(K.texto(ahora[m.id].c.seguridad, ahora[m.id].c.unidad))})`).join(' · ')}. Administración ya recibe el aviso por correo; avísenle igual si no viene un pedido.</span></div>` : ''}
     <div class="cab-seccion">
-      <p class="ayuda">Bodega común: lo que entra y lo que cuentan aquí vale para todas las áreas. El consumo se descuenta solo: lo que marcan como hecho${E.area === 'CAF' ? ', lo vendido en la caja y el café de la bitácora' : ''}.</p>
+      <p class="ayuda">Bodega <b>${esc(nomB)}</b>${otrasAreas.length ? ` (la comparten ${esc(AREAS[E.area].nombre)}, ${esc(otrasAreas.join(' y '))}: lo que entra y lo que cuentan aquí vale para todas)` : ' (solo de esta área)'}. El consumo se descuenta solo: lo que marcan como hecho${E.area === 'CAF' ? ', lo vendido en la caja, la calibración diaria, el café de la bitácora y lo derramado' : ''}.</p>
       <div class="botones-bit"><button type="button" class="btn btn-fuerte" data-bodega="llegada">${ic('bodega')}Llegó mercadería</button><button type="button" class="btn-sec" data-bodega="conteo">${ic('pasos')}Conteo de bodega</button></div>
     </div>
-    ${bajos.length ? `<div class="nota ojo">${ic('alerta')}<span>${bajos.map(m => { const e = est(m); return `<b>${esc(m.nombre)}</b> ${e.bajoAhora ? 'está bajo el mínimo' : 'queda bajo el mínimo el ' + esc(M.fechaLarga(e.bajoDesde).toLowerCase())}`; }).join(' · ')}. Avísale a Administración si no viene un pedido.</span></div>` : ''}
+    ${pronto.length ? `<div class="nota ojo">${ic('alerta')}<span>${pronto.map(m => `<b>${esc(m.nombre)}</b> queda bajo el mínimo el ${esc(M.fechaLarga(est(m).bajoDesde).toLowerCase())}`).join(' · ')}. Avísale a Administración si no viene un pedido.</span></div>` : ''}
     <div class="caja">
-      <span class="rotulo">Materias primas críticas</span>
-      ${cr.length ? `<div class="lista-mini">${cr.map(fila).join('')}</div>` : '<span class="ayuda">Administración todavía no marca materias primas críticas.</span>'}
+      <span class="rotulo">Materias primas críticas · bodega ${esc(nomB)}</span>
+      ${cr.length ? `<div class="lista-mini">${cr.map(fila).join('')}</div>` : '<span class="ayuda">Administración todavía no marca materias primas críticas en esta bodega.</span>'}
       ${calculado ? `<span class="ayuda">Calculado en Sistema Fën: ${esc(M.fechaCorta(M.hoyTxt(new Date(calculado))))} ${esc(horaDe(calculado))}.</span>` : ''}
     </div>
     <h2 class="titulo">Llegadas y conteos de ${esc(AREAS[E.area].nombre)} (14 días)</h2>
@@ -1863,9 +2072,9 @@ function vistaBodega() {
       `${a.nota ? esc(a.nota) + ' · ' : ''}${esc(a.por || '')} · ${esc(M.fechaCorta(a.fecha))} ${esc(horaDe(a.en))}`))}` : '<p class="ayuda">Sin llegadas ni conteos.</p>'}
     ${avisoCopia()}`;
 }
-// Último conteo de una materia prima (de cualquier área): { texto, hoyOtra }
+// Último conteo de una materia prima en la bodega de esta área (de cualquier área de esa bodega): { texto, hoyOtra }
 function ultimoConteo(mpId) {
-  const c = E.conteosmp[mpId]; if (!c || c.anulado || !c.fecha) return null;
+  const bod = bodegaArea(), c = E.conteosmp[K.idStock(bod, mpId)]; if (!c || c.anulado || !c.fecha || (c.bodega || K.BODEGA_PRINCIPAL) !== bod) return null;
   const hoy = M.hoyTxt(), area = AREAS[c.area] ? AREAS[c.area].nombre : c.area;
   return {
     texto: `${c.fecha === hoy ? 'hoy' : M.fechaCorta(c.fecha)} ${horaDe(c.en)} · ${area}${c.por ? ' (' + c.por + ')' : ''} · ${K.texto(c.cantidad, c.unidad)}`,
@@ -1874,11 +2083,12 @@ function ultimoConteo(mpId) {
 }
 function dialogoBodega(tipo) {
   const d = $('dialogo'), cr = criticas(), conteo = tipo === 'conteo';
-  if (!cr.length) { avisar('Administración todavía no marca materias primas críticas (Sistema Fën → Producción → Bodega).', true); return; }
+  if (!cr.length) { avisar('Administración todavía no marca materias primas críticas en esta bodega (Sistema Fën → Producción → Bodega).', true); return; }
+  const bod = bodegaArea();
   const campo = m => {
     const u = K.unidadMp(m), uc = conteo ? ultimoConteo(m.id) : null;
     const notas = [!ED.habilitada(m, E.area) ? 'De otra área' : '', uc ? 'Último conteo: ' + uc.texto : ''].filter(Boolean);
-    const env = K.control(m, E.stockmp[m.id]).envase;
+    const env = ctrl(m).envase;
     const etiqueta = `<label for="bo-${esc(m.id)}">${esc(m.nombre)}${env ? `<small>En ${esc(K.envases(env.nombre, 2))} de ${esc(K.texto(env.tamano, u))} + lo suelto</small>` : ''}${notas.map(n => `<small>${esc(n)}</small>`).join('')}${uc && uc.hoyOtra ? `<small class="txt-ojo" data-ya-contada="${esc(m.id)}">${esc(uc.hoyOtra)}: si la cuentan de nuevo, vale la última.</small>` : ''}</label>`;
     if (!env) return `<div class="fila-aj">${etiqueta}<input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off"><span class="gr">${K.unidadEntrada(u)}</span></div>`;
     return `<div class="fila-aj fila-env">${etiqueta}<div class="env-campos">
@@ -1888,7 +2098,7 @@ function dialogoBodega(tipo) {
       </div><span class="gr env-total" id="bo-${esc(m.id)}-t"></span></div>`;
   };
   d.innerHTML = `<form method="dialog" class="dlg">
-      <h2>${conteo ? 'Conteo de bodega' : 'Llegó mercadería'} · hoy</h2>
+      <h2>${conteo ? 'Conteo de bodega' : 'Llegó mercadería'} · ${esc(K.nombreBodega(bod, E.mapa))} · hoy</h2>
       <p class="ayuda">${conteo ? `Cuenten al terminar la producción del día${E.area === 'CAF' ? ' (en Cafetería, después de cerrar la caja)' : ''}: el conteo vale como cierre de hoy, así que lo hecho hoy ya está incluido y desde mañana se descuenta solo. Escriban en sacos, kg, litros o unidades, según diga. Las que no cuenten, déjenlas vacías: siguen con su conteo anterior.` : 'Escriban lo que llegó (en sacos, kg, litros o unidades, según diga). Lo demás, vacío.'}</p>
       <div class="filas-aj">${cr.map(campo).join('')}</div>
       ${conteo ? '' : '<div class="campo"><label for="bo-nota">Proveedor o factura (opcional)</label><input id="bo-nota" maxlength="120" autocomplete="off"></div>'}
@@ -1900,7 +2110,7 @@ function dialogoBodega(tipo) {
   d.onchange = null;
   // Con envase: sacos × tamaño + lo suelto (en kg, l o un). Devuelve { total, envases, sueltos } o null si está vacío; 'mal' si no es número
   const leer = m => {
-    const u = K.unidadMp(m), env = K.control(m, E.stockmp[m.id]).envase;
+    const u = K.unidadMp(m), env = ctrl(m).envase;
     const a = ($('bo-' + m.id).value || '').trim(), b = env ? ($('bo-' + m.id + '-s').value || '').trim() : '';
     if (a === '' && b === '') return null;
     if ((a && !/^\d+([.,]\d+)?$/.test(a)) || (b && !/^\d+([.,]\d+)?$/.test(b))) return 'mal';
@@ -1920,7 +2130,7 @@ function dialogoBodega(tipo) {
       const r = leer(m); if (r === null) continue;
       if (r === 'mal') { $('bo-error').textContent = `${m.nombre}: escribe solo números.`; return; }
       if (!conteo && !(r.total > 0)) { $('bo-error').textContent = `${m.nombre}: la cantidad que llegó tiene que ser mayor que 0.`; return; }
-      const u = K.unidadMp(m), a = { tipo, mp: m.id, nombre: m.nombre, cantidad: Math.round(r.total * 100) / 100, unidad: u, nota, por: quien(), en: ahoraIso() };
+      const u = K.unidadMp(m), a = { tipo, mp: m.id, nombre: m.nombre, bodega: bod, cantidad: Math.round(r.total * 100) / 100, unidad: u, nota, por: quien(), en: ahoraIso() };
       if (r.env) a.detalle = { envase: r.env.nombre, tamano: r.env.tamano, envases: r.envases, sueltos: Math.round(r.sueltos * 100) / 100 };
       entradas[idAnot()] = a;
     }
@@ -1929,7 +2139,8 @@ function dialogoBodega(tipo) {
     const hoy = M.hoyTxt();
     guardarSinEsperar(guardarDia(hoy, { bodega: entradas, registrosPendientes: true }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
     // El último conteo de cada una, para que lo vean las otras áreas
-    if (conteo) Object.entries(entradas).forEach(([id, a]) => guardarSinEsperar(setDoc(doc(db, 'conteosmp', a.mp), { mp: a.mp, nombre: a.nombre, area: E.area, fecha: hoy, id, cantidad: a.cantidad, unidad: a.unidad, por: a.por, en: a.en, anulado: false })));
+    // v0.16.0: por bodega (conteosmp/{mpId} en Producción, conteosmp/CAF__{mpId} en Cafetería; reglas v1.7.0)
+    if (conteo) Object.entries(entradas).forEach(([id, a]) => guardarSinEsperar(setDoc(doc(db, 'conteosmp', K.idStock(bod, a.mp)), { mp: a.mp, nombre: a.nombre, bodega: bod, area: E.area, fecha: hoy, id, cantidad: a.cantidad, unidad: a.unidad, por: a.por, en: a.en, anulado: false })));
     programarRegistros();
   };
 }

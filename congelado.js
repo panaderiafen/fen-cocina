@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — Bollería: stock inicial, sobre stock y masas que ya hay en el congelador (sin pantalla)  v0.14.0
+//  fën · Cocina — Bollería: stock inicial, sobre stock y masas que ya hay en el congelador (sin pantalla)  v0.15.0
 //
 //  Semana de una meta (lunes W): la meta es lo que sale en la semana. Se parte con un STOCK INICIAL de
 //  productos formados y congelados, y se quiere DEJAR un sobre stock para la semana siguiente:
