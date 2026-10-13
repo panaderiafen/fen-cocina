@@ -1,6 +1,6 @@
-# fën · Cocina · v0.16.0
+# fën · Cocina · v0.16.1
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.0: 12 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,29 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.16.1 · escribir para buscar en las listas de materias primas (pedido de Emmanuel, 12-oct)
+Donde se elige una materia prima o insumo de una lista, ahora también se puede **escribir el nombre**.
+
+- Arriba de la lista: **"Escribe para buscar…"**. Al escribir, la lista queda con lo que coincide y se elige la primera.
+- Sin importar **tildes** ni **mayúsculas**, en **cualquier parte** del nombre y con **varias palabras en cualquier orden**.
+- Si no hay nada: **"Sin resultados"** (la lista queda completa, con lo que estaba elegido antes de escribir). **Escape** o borrar: vuelve la lista completa (la primera vez que se aprieta Escape con texto, solo borra; no cierra la ventana).
+
+**Dónde:** Recetas → **Falta una materia prima** → "Una que existe en otra área" (la lista para habilitarla). Era la única lista de materias primas en Cocina:
+- **Llegó mercadería** y **Conteo de bodega** no tienen lista: muestran todas las críticas de la bodega, una por fila.
+- **Merma** e **ingredientes/insumos de la receta** ya tenían su propio buscador: no cambian.
+
+Por dentro: `buscador.js` nuevo (`conBuscador(select)`; copia exacta en Sistema Fën v0.54.1). El `<select>` sigue mandando (`select.value` igual que antes); no se duplica si se llama dos veces (`data-buscador`).
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** nuevo `buscador.js`; cambian `editor.js`, `estilos.css`, `app.js`, `config.js`, `index.html` y `README.md` (estos tres, solo versión). Sin cambios: reglas (siguen las v1.7.0), script, `consumo.js` y los demás. Si no instalaste la v0.16.0, instala esta directo siguiendo sus pasos (abajo).
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.16.1**.
+- [ ] Recetas → Nueva receta → Falta una materia prima → "Una que existe en otra área": arriba de la lista está "Escribe para buscar…".
+- [ ] Escribe "levadura" (o "levádura"): queda elegida la levadura.
+- [ ] Escribe algo que no existe: "Sin resultados". Escape: vuelve la lista completa y la ventana sigue abierta.
+
+**Si algo sale mal:** vuelve a subir la v0.16.0.
 
 ## Novedades v0.16.0 · Bodegas separadas y avisos de bajo el mínimo (pedido de Emmanuel, 12-oct)
 **Esta entrega incluye la v0.15.0** (Cafetería, parte 1: calibración diaria, derramado, merma con fecha; ver abajo), que no alcanzó a instalarse. Se instalan juntas.

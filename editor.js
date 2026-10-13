@@ -13,6 +13,7 @@
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
 import * as M from './modelo.js?v=0.11.0';
+import { conBuscador } from './buscador.js?v=0.16.1';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }
 export function configurar(api) { A = api; }
@@ -432,6 +433,7 @@ function dialogoPedir() {
       <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Pedir</button></div>
     </form>`;
   d.showModal();
+  conBuscador(A.$('pm-existente')); // v0.16.1: escribir para buscar
   d.onsubmit = ev => ev.preventDefault();
   d.oninput = null;
   d.onchange = ev => { if (ev.target.name === 'pm-modo') { modo = ev.target.value; A.$('pm-nueva').classList.toggle('oculto', modo !== 'nueva'); A.$('pm-habilitar').classList.toggle('oculto', modo !== 'habilitar'); } };

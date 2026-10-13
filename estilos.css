@@ -423,3 +423,13 @@ details.info > summary { display: flex; align-items: center; min-height: 40px; c
 .linea-bodega { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 10px 14px; border-radius: 12px; background: var(--ojo-fondo); color: var(--ojo); font-size: 14px; line-height: 1.4; text-decoration: none; }
 .linea-bodega svg { flex: none; width: 18px; height: 18px; margin-top: 1px; }
 .linea-bodega:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Buscador sobre las listas de materias primas e insumos (Cocina v0.16.1 · Sistema Fën v0.54.1) */
+.buscador { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.buscador .buscador-ic { position: absolute; left: 12px; top: 15px; color: var(--suave); pointer-events: none; display: flex; }
+.buscador input[type=search] { min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 12px 0 38px; border-radius: 10px; border: 1px dashed var(--borde); background: #fff; font-size: 16px; -webkit-appearance: none; appearance: none; }
+.buscador input[type=search]::placeholder { color: var(--suave); }
+.buscador input[aria-invalid=true] { border-color: #B3261E; }
+.buscador-msg { font-size: 13px; color: var(--suave); min-height: 0; }
+.buscador-msg:empty { display: none; }
+.buscador input[aria-invalid=true] ~ .buscador-msg { color: #B3261E; font-weight: 600; }

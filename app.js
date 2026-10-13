@@ -67,14 +67,14 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.16.0';
+} from './firebase.js?v=0.16.1';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.16.0';
+import * as ED from './editor.js?v=0.16.1';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.16.0';
-import * as CG from './congelado.js?v=0.16.0';
-import * as CF from './cafeteria.js?v=0.16.0';
+import * as CG from './congelado.js?v=0.16.1';
+import * as CF from './cafeteria.js?v=0.16.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
