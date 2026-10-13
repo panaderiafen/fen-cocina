@@ -1,6 +1,6 @@
-# fën · Cocina · v0.16.1
+# fën · Cocina · v0.16.2
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2: 13 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,35 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.16.2 · cada pantalla se ve bien en el celular, las tablets y el PC (regla de Emmanuel, 13-oct)
+Se revisaron **todas las pantallas** de las 4 áreas (Hoy, Planificación, Bitácora, Metas, Masas, Merma, Bodega, Recetas y el formulario, Bitácora de turno) y los diálogos (anotar en la Bitácora, inventario, empastes, hice empastes, merma, derramado, calibración, conteo, llegada, ajuste, tandas, copiar semana, cambiar de área) en celular (390×844), tablet vertical (768×1024), tablet horizontal (1024×768) y PC (1280×900). Solo cambia cómo se ve: los datos y los cálculos son los mismos.
+
+**Lo que se arregló:**
+- **Planificación y Masas en el celular:** la página se corría hacia el lado (las etiquetas escondidas de cada casilla empujaban la página). Ahora la tabla se desliza **dentro de su caja**, con el nombre de la receta fijo a la izquierda, una sombra en el borde y arriba **"Desliza la tabla hacia el lado para ver todo"** (solo cuando no cabe). En la tablet vertical la Planificación cabe entera.
+- **Barra de arriba en el celular:** "En línea", "Cambiar de área" y el nombre ya no se parten en dos líneas apretadas; "En línea" va arriba a la derecha y los dos botones en una línea (un nombre muy largo termina en "…").
+- **Flechas de la semana** (Planificación, Metas, Masas): en el celular quedan a los lados del título, en la misma línea (antes la flecha "siguiente" caía abajo).
+- **Hoy en el celular:** "Ajustar harina / agua" y "Tandas" lado a lado y "Marcar terminada" a lo ancho (antes, uno bajo otro con anchos distintos).
+- **Bitácora de Bollería en el celular:** los botones de anotar, dos por línea y del mismo ancho.
+- **Diálogos en el celular** (conteo, llegada, inventario, elaboré masas, formé, empastes, calibración, tandas): el nombre tiene espacio (antes quedaba en una columna angosta de 6–8 líneas); la columna de la unidad usa solo lo que necesita. El diálogo usa casi todo el ancho y se desliza por dentro.
+- **Bodega:** "Contada hoy…" tenía un relleno de más (heredado del formulario de recetas); cada materia prima queda separada de la siguiente, así el stock ya no parece de la de abajo.
+- **Filas nombre / valor** (Hoy de Bollería, congelado, meta): si no caben juntos, el valor baja a la línea siguiente a la derecha, en vez de apretar el nombre ("Masa / Base").
+- **Metas en el celular:** el nombre del producto más ancho y casillas más justas.
+- **Formulario de recetas:** el estado ("Borrador") alineado con el título.
+- Textos de ayuda largos dentro de una casilla terminan en "…" en vez de cortarse a media palabra.
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** cambian `estilos.css` y `app.js`; solo versión: `editor.js`, `config.js`, `index.html` y `README.md`. Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `consumo.js` (los cuatro iguales a los de Sistema Fën), `buscador.js`, `cafeteria.js`, `congelado.js`, `firebase.js`, reglas (siguen las v1.7.0) y script. Requiere la v0.16.1 instalada (si no, sube todos los del zip).
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.16.2**.
+- [ ] Celular, Panadería → Planificación: la página no se mueve hacia el lado; la tabla sí, con el nombre fijo y el aviso "Desliza la tabla…".
+- [ ] Celular, arriba: "En línea" a la derecha; "Cambiar de área" y el nombre en una línea, sin partirse.
+- [ ] Celular, Bollería → Metas y Masas: las dos flechas a los lados del título.
+- [ ] Celular, Hoy: "Ajustar harina / agua" y "Tandas" lado a lado; "Marcar terminada" a lo ancho.
+- [ ] Celular, Bodega → Conteo de bodega: el nombre de cada materia prima se lee en 1–2 líneas.
+- [ ] Tablet (vertical y acostada) y PC: todo como antes, sin nada cortado.
+
+**Si algo sale mal:** vuelve a subir la v0.16.1 (solo cambia cómo se ve).
 
 ## Novedades v0.16.1 · escribir para buscar en las listas de materias primas (pedido de Emmanuel, 12-oct)
 Donde se elige una materia prima o insumo de una lista, ahora también se puede **escribir el nombre**.

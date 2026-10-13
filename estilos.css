@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.14.0 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.16.2 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -433,3 +433,60 @@ details.info > summary { display: flex; align-items: center; min-height: 40px; c
 .buscador-msg { font-size: 13px; color: var(--suave); min-height: 0; }
 .buscador-msg:empty { display: none; }
 .buscador input[aria-invalid=true] ~ .buscador-msg { color: #B3261E; font-weight: 600; }
+
+/* v0.16.2 · Revisión de pantallas (celular 390, tablets 768/1024, PC 1280) */
+/* Tablas: la casilla escondida de cada celda (.sr) ya no empuja la página hacia el lado; la tabla se desliza dentro
+   de su caja, con la primera columna fija, una sombra al borde y un aviso arriba */
+.tabla-caja { position: relative; }
+table.plan { min-width: 700px; }   /* cabe entera en la tablet vertical (768) */
+.tabla-caja.ancha { box-shadow: inset -14px 0 12px -12px rgba(43, 38, 34, .28); }
+.tabla-caja.ancha.al-final { box-shadow: none; }
+.tabla-caja.ancha table.plan th:first-child, .tabla-caja.ancha table.plan td:first-child { position: sticky; left: 0; z-index: 2; background: #fff; box-shadow: 1px 0 0 #F1ECE5; }
+.tabla-caja.ancha table.plan thead th:first-child, .tabla-caja.ancha table.plan tfoot td:first-child { background: var(--suave-fondo); }
+.aviso-desliza { margin: 0 0 -8px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--suave); }
+.aviso-desliza[hidden] { display: none; }
+.aviso-desliza svg.ic { width: 16px; height: 16px; }
+/* "Contada hoy…" en Bodega: la clase .bloque del formulario de recetas le ponía relleno */
+.ayuda.bloque { padding: 0; border-radius: 0; gap: 0; }
+/* Bodega: cada materia prima separada de la siguiente (el valor ya no parece de la de abajo) */
+.fila.fila-bod { padding-bottom: 8px; border-bottom: 1px solid #F1ECE5; }
+.fila.fila-bod:last-of-type { border-bottom: 0; padding-bottom: 0; }
+/* Filas nombre / valor: si no caben juntos, el valor baja a la línea siguiente (a la derecha) en vez de apretar el nombre */
+.fila { flex-wrap: wrap; column-gap: 12px; row-gap: 2px; }
+.fila > span:last-child { margin-left: auto; }
+/* El texto de ayuda dentro de una casilla no se corta a media palabra */
+input { text-overflow: ellipsis; }
+/* Título con estado (editor de recetas): centrado con el título */
+.nav-fecha .estado { align-self: center; }
+
+@media (max-width: 600px) {
+  /* Barra de arriba: los botones en una línea, sin partir "Cambiar de área" ni "En línea" */
+  .barra { gap: 10px; padding-top: 10px; padding-bottom: 10px; position: relative; }
+  .barra-area { padding-right: 84px; }
+  .barra-der { width: 100%; gap: 8px; min-width: 0; }
+  .estado-red { white-space: nowrap; position: absolute; top: 14px; right: 14px; }
+  .btn-persona { white-space: nowrap; padding: 0 14px; min-height: 40px; flex: none; }
+  #btn-persona { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* Botones de la Bitácora: dos por línea, del mismo ancho */
+  .botones-bit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .botones-bit .btn-sec { padding: 6px 12px; text-align: left; }
+  .secciones { padding-top: 6px; padding-bottom: 6px; }
+  /* Flechas de la fecha / semana a los lados del título, en la misma línea */
+  .nav-fecha { gap: 8px; }
+  .nav-fecha > h2, .nav-fecha > .titulo-meta { flex: 1 1 0; min-width: 0; font-size: 17px; }
+  .nav-fecha .titulo-meta h2 { font-size: 17px; }
+  /* Pie de cada receta en Hoy: "Ajustar" y "Tandas" lado a lado; "Marcar terminada" a lo ancho */
+  .receta-pie { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .receta-pie > .btn-sec { justify-content: center; text-align: center; padding: 0 10px; }
+  .receta-pie > .ayuda, .receta-pie > .der { grid-column: 1 / -1; margin-left: 0; }
+  .receta-pie > .der > * { width: 100%; justify-content: center; }
+  /* Diálogos: la columna del nombre tiene espacio; la de la unidad o el resultado, solo lo que necesita */
+  .dialogo { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
+  .dlg { padding: 18px 16px; }
+  .fila-aj { grid-template-columns: minmax(0, 1fr) 96px auto; gap: 8px; }
+  .fila-aj .gr { min-width: 0; }
+  /* Tablas que se deslizan: columnas más justas */
+  table.plan td.nombre { min-width: 130px; }
+  table.metas td.nombre { min-width: 150px; }
+  table.metas td input { width: 84px; }
+}

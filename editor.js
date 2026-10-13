@@ -13,7 +13,7 @@
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
 import * as M from './modelo.js?v=0.11.0';
-import { conBuscador } from './buscador.js?v=0.16.1';
+import { conBuscador } from './buscador.js?v=0.16.2';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }
 export function configurar(api) { A = api; }

@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.16.0
+//  fën · Cocina — la app de las jefas  v0.16.2
+//  v0.16.2: revisión de pantallas (celular, tablets, PC): marcarTablasAnchas() avisa cuando una tabla se desliza.
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
 //  "borrar la semana y reescribir"). Si algo no se pudo guardar, lo dice.
@@ -67,14 +68,14 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.16.1';
+} from './firebase.js?v=0.16.2';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.16.1';
+import * as ED from './editor.js?v=0.16.2';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.16.0';
-import * as CG from './congelado.js?v=0.16.1';
-import * as CF from './cafeteria.js?v=0.16.1';
+import * as CG from './congelado.js?v=0.16.2';
+import * as CF from './cafeteria.js?v=0.16.2';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -446,6 +447,7 @@ function pintar() {
   const lb = v === 'hoy' || v === 'turno' ? lineaBodegaHoy() : '';
   main.innerHTML = lb + (v === 'recetas' && E.editor ? ED.vistaEditor() : v === 'plan' ? vistaPlan() : v === 'recetas' ? vistaRecetas() : v === 'metas' ? vistaMetas() : v === 'masas' ? vistaMasas() : v === 'bitacora' ? vistaBitacora() : v === 'merma' ? vistaMerma() : v === 'bodega' ? vistaBodega() : v === 'turno' ? vistaTurno() : E.area === 'BOL' ? vistaHoyBol() : E.area === 'PAS' ? vistaHoyPas() : vistaHoy());
   if (v === 'recetas' && E.editor) ED.actualizarCalculos();
+  marcarTablasAnchas();
   if (guardado && $(guardado.id)) {
     const el = $(guardado.id); el.value = guardado.valor; el.focus();
     if (el.dataset.celda || el.dataset.num) el.classList.toggle('error-celda', !/^\s*\d*\s*$/.test(el.value));
@@ -453,6 +455,21 @@ function pintar() {
     if (v === 'recetas' && E.editor) ED.trasPintar(el);
   }
 }
+
+// v0.16.2: una tabla más ancha que la pantalla (celular) se desliza dentro de su caja; se avisa con una línea
+// "Desliza para ver todos los días" y una sombra al borde (estilos.css). Se revisa al pintar y al girar la tablet.
+function marcarTablasAnchas() {
+  document.querySelectorAll('#principal .tabla-caja').forEach(c => {
+    const ancha = c.scrollWidth > c.clientWidth + 4;
+    c.classList.toggle('ancha', ancha);
+    c.classList.toggle('al-final', ancha && c.scrollLeft + c.clientWidth >= c.scrollWidth - 2);
+    if (!c.dataset.desliza) { c.dataset.desliza = '1'; c.addEventListener('scroll', () => c.classList.toggle('al-final', c.scrollLeft + c.clientWidth >= c.scrollWidth - 2), { passive: true }); }
+    let aviso = c.previousElementSibling;
+    if (!aviso || !aviso.classList.contains('aviso-desliza')) { aviso = document.createElement('p'); aviso.className = 'aviso-desliza'; aviso.innerHTML = `${ic('der')}Desliza la tabla hacia el lado para ver todo`; c.before(aviso); }
+    aviso.hidden = !ancha;
+  });
+}
+addEventListener('resize', () => marcarTablasAnchas());
 
 // ── Hoy ──
 // v0.14.0: barra de la fecha (fija arriba al bajar). Hoy: "Hoy" marcado y el fondo del color del área (lo pone pintar);
