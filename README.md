@@ -1,6 +1,6 @@
-# fën · Cocina · v0.16.4
+# fën · Cocina · v0.17.0
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,47 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.17.0 · Bodegas por área responsable (decisión de Emmanuel, 14-oct)
+Va con **Sistema Fën v0.65.0**, el **script de Producción v2.11.0** y las **reglas v1.8.0**. Hasta que confirmes los responsables en Sistema Fën, Cocina funciona **igual que la v0.16.4**.
+
+**La decisión:** cuatro bodegas, **Panadería, Bollería, Pastelería y Cafetería**. Cada materia prima crítica tiene **una sola área responsable** (las harinas → Panadería). Su stock es uno solo y **baja con lo que consume cualquier área**: la harina que usan Bollería y Pastelería baja la harina de Panadería. Cafetería sigue con su propia bodega (otro stock físico, como ahora).
+
+**En Cocina → Bodega (después de confirmar):**
+- Cada área ve **solo las materias primas de las que es responsable**: Panadería ve las harinas aunque las use Bollería; Bollería, sus insumos; Pastelería, los suyos; Cafetería, igual que antes.
+- **Llegó mercadería** y **Conteo de bodega** ofrecen solo esas. El título dice la bodega: "Conteo de bodega · Panadería · hoy".
+- La ayuda dice "Bodega Panadería: las materias primas de las que Panadería es responsable…", con un (i) que lo explica.
+- **Bajo el mínimo** (arriba de la Bodega y la línea en Hoy / Bitácora de turno): solo lo suyo. Sin precios.
+- **Correo:** la tablet pide el aviso solo de lo suyo y llega a Administración y a **las jefas de esa área** (no a las demás). Cafetería nunca recibe la harina; Bollería no recibe lo de Panadería.
+
+**Lo de antes no se pierde:** el stock de cada materia prima sigue en el mismo lugar (`stockmp/{mpId}`, `conteosmp/{mpId}`). Los conteos y llegadas anotados antes (por cualquier área de Producción) siguen valiendo para la responsable: si Bollería contó la harina ayer, ese conteo sigue siendo el último de la harina de Panadería. Cambiar la responsable más adelante tampoco mueve nada.
+
+**Cómo queda guardado (para el que venga):**
+- `config/bodegas` = `{ modo: 'responsable', areas: { PAN: 'PAN', BOL: 'BOL', PAS: 'PAS', CAF: 'CAF' }, responsables: { mpId: 'PAN' | 'BOL' | 'PAS' }, confirmado: { por, en }, historial: [...] }` (lo escribe Sistema Fën). Sin `responsables` para una materia prima = Panadería.
+- Stock de producción: `stockmp/{mpId}` en su responsable (el documento de siempre). Si alguna vez una materia prima se marca crítica en **otra** bodega de producción, va en `stockmp/{BODEGA}__{mpId}` (Sistema Fën avisa; lo que consume un área va a la suya si la tiene; si no, a la responsable).
+- Llegadas y conteos nuevos: `dias/{AREA}_{fecha}.bodega[id].bodega = 'PAN' | 'BOL' | 'PAS' | 'CAF'`. Cada guardado declara las anotaciones que toca en `movIds` (de a 30), para las reglas v1.8.0. Las de antes ('PROD' o sin campo) van al stock de siempre de la responsable.
+- El cálculo compartido es `consumo.js` v0.17.0 (copia exacta en Sistema Fën v0.65.0): `bodegaConsumo`, `bodegaMov`, `puestos`, `idStockEn`, `areasAviso`.
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** cambian `app.js`, `consumo.js`, `estilos.css`, `firestore-produccion.rules` (v1.8.0: va a la consola, paso 1); solo versión: `config.js`, `index.html` y `README.md`. Sin cambios: `modelo.js`, `bolleria.js`, `registros.js` (los tres iguales a los de Sistema Fën; `consumo.js` también es copia exacta), `buscador.js`, `cafeteria.js`, `congelado.js`, `editor.js`, `firebase.js`, `logo-fen.png`. Lo más simple: subir **todos** los del zip.
+
+**Orden de instalación (importante):**
+1. **Reglas v1.8.0** (`firestore-produccion.rules`, en este zip y en `reglas-produccion-v1.8.0.zip`): consola de Firebase → **fen-produccion** → Firestore Database → **Reglas** → pegar todo → **Publicar**. Mientras no confirmes los responsables, dejan hacer lo mismo que la v1.7.0 (las tablets sin recargar siguen funcionando).
+2. **Script de Producción v2.11.0** (`produccion-script-v2.11.0.zip`): reemplaza **Seguridad** y **SistemaFen** → Implementar → Gestionar implementaciones → ✏️ → **Nueva versión**. Ping: `"version":"2.11.0"`.
+3. **Sistema Fën v0.65.0**.
+4. **Cocina v0.17.0** (este zip). **Recarga todas las tablets** (abajo debe decir Cocina v0.17.0).
+5. Sistema Fën → Producción → Bodega → **Calcular** → **Asignar responsables**: revisa la propuesta y **Confirmar responsables**. Desde ese momento cada área ve solo lo suyo.
+6. Si alguna tablet no se recargó, después de confirmar no podrá anotar llegadas ni conteos (las reglas le piden lo nuevo): recargarla.
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.17.0**. Antes de confirmar: la Bodega se ve igual que ayer.
+- [ ] Después de confirmar, Panadería → Bodega: "Bodega Panadería: las materias primas de las que Panadería es responsable", con las harinas; **no** aparece la mantequilla ni lo de Cafetería. El (i) lo explica.
+- [ ] Bollería → Bodega: solo lo suyo (sin harinas). El conteo ofrece solo lo suyo.
+- [ ] Pastelería → Bodega: solo lo suyo. Cafetería → Bodega: igual que antes.
+- [ ] Bollería marca masas hechas → en Sistema Fën (Calcular) la harina de **Panadería** baja; en la tablet de Panadería se ve el stock nuevo.
+- [ ] Algo de Panadería bajo el mínimo: aviso arriba de la Bodega de Panadería (no en Bollería) y un correo a ti y a las jefas de Panadería.
+- [ ] Celular, tablet y PC: nada cortado ni corrido hacia el lado.
+
+**Si algo sale mal:** vuelve a subir la v0.16.4 **y** en Sistema Fën no confirmes (o, si ya confirmaste, avísame: se vuelve a la bodega común cambiando `config/bodegas` a `modo: 'compartida'` y `areas` como estaba, lo que quedó en `antes`; no se pierde nada). Las reglas v1.8.0 pueden quedar.
 
 ## Novedades v0.16.4 · Panadería → Hoy: las masas van en "Recetas del día" (pedido de Emmanuel con las jefas de Panadería, 13-oct)
 **Esta entrega incluye la v0.16.3** (chips de estado, pie de masa madre destacado, check en lo terminado; ver abajo). Si la v0.16.3 no se instaló, se instalan juntas.
@@ -715,7 +756,7 @@ Quién entra a cada área sigue saliendo de la app actual (Administración → S
 index.html, app.js, modelo.js, bolleria.js, registros.js, consumo.js, congelado.js, cafeteria.js, editor.js, firebase.js, estilos.css, logo-fen.png  → GitHub, repo fen-cocina (raíz)
 config.js                          → GitHub, raíz (lleva el firebaseConfig de fen-produccion)
 README.md                          → GitHub, raíz
-firestore-produccion.rules (v1.6.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
+firestore-produccion.rules (v1.8.0) → consola de Firebase de fen-produccion → Firestore → Reglas (la copia en GitHub es respaldo)
 ```
 
 ## Instalación (una vez)

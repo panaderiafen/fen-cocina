@@ -1,6 +1,6 @@
 rules_version = '2';
 // ═══════════════════════════════════════════════
-//  Reglas de fen-produccion  v1.7.0  (Cocina + Sistema Fën)
+//  Reglas de fen-produccion  v1.8.0  (Cocina + Sistema Fën)
 //  Van en la consola de Firebase → Firestore → Reglas (esta copia es de respaldo).
 //
 //  · Administración (Sistema Fën): admins/{uid}. Lee y escribe todo.
@@ -26,6 +26,16 @@ rules_version = '2';
 //    el documento de SU bodega. Las llegadas y conteos van dentro del día del área (dias/{AREA}_{fecha}.bodega, con su
 //    bodega): cada área ya solo escribe sus días, y el cálculo de Sistema Fën no cuenta lo que un área anote para otra
 //    bodega (las reglas no pueden revisar cada anotación dentro del mapa).
+//  · v1.8.0: BODEGAS POR ÁREA RESPONSABLE (Cocina v0.17.0, Sistema Fën v0.65.0). Mientras config/bodegas.modo no sea
+//    'responsable', todo igual que la v1.7.0. Con modo 'responsable' (lo confirma Sistema Fën):
+//    - config/bodegas.responsables = { mpId: 'PAN' | 'BOL' | 'PAS' } (sin entrada = PAN); areas: PAN→PAN, BOL→BOL, PAS→PAS, CAF→CAF.
+//    - conteosmp: un área escribe conteosmp/{mpId} solo si su bodega es la responsable de esa materia prima; en otra
+//      bodega, conteosmp/{SU_BODEGA}__{mpId} (Cafetería: CAF__{mpId}, como antes).
+//    - Llegadas y conteos (dias/{AREA}_{fecha}.bodega): todo guardado que agrega o cambia anotaciones de bodega declara
+//      cuáles en movIds (lista, hasta 30) y cada una debe ser de la bodega del área y de una materia prima de la que el
+//      área es responsable (Cafetería: bodega 'CAF'); si dice su documento de stock (stock), tiene que ser el de su área
+//      (idConteo). Anular una anotación que ya existía siempre se puede. Nada se borra.
+//    - stockmp sigue siendo solo de Administración (crítica, mínimo, envase y el cálculo).
 //  · Nadie borra: lo que tiene historia no se elimina.
 // ═══════════════════════════════════════════════
 service cloud.firestore {
@@ -51,6 +61,49 @@ service cloud.firestore {
     }
     // Id del documento de una materia prima en una bodega: PROD = el id de la materia prima; otra = BODEGA__mpId
     function idEnBodega(b, mp) { return b == 'PROD' ? mp : b + '__' + mp; }
+    // v1.8.0: bodegas por área responsable
+    function cfgBodegas() {
+      let ruta = /databases/$(database)/documents/config/bodegas;
+      return exists(ruta) ? get(ruta).data : {};
+    }
+    function modoResp() { return cfgBodegas().get('modo', '') == 'responsable'; }
+    // La bodega responsable de una materia prima (sin elegir: PAN)
+    function respDe(mp) { return cfgBodegas().get('responsables', {}).get(mp, 'PAN'); }
+    // El documento del último conteo de un área: su responsable = {mpId}; otra bodega = {BODEGA}__{mpId}
+    function idConteo(area, mp) {
+      let b = bodegaDeArea(area);
+      return !modoResp() ? idEnBodega(b, mp) : (b != 'CAF' && respDe(mp) == b ? mp : b + '__' + mp);
+    }
+    // Llegadas y conteos dentro del día: las anotaciones que cambian (claves de dias.bodega) deben estar en movIds
+    function movsAntes() { return resource == null ? {} : resource.data.get('bodega', {}); }
+    function movsCambiados() { return request.resource.data.get('bodega', {}).diff(movsAntes()).affectedKeys(); }
+    // Una anotación: anular una que ya existía, o una de la bodega del área (b) y de una materia prima de la que es
+    // responsable (c = config/bodegas, leído una vez); si dice su documento de stock, el de su área
+    function movOk(l, i, c, b) {
+      return l.size() <= i || movUno(l[i], request.resource.data.bodega[l[i]], c.get('responsables', {}), b);
+    }
+    function movUno(k, a, rs, b) {
+      return a.mp is string && a.mp.size() <= 60 && (
+        (a.get('anulado', null) != null && movsAntes().get(k, null) != null)
+        || (a.get('bodega', '') == b
+            && a.get('stock', b != 'CAF' && rs.get(a.mp, 'PAN') == b ? a.mp : b + '__' + a.mp) == (b != 'CAF' && rs.get(a.mp, 'PAN') == b ? a.mp : b + '__' + a.mp)
+            && (b == 'CAF' || rs.get(a.mp, 'PAN') == b || exists(/databases/$(database)/documents/stockmp/$(b + '__' + a.mp)))));
+    }
+    // Hasta 30 anotaciones por guardado (las reglas no tienen ciclos: se revisan una por una)
+    function movsOk() {
+      let d = request.resource.data;
+      let c = cfgBodegas();
+      let b = bodegaDeArea(d.area);
+      let l = d.get('movIds', []);
+      return c.get('modo', '') != 'responsable' || movsCambiados().size() == 0 || (d.get('movIds', null) is list && l.size() <= 30
+        && movsCambiados().hasOnly(l)
+        && movOk(l, 0, c, b) && movOk(l, 1, c, b) && movOk(l, 2, c, b) && movOk(l, 3, c, b) && movOk(l, 4, c, b)
+        && movOk(l, 5, c, b) && movOk(l, 6, c, b) && movOk(l, 7, c, b) && movOk(l, 8, c, b) && movOk(l, 9, c, b)
+        && movOk(l, 10, c, b) && movOk(l, 11, c, b) && movOk(l, 12, c, b) && movOk(l, 13, c, b) && movOk(l, 14, c, b)
+        && movOk(l, 15, c, b) && movOk(l, 16, c, b) && movOk(l, 17, c, b) && movOk(l, 18, c, b) && movOk(l, 19, c, b)
+        && movOk(l, 20, c, b) && movOk(l, 21, c, b) && movOk(l, 22, c, b) && movOk(l, 23, c, b) && movOk(l, 24, c, b)
+        && movOk(l, 25, c, b) && movOk(l, 26, c, b) && movOk(l, 27, c, b) && movOk(l, 28, c, b) && movOk(l, 29, c, b));
+    }
 
     match /admins/{uid} { allow read: if dentro() && request.auth.uid == uid; allow write: if false; }
     match /cuentas/{uid} { allow read: if dentro() && (request.auth.uid == uid || admin()); allow write: if admin(); }
@@ -65,11 +118,12 @@ service cloud.firestore {
     match /stockmp/{id} { allow read: if admin() || deArea(); allow write: if admin(); }
     // Último conteo de cada materia prima en cada bodega (lo ven todas las áreas). v1.7.0: un área solo escribe el
     // de SU bodega: conteosmp/{mpId} si es de Producción, conteosmp/CAF__{mpId} si es Cafetería
+    // v1.8.0 (con responsables): conteosmp/{mpId} solo el área responsable de esa materia prima (idConteo)
     match /conteosmp/{id} {
       allow read: if admin() || deArea();
       allow create, update: if admin() || (deArea() && tengo(request.resource.data.area) && request.resource.data.cantidad is number
         && request.resource.data.fecha is string && texto(request.resource.data.mp, 60)
-        && id == idEnBodega(bodegaDeArea(request.resource.data.area), request.resource.data.mp));
+        && id == idConteo(request.resource.data.area, request.resource.data.mp));
       allow delete: if false;
     }
 
@@ -86,12 +140,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // El día: dias/{AREA}_{fecha} (hechos, notas, tandas)
+    // El día: dias/{AREA}_{fecha} (hechos, notas, tandas). v1.8.0: llegadas y conteos (bodega) por área responsable (movsOk)
     match /dias/{id} {
       allow get: if admin() || (deArea() && idDeMiArea(id));
       allow list: if admin() || (deArea() && tengo(resource.data.area));
       allow create, update: if admin() || (deArea() && idDeMiArea(id) && areaDeDatos(id, request.resource.data)
-        && request.resource.data.fecha is string);
+        && request.resource.data.fecha is string && movsOk());
       allow delete: if false;
     }
 

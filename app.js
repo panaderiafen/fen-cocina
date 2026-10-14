@@ -1,5 +1,10 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.16.4
+//  fën · Cocina — la app de las jefas  v0.17.0
+//  v0.17.0: BODEGAS POR ÁREA RESPONSABLE (Sistema Fën v0.65.0 → "Asignar responsables"). Cuando se confirman, cada área ve,
+//  cuenta y recibe en Bodega solo las materias primas de las que es responsable (Panadería la harina, aunque la use Bollería;
+//  Bollería, Pastelería y Cafetería las suyas). El aviso de bajo el mínimo (arriba de la Bodega y en Hoy) es solo de lo suyo
+//  y el correo va a Administración y a las jefas de esta área (script v2.11.0). Cada guardado de llegadas o conteos declara
+//  las anotaciones que toca (movIds) para las reglas v1.8.0. Sin confirmar: igual que la v0.16.4.
 //  v0.16.4: Panadería → Hoy: las masas (sub recetas "Masa …", menos masa madre, poolish y pie) van en "Recetas del día",
 //  primero, con su tarjeta completa y "Para: 150 Ciabatta · 20 Focaccia (1,5 c/u)". La jefa elige cuáles en "Ordenar Hoy"
 //  (ajustes/{AREA}__hoy.hoy.recetasDia = { subId: true|false }; sin elegir: lo de por defecto). Mismas claves (sub_{id}).
@@ -72,14 +77,14 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.16.4';
+} from './firebase.js?v=0.17.0';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.16.4';
+import * as ED from './editor.js?v=0.17.0';
 import * as R from './registros.js?v=0.11.0';
-import * as K from './consumo.js?v=0.16.0';
-import * as CG from './congelado.js?v=0.16.4';
-import * as CF from './cafeteria.js?v=0.16.4';
+import * as K from './consumo.js?v=0.17.0';
+import * as CG from './congelado.js?v=0.17.0';
+import * as CF from './cafeteria.js?v=0.17.0';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -1529,6 +1534,7 @@ $('principal').addEventListener('click', async ev => {
   }
   if (ds.periodo) { E[ds.periodoDe] = ds.periodo; pintar(); return; }
   if (ds.mermaNueva) { dialogoMerma(); return; }
+  if (ds.infoBod) { const p = $('bod-resp-info'), abrir = p.hidden; p.hidden = !abrir; b.setAttribute('aria-expanded', String(abrir)); return; }
   if (ds.bodega) { dialogoBodega(ds.bodega); return; }
   if (ds.turnoNuevo) { dialogoTurno(ds.turnoNuevo); return; }
   if (ds.calEditar) { dialogoCalibracion(); return; }
@@ -1536,9 +1542,11 @@ $('principal').addEventListener('click', async ev => {
   if (ds.anularReg) {
     const [campo, fecha, id] = ds.anularReg.split('|');
     if (!confirm('¿Anular esta anotación? Queda en el registro como anulada y deja de contar.')) return;
-    guardarSinEsperar(guardarDia(fecha, { [campo]: { [id]: { anulado: { por: quien(), en: ahoraIso() } } }, registrosPendientes: true }), 'Anotación anulada.');
+    guardarSinEsperar(guardarDia(fecha, { [campo]: { [id]: { anulado: { por: quien(), en: ahoraIso() } } }, ...(campo === 'bodega' ? { movIds: [id] } : {}), registrosPendientes: true }), 'Anotación anulada.');
     const b0 = campo === 'bodega' ? (((E.diasArea[fecha] || {}).bodega) || {})[id] : null;
-    const kc = b0 ? K.idStock(b0.bodega || K.BODEGA_PRINCIPAL, b0.mp) : '';   // v0.16.0: el último conteo es por bodega
+    // v0.16.0: el último conteo es por bodega; v0.17.0: el documento de la bodega de esa anotación ('PROD' o sin campo = el de siempre)
+    const b0d = b0 ? K.destinoMov('ADM', b0, mapaB()) : null;
+    const kc = b0d ? b0d.docId : '';
     if (b0 && b0.tipo === 'conteo' && E.conteosmp[kc] && E.conteosmp[kc].id === id && E.conteosmp[kc].area === E.area)
       guardarSinEsperar(setDoc(doc(db, 'conteosmp', kc), { area: E.area, mp: b0.mp, ...(kc !== b0.mp ? { bodega: b0.bodega } : {}), fecha: E.conteosmp[kc].fecha, cantidad: E.conteosmp[kc].cantidad, anulado: true }, { merge: true }));
     programarRegistros();
@@ -2090,9 +2098,15 @@ function dialogoTurno(tipo) {
 // día de hoy del área (dias.bodega, con bodega: 'CAF' o 'PROD') y se copia a la planilla (MP_stock_movimientos).
 // El stock lo calcula Sistema Fën (stockmp/{id}.estado; id = idStock(bodega, mp)); la tablet le suma lo contado o
 // recibido después de ese cálculo (stockAhora) para avisar al tiro si queda bajo el mínimo.
+// v0.17.0: BODEGAS POR ÁREA RESPONSABLE (cuando Sistema Fën las confirma: config/bodegas.modo = 'responsable'). Cada área
+// ve, cuenta y recibe solo las materias primas de las que es responsable (la harina, en Panadería, aunque la use Bollería).
+// El documento de stock es el de siempre (stockmp/{mpId}) en la responsable; en otra bodega, {BODEGA}__{mpId} (K.idStockEn).
+// Lo nuevo se anota con la bodega del área ('PAN', 'BOL'…) y cada guardado declara qué anotaciones toca (movIds, reglas v1.8.0).
 const bodegaArea = () => K.bodegaDe(E.area, E.mapa);
-const smDe = (m, bod = bodegaArea()) => E.stockmp[K.idStock(bod, m.id)];
-const ctrl = m => K.controlEn(bodegaArea(), m, smDe(m));
+const mapaB = () => E.mapa || K.mapaBodegas(null);
+const idEn = (mpId, bod = bodegaArea()) => K.idStockEn(bod, mpId, mapaB());
+const smDe = (m, bod = bodegaArea()) => E.stockmp[idEn(m.id, bod)];
+const ctrl = m => K.controlEn(bodegaArea(), m, smDe(m), mapaB());
 function criticas() {
   return E.mps.filter(m => (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta' && ctrl(m).critica)
     .sort((a, b) => (ED.habilitada(b, E.area) - ED.habilitada(a, E.area)) || a.nombre.localeCompare(b.nombre, 'es'));
@@ -2100,9 +2114,9 @@ function criticas() {
 // Lo de la bodega de esta área que hay ahora (o null) y si está bajo el mínimo
 function ahoraDe(m) {
   const bod = bodegaArea(), sm = smDe(m) || {}, c = ctrl(m);
-  const llegadas = Object.values(E.diasArea).flatMap(d => Object.values((d && d.bodega) || {})).filter(a => a && a.tipo === 'llegada' && a.mp === m.id && (a.bodega || K.BODEGA_PRINCIPAL) === bod);
-  const conteo = E.conteosmp[K.idStock(bod, m.id)];
-  const a = K.stockAhora(sm.estado, conteo && (conteo.bodega || K.BODEGA_PRINCIPAL) === bod ? conteo : null, llegadas);
+  const llegadas = Object.values(E.diasArea).flatMap(d => Object.values((d && d.bodega) || {})).filter(a => a && a.tipo === 'llegada' && a.mp === m.id && K.bodegaMov(E.area, a, mapaB()) === bod);
+  const conteo = conteoDe(m.id);
+  const a = K.stockAhora(sm.estado, conteo, llegadas);
   return { ...(a || {}), sinDatos: !a, bajo: !!a && K.bajoMinimo(a.hay, c.seguridad), c };
 }
 // Las de la bodega de esta área bajo el mínimo ahora: [{ m, hay, minimo, unidad }]
@@ -2116,6 +2130,14 @@ function lineaBodegaHoy() {
   avisarStock(b);
   return `<a class="linea-bodega" href="#bodega">${ic('alerta')}<span>Bodega: ${b.map(o => `<b>${esc(o.m.nombre)}</b> bajo el mínimo (hay ${esc(K.textoEnv(o.hay, o.unidad, o.env))})`).join(' · ')}</span></a>`;
 }
+// El último conteo (conteosmp) de una materia prima en la bodega de esta área: el documento manda (v0.17.0: {mpId} en la
+// responsable, aunque lo haya contado otra área antes de confirmar). En otra bodega (CAF__…), que diga esa bodega.
+function conteoDe(mpId) {
+  const id = idEn(mpId), c = E.conteosmp[id];
+  if (!c) return null;
+  if (id !== String(mpId) && (c.bodega || K.BODEGA_PRINCIPAL) !== bodegaArea()) return null;
+  return c;
+}
 // Correo a Administración y a las jefas de esta bodega (script v2.9.0, stock_alerta): el script manda uno por día,
 // bodega y materia prima. Aquí se recuerda lo ya pedido hoy en el equipo, para no llamarlo a cada rato.
 const K_ALERTAS = 'fen_cocina_alertas_stock';
@@ -2127,7 +2149,7 @@ function avisarStock(bajos) {
   const nuevas = bajos.filter(o => !hechas[K.claveAlerta(hoy, bod, o.m.id)]);
   if (!nuevas.length) return;
   E.alertando = true;
-  llamarScript({ action: 'stock_alerta', area: E.area, fecha: hoy, alertas: nuevas.map(o => ({ mp: o.m.id, hay: Math.round(o.hay) })) })
+  llamarScript({ action: 'stock_alerta', area: E.area, bodega: bod, fecha: hoy, alertas: nuevas.map(o => ({ mp: o.m.id, hay: Math.round(o.hay) })) })
     .then(r => {
       if (!r || r.ok !== true) return;
       const limpio = {}; Object.entries(hechas).forEach(([k, v]) => { if (k.slice(0, 10) >= M.sumarDias(hoy, -3)) limpio[k] = v; });
@@ -2139,9 +2161,10 @@ function avisarStock(bajos) {
 }
 function vistaBodega() {
   if (!E.cargado.mps || !E.cargado.diasArea || !E.cargado.stockmp) return '<div class="vacio">Cargando…</div>';
-  const cr = criticas(), hoy = M.hoyTxt(), bod = bodegaArea(), nomB = K.nombreBodega(bod, E.mapa);
+  const cr = criticas(), hoy = M.hoyTxt(), bod = bodegaArea(), nomB = K.nombreBodega(bod, E.mapa), resp = K.esResponsable(mapaB());
   const otrasAreas = K.areasDeBodega(bod, E.mapa).filter(a => a !== E.area && AREAS[a]).map(a => AREAS[a].nombre);
-  const per = { desde: M.sumarDias(hoy, -13), hasta: hoy }, movs = R.delPeriodo(E.diasArea, 'bodega', per).filter(a => (a.bodega || K.BODEGA_PRINCIPAL) === bod);
+  // v0.17.0: las anotaciones de esta área (las de antes de confirmar también, aunque hoy sean de otra bodega: es su historia)
+  const per = { desde: M.sumarDias(hoy, -13), hasta: hoy }, movs = R.delPeriodo(E.diasArea, 'bodega', per).filter(a => resp || (a.bodega || K.BODEGA_PRINCIPAL) === bod);
   // Lo que calculó Sistema Fën (stock teórico y alertas), más lo contado o recibido después
   const est = m => (smDe(m) || {}).estado || null;
   const ahora = {}; cr.forEach(m => { ahora[m.id] = ahoraDe(m); });
@@ -2151,19 +2174,22 @@ function vistaBodega() {
     const c = ahora[m.id].c, e = est(m), a = ahora[m.id];
     const txt = a.sinDatos ? (!e ? 'Sin calcular todavía' : 'Falta un conteo') : `${K.textoEnv(a.hay, c.unidad, c.envase)}${a.desde === 'calculo' && e.alcanza !== null && e.alcanza !== undefined ? ` · alcanza para ~${M.unidades(e.alcanza)} ${M.num(e.alcanza) === 1 ? 'día' : 'días'}` : a.desde === 'conteo' ? ' · recién contado' : ''}`;
     const uc = ultimoConteo(m.id);
-    return `<div class="fila sub fila-bod"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${a.bajo || (e && e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
+    return `<div class="fila sub fila-bod"><span>${esc(m.nombre)}${!ED.habilitada(m, E.area) && !K.esResponsable(mapaB()) ? ' <small class="ayuda">(otra área)</small>' : ''}${uc ? `<small class="ayuda bloque">Contada ${esc(uc.texto)}</small>` : ''}</span><span class="${a.bajo || (e && e.bajoDesde) ? 'txt-ojo' : ''}">${esc(txt)}${c.seguridad ? ` · mínimo ${esc(K.texto(c.seguridad, c.unidad))}` : ''}</span></div>`;
   };
   const calculado = cr.map(est).filter(Boolean).map(e => e.en).sort().pop();
   return `
     ${bajos.length ? `<div class="nota ojo banner-bodega" role="alert">${ic('alerta')}<span><b>Bajo el mínimo en la bodega ${esc(nomB)}:</b> ${bajos.map(m => `<b>${esc(m.nombre)}</b> (hay ${esc(K.textoEnv(ahora[m.id].hay, ahora[m.id].c.unidad, ahora[m.id].c.envase))}, mínimo ${esc(K.texto(ahora[m.id].c.seguridad, ahora[m.id].c.unidad))})`).join(' · ')}. Administración ya recibe el aviso por correo; avísenle igual si no viene un pedido.</span></div>` : ''}
     <div class="cab-seccion">
-      <p class="ayuda">Bodega <b>${esc(nomB)}</b>${otrasAreas.length ? ` (la comparten ${esc(AREAS[E.area].nombre)}, ${esc(otrasAreas.join(' y '))}: lo que entra y lo que cuentan aquí vale para todas)` : ' (solo de esta área)'}. El consumo se descuenta solo: lo que marcan como hecho${E.area === 'CAF' ? ', lo vendido en la caja, la calibración diaria, el café de la bitácora y lo derramado' : ''}.</p>
+      <p class="ayuda">${resp && E.area !== 'CAF'
+        ? `Bodega <b>${esc(nomB)}</b>: las materias primas de las que ${esc(AREAS[E.area].nombre)} es responsable. Aquí se cuentan y se recibe lo que llega. El consumo se descuenta solo: lo que marca como hecho cualquier área que las use. <button type="button" class="btn-i btn-i-linea" data-info-bod="1" aria-expanded="false" aria-controls="bod-resp-info" aria-label="Qué es esto">${ic('info')}</button>`
+        : `Bodega <b>${esc(nomB)}</b>${otrasAreas.length ? ` (la comparten ${esc(AREAS[E.area].nombre)}, ${esc(otrasAreas.join(' y '))}: lo que entra y lo que cuentan aquí vale para todas)` : ' (solo de esta área)'}. El consumo se descuenta solo: lo que marcan como hecho${E.area === 'CAF' ? ', lo vendido en la caja, la calibración diaria, el café de la bitácora y lo derramado' : ''}.`}</p>
+      ${resp && E.area !== 'CAF' ? `<p class="ayuda info-texto" id="bod-resp-info" hidden>Administración decidió qué área está a cargo de cada materia prima crítica. Aquí aparecen solo las de ${esc(AREAS[E.area].nombre)}: las cuentan, anotan lo que llega y reciben el aviso por correo cuando quedan bajo el mínimo. Su stock es uno solo y baja también con lo que usan las otras áreas (por ejemplo, la harina de Panadería baja con lo que usan Bollería y Pastelería). Si falta alguna que ustedes cuidan, pídanle a Administración que la pase a ${esc(AREAS[E.area].nombre)}.</p>` : ''}
       <div class="botones-bit"><button type="button" class="btn btn-fuerte" data-bodega="llegada">${ic('bodega')}Llegó mercadería</button><button type="button" class="btn-sec" data-bodega="conteo">${ic('pasos')}Conteo de bodega</button></div>
     </div>
     ${pronto.length ? `<div class="nota ojo">${ic('alerta')}<span>${pronto.map(m => `<b>${esc(m.nombre)}</b> queda bajo el mínimo el ${esc(M.fechaLarga(est(m).bajoDesde).toLowerCase())}`).join(' · ')}. Avísale a Administración si no viene un pedido.</span></div>` : ''}
     <div class="caja">
       <span class="rotulo">Materias primas críticas · bodega ${esc(nomB)}</span>
-      ${cr.length ? `<div class="lista-mini">${cr.map(fila).join('')}</div>` : '<span class="ayuda">Administración todavía no marca materias primas críticas en esta bodega.</span>'}
+      ${cr.length ? `<div class="lista-mini">${cr.map(fila).join('')}</div>` : `<span class="ayuda">${resp && E.area !== 'CAF' ? `Administración todavía no deja materias primas críticas a cargo de ${esc(AREAS[E.area].nombre)}.` : 'Administración todavía no marca materias primas críticas en esta bodega.'}</span>`}
       ${calculado ? `<span class="ayuda">Calculado en Sistema Fën: ${esc(M.fechaCorta(M.hoyTxt(new Date(calculado))))} ${esc(horaDe(calculado))}.</span>` : ''}
     </div>
     <h2 class="titulo">Llegadas y conteos de ${esc(AREAS[E.area].nombre)} (14 días)</h2>
@@ -2174,7 +2200,7 @@ function vistaBodega() {
 }
 // Último conteo de una materia prima en la bodega de esta área (de cualquier área de esa bodega): { texto, hoyOtra }
 function ultimoConteo(mpId) {
-  const bod = bodegaArea(), c = E.conteosmp[K.idStock(bod, mpId)]; if (!c || c.anulado || !c.fecha || (c.bodega || K.BODEGA_PRINCIPAL) !== bod) return null;
+  const c = conteoDe(mpId); if (!c || c.anulado || !c.fecha) return null;
   const hoy = M.hoyTxt(), area = AREAS[c.area] ? AREAS[c.area].nombre : c.area;
   return {
     texto: `${c.fecha === hoy ? 'hoy' : M.fechaCorta(c.fecha)} ${horaDe(c.en)} · ${area}${c.por ? ' (' + c.por + ')' : ''} · ${K.texto(c.cantidad, c.unidad)}`,
@@ -2187,7 +2213,7 @@ function dialogoBodega(tipo) {
   const bod = bodegaArea();
   const campo = m => {
     const u = K.unidadMp(m), uc = conteo ? ultimoConteo(m.id) : null;
-    const notas = [!ED.habilitada(m, E.area) ? 'De otra área' : '', uc ? 'Último conteo: ' + uc.texto : ''].filter(Boolean);
+    const notas = [!ED.habilitada(m, E.area) && !K.esResponsable(mapaB()) ? 'De otra área' : '', uc ? 'Último conteo: ' + uc.texto : ''].filter(Boolean);
     const env = ctrl(m).envase;
     const etiqueta = `<label for="bo-${esc(m.id)}">${esc(m.nombre)}${env ? `<small>En ${esc(K.envases(env.nombre, 2))} de ${esc(K.texto(env.tamano, u))} + lo suelto</small>` : ''}${notas.map(n => `<small>${esc(n)}</small>`).join('')}${uc && uc.hoyOtra ? `<small class="txt-ojo" data-ya-contada="${esc(m.id)}">${esc(uc.hoyOtra)}: si la cuentan de nuevo, vale la última.</small>` : ''}</label>`;
     if (!env) return `<div class="fila-aj">${etiqueta}<input id="bo-${esc(m.id)}" data-bo="${esc(m.id)}" inputmode="decimal" autocomplete="off"><span class="gr">${K.unidadEntrada(u)}</span></div>`;
@@ -2230,17 +2256,23 @@ function dialogoBodega(tipo) {
       const r = leer(m); if (r === null) continue;
       if (r === 'mal') { $('bo-error').textContent = `${m.nombre}: escribe solo números.`; return; }
       if (!conteo && !(r.total > 0)) { $('bo-error').textContent = `${m.nombre}: la cantidad que llegó tiene que ser mayor que 0.`; return; }
-      const u = K.unidadMp(m), a = { tipo, mp: m.id, nombre: m.nombre, bodega: bod, cantidad: Math.round(r.total * 100) / 100, unidad: u, nota, por: quien(), en: ahoraIso() };
+      const u = K.unidadMp(m), a = { tipo, mp: m.id, nombre: m.nombre, bodega: bod, ...(K.esResponsable(mapaB()) ? { stock: idEn(m.id, bod) } : {}), cantidad: Math.round(r.total * 100) / 100, unidad: u, nota, por: quien(), en: ahoraIso() };
       if (r.env) a.detalle = { envase: r.env.nombre, tamano: r.env.tamano, envases: r.envases, sueltos: Math.round(r.sueltos * 100) / 100 };
       entradas[idAnot()] = a;
     }
     if (!Object.keys(entradas).length) { $('bo-error').textContent = conteo ? 'Escribe al menos un conteo.' : 'Escribe lo que llegó.'; return; }
     d.close();
     const hoy = M.hoyTxt();
-    guardarSinEsperar(guardarDia(hoy, { bodega: entradas, registrosPendientes: true }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
+    // v0.17.0: cada guardado declara las anotaciones que toca (movIds; las reglas v1.8.0 revisan que sean de esta área), de a 30
+    const ids = Object.keys(entradas);
+    for (let i = 0; i < ids.length; i += 30) {
+      const parte = Object.fromEntries(ids.slice(i, i + 30).map(k => [k, entradas[k]]));
+      guardarSinEsperar(guardarDia(hoy, { bodega: parte, movIds: Object.keys(parte), registrosPendientes: true }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
+    }
     // El último conteo de cada una, para que lo vean las otras áreas
     // v0.16.0: por bodega (conteosmp/{mpId} en Producción, conteosmp/CAF__{mpId} en Cafetería; reglas v1.7.0)
-    if (conteo) Object.entries(entradas).forEach(([id, a]) => guardarSinEsperar(setDoc(doc(db, 'conteosmp', K.idStock(bod, a.mp)), { mp: a.mp, nombre: a.nombre, bodega: bod, area: E.area, fecha: hoy, id, cantidad: a.cantidad, unidad: a.unidad, por: a.por, en: a.en, anulado: false })));
+    // v0.17.0: en la bodega responsable, conteosmp/{mpId} (el de siempre); reglas v1.8.0: solo el área responsable
+    if (conteo) Object.entries(entradas).forEach(([id, a]) => guardarSinEsperar(setDoc(doc(db, 'conteosmp', idEn(a.mp, bod)), { mp: a.mp, nombre: a.nombre, bodega: bod, area: E.area, fecha: hoy, id, cantidad: a.cantidad, unidad: a.unidad, por: a.por, en: a.en, anulado: false })));
     programarRegistros();
   };
 }
