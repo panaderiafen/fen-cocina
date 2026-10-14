@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════ 
 //  fën · Cocina — la app de las jefas  v0.17.0
 //  v0.17.0: BODEGAS POR ÁREA RESPONSABLE (Sistema Fën v0.65.0 → "Asignar responsables"). Cuando se confirman, cada área ve,
 //  cuenta y recibe en Bodega solo las materias primas de las que es responsable (Panadería la harina, aunque la use Bollería;
