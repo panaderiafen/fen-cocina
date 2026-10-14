@@ -1,5 +1,8 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.16.3
+//  fën · Cocina — la app de las jefas  v0.16.4
+//  v0.16.4: Panadería → Hoy: las masas (sub recetas "Masa …", menos masa madre, poolish y pie) van en "Recetas del día",
+//  primero, con su tarjeta completa y "Para: 150 Ciabatta · 20 Focaccia (1,5 c/u)". La jefa elige cuáles en "Ordenar Hoy"
+//  (ajustes/{AREA}__hoy.hoy.recetasDia = { subId: true|false }; sin elegir: lo de por defecto). Mismas claves (sub_{id}).
 //  v0.16.3: chips de estado en Recetas (todas las áreas), pie de masa madre destacado en Hoy, check junto al título de lo terminado.
 //  v0.16.2: revisión de pantallas (celular, tablets, PC): marcarTablasAnchas() avisa cuando una tabla se desliza.
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
@@ -69,14 +72,14 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.16.3';
+} from './firebase.js?v=0.16.4';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.16.3';
+import * as ED from './editor.js?v=0.16.4';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.16.0';
-import * as CG from './congelado.js?v=0.16.3';
-import * as CF from './cafeteria.js?v=0.16.3';
+import * as CG from './congelado.js?v=0.16.4';
+import * as CF from './cafeteria.js?v=0.16.4';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -512,7 +515,11 @@ function vistaHoy() {
         ${btnHecho('pie_' + t)}
       </div>`).join('');
   E.tarjetas = {};
-  const elabs = el.subRecetas.map(s => tarjetaElab(s, s.recetaId ? ajHoy[s.recetaId] : null, dia, hecho, c)).join('');
+  // v0.16.4: las masas elegidas van en Recetas del día (primero); el resto sigue en Elaboraciones previas
+  const masasDia = el.subRecetas.filter(vaEnRecetasDia), previas = el.subRecetas.filter(s => !vaEnRecetasDia(s));
+  const elabs = previas.map(s => tarjetaElab(s, s.recetaId ? ajHoy[s.recetaId] : null, dia, hecho, c)).join('');
+  const masasHtml = masasDia.map(s => tarjetaElab(s, s.recetaId ? ajHoy[s.recetaId] : null, dia, hecho, c, planDia)).join('');
+  const enDia = new Set(masasDia.map(s => s.id));
   const ins = Object.entries(el.insumos).filter(([, g]) => g > 0.5).sort((a, b) => b[1] - a[1]);
   const harina = M.harinaDe(el.insumos);
   const cajaIns = ins.length ? `<div class="caja">
@@ -521,17 +528,18 @@ function vistaHoy() {
       <span class="ayuda">${harina ? 'de harina en total' : esc(ins[0][0])}</span>
       <details class="desp"><summary>Ver todos (${ins.length})</summary><div class="lista-mini">${ins.map(([n, g]) => `<div class="fila sub"><span>${esc(n)}</span><span>${M.gramos(g)}</span></div>`).join('')}</div></details>
     </div>` : '';
-  const recetas = planDia.map(x => tarjetaReceta(x, ajHoy[x.receta.id], dia, hecho)).join('');
+  const recetas = planDia.map(x => tarjetaReceta(x, ajHoy[x.receta.id], dia, hecho, enDia)).join('');
   const notas = dia.notas || {};
   // Lo que falta marcar del día: recetas y elaboraciones previas (las recetas descuentan la bodega)
-  const pendientes = [...planDia.map(x => 'rec_' + x.receta.id), ...el.subRecetas.map(s => 'sub_' + s.id)].filter(k => !hecho(k));
+  const pendientes = [...masasDia.map(s => 'sub_' + s.id), ...planDia.map(x => 'rec_' + x.receta.id), ...previas.map(s => 'sub_' + s.id)].filter(k => !hecho(k));
   const avisoHecho = `<div class="nota neutra aviso-hecho">${ic('alerta')}<span><b>Marcar terminada descuenta la bodega</b> (las materias primas de esa receta). Al cerrar el día, que todo lo hecho quede marcado.</span>
       ${pendientes.length ? `<button type="button" class="btn-sec" data-todo-hecho="${esc(pendientes.join(','))}">${ic('check')}Marcar todo como hecho (${pendientes.length})</button>` : `<span class="chip-ok">${ic('ok')}Todo marcado</span>`}</div>`;
   return nav + `
     <section class="resumen" aria-label="Antes de empezar">${cajaPie}${cajaIns}</section>
-    ${elabs ? `<h2 class="titulo">Elaboraciones previas · ${el.subRecetas.length}</h2>${elabs}` : ''}
-    <h2 class="titulo">Recetas del día · ${planDia.length}</h2>
+    ${elabs ? `<h2 class="titulo">Elaboraciones previas · ${previas.length}</h2>${elabs}` : ''}
+    <div class="titulo-fila-hoy"><h2 class="titulo">Recetas del día · ${planDia.length + masasDia.length}</h2>${subRecetasSemana(lunes).length ? `<button type="button" class="btn-link" data-ordenar-hoy="1">${ic('ajuste')}Ordenar Hoy</button>` : ''}</div>
     ${avisoHecho}
+    ${masasHtml}
     ${recetas}
     <section class="caja">
       <label class="rotulo" for="notas-dia">Notas del día (las ve la dupla)</label>
@@ -582,7 +590,7 @@ function tarjeta(o) {
       </div>`;
   }).join('');
   const pasos = o.receta ? (o.receta.pasos || []).filter(Boolean) : [], proc = o.receta && o.receta.procedimiento;
-  return `<article class="receta ${o.elab ? 'elab' : ''} ${h ? 'terminada' : ''}" ${o.attr || (o.elab ? 'data-elab-card' : 'data-receta-card')}="${esc(o.idCard)}">
+  return `<article class="receta ${o.elab ? 'elab' : ''} ${o.clase || ''} ${h ? 'terminada' : ''}" ${o.attr || (o.elab ? 'data-elab-card' : 'data-receta-card')}="${esc(o.idCard)}">
       <div class="receta-cab">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
           ${o.rotulo || o.elab ? `<span class="rotulo">${esc(o.rotulo || 'Elaboración previa')}</span>` : ''}
@@ -604,24 +612,87 @@ function tarjeta(o) {
     </article>`;
 }
 
-function tarjetaReceta({ receta: r, unidades }, aj, dia, hecho) {
+function tarjetaReceta({ receta: r, unidades }, aj, dia, hecho, enDia) {
   const c = ctx(), esPan = E.area === 'PAN', P = M.panadero(r);
   // Un producto hecho de una masa (Ciabatta = Masa ciabatta): la harina y el agua se ajustan en la masa
-  const masas = (r.ingredientes || []).filter(i => M.esSub(i, c) && !M.esPieMM(i.nombre)).map(i => i.nombre);
+  const subsR = (r.ingredientes || []).filter(i => M.esSub(i, c) && !M.esPieMM(i.nombre)), masas = subsR.map(i => i.nombre);
+  const dondeAj = subsR.length && enDia && subsR.every(i => enDia.has(i.id)) ? 'arriba, en Recetas del día' : 'elaboraciones previas';
   return tarjeta({ clave: r.id, idCard: r.id, rid: r.id, receta: r, nombre: r.nombre, unidad: r.unidad === 'g' ? 'g' : 'un', total: unidades, dia, hecho,
     claveHecho: 'rec_' + r.id, aj, escalar: t => M.escalar(r, t, aj, c), conPct: esPan,
     detalle: `${M.unidades(unidades)} ${r.unidad === 'g' ? 'g' : 'unidades'}`,
-    ajustable: esPan && P.ajustable, ajusteEn: esPan && !P.ajustable && masas.length ? `Harina y agua: se ajustan en ${masas.join(', ')} (elaboraciones previas)` : '' });
+    ajustable: esPan && P.ajustable, ajusteEn: esPan && !P.ajustable && masas.length ? `Harina y agua: se ajustan en ${masas.join(', ')} (${dondeAj})` : '' });
 }
 
-function tarjetaElab(s, aj, dia, hecho, c) {
+function tarjetaElab(s, aj, dia, hecho, c, planDia) {
   const rs = s.recetaId ? E.recetas.find(r => r.id === s.recetaId) : null, P = rs ? M.panadero(rs) : null;
   const total = s.porUnidades ? s.unidades : Math.round(s.gramos);
   const para = [...new Set(s.usan.map(u => u.nombre))];
+  // v0.16.4: una masa que va en "Recetas del día" dice para cuántos productos es (y cuánto lleva cada uno)
+  const enDia = !!planDia;
   return tarjeta({ clave: 'sub_' + s.id, idCard: s.id, elab: true, rid: rs ? rs.id : null, receta: rs, nombre: s.nombre, unidad: s.porUnidades ? 'un' : 'g', total, dia, hecho,
     claveHecho: 'sub_' + s.id, aj, escalar: t => M.escalarSub(s, t, aj, c), conPct: E.area === 'PAN',
+    rotulo: enDia ? 'Masa · sub receta' : '', clase: enDia ? 'masa-dia' : '',
     detalle: s.porUnidades ? `${M.unidades(s.unidades)} un · ${M.gramos(s.gramos)}` : M.gramos(s.gramos),
-    para: `Para ${esc(para.join(', '))}`, ajustable: E.area === 'PAN' && !!(P && P.ajustable) });
+    para: enDia ? esc(paraLinea(s, planDia)) : `Para ${esc(para.join(', '))}`, ajustable: E.area === 'PAN' && !!(P && P.ajustable) });
+}
+
+// ── v0.16.4 · Sub recetas que van en "Recetas del día" (por área) ──
+// ajustes/{AREA}__hoy = { area, recetaId: '_hoy', periodos: [], hoy: { recetasDia: { subId: true|false }, por, en } }
+// (va en ajustes porque las jefas ya pueden escribir ahí: reglas v1.7.0 sin cambios; periodos vacío = no es un ajuste).
+// Lo que la jefa no tocó sigue lo de por defecto: las "Masa …" (no la masa madre, el poolish ni el pie).
+const CLAVE_HOY = '_hoy';
+const normTxt = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const masaPorDefecto = nombre => { const n = normTxt(nombre); return /^masa /.test(n) && !/masa madre|poolish|\bpie\b/.test(n); };
+const elegidasHoy = () => ((E.ajustes[CLAVE_HOY] || {}).hoy || {}).recetasDia || {};
+const vaEnRecetasDia = s => { const v = elegidasHoy()[s.id]; return typeof v === 'boolean' ? v : masaPorDefecto(s.nombre); };
+// "Para: 150 Ciabatta · 20 Focaccia (1,5 c/u)": cuántos de cada producto del día y cuánto de la masa lleva cada uno
+function paraLinea(s, planDia) {
+  const porOrigen = {}; s.usan.forEach(u => { porOrigen[u.nombre] = (porOrigen[u.nombre] || 0) + u.gramos; });
+  const partes = planDia.filter(x => porOrigen[x.receta.nombre] > 0).map(x => {
+    const g = porOrigen[x.receta.nombre], n = M.num(x.unidades), un = x.receta.unidad === 'g' ? ' g' : '';
+    let cu = '';
+    if (n > 0 && s.porUnidades && s.gramos > 0) { const v = g * s.unidades / s.gramos / n; if (Math.abs(v - 1) > 0.001) cu = ` (${M.unidades(Math.round(v * 1000) / 1000)} c/u)`; }
+    else if (n > 0 && !s.porUnidades && x.receta.unidad !== 'g') cu = ` (${M.unidades(Math.round(g / n * 10) / 10)} g c/u)`;
+    return `${M.unidades(n)}${un} ${x.receta.nombre}${cu}`;
+  });
+  return 'Para: ' + (partes.length ? partes.join(' · ') : [...new Set(s.usan.map(u => u.nombre))].join(', '));
+}
+// Las sub recetas que usa lo planificado en la semana (para elegir aunque hoy no toquen)
+function subRecetasSemana(lunes) {
+  const plan = E.planes[lunes], vistas = {};
+  if (!plan) return [];
+  for (let i = 0; i < 7; i++) {
+    const f = M.sumarDias(lunes, i), pd = M.planDelDia(plan, f, E.recetas);
+    if (pd.length) M.elaboracionesDia(pd, ajustesDe(f), ctx()).subRecetas.forEach(s => { if (!vistas[s.id]) vistas[s.id] = { id: s.id, nombre: s.nombre }; });
+  }
+  return Object.values(vistas).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+function dialogoOrdenarHoy() {
+  const subs = subRecetasSemana(M.lunesDe(E.fecha)); if (!subs.length) return;
+  const el = elegidasHoy(), d = $('dialogo');
+  d.innerHTML = `<form method="dialog" class="dlg" id="f-ordenar-hoy">
+      <div class="dlg-cab-i"><h2>Ordenar Hoy</h2><button type="button" class="btn-i" data-info-hoy="1" aria-expanded="false" aria-controls="oh-info" aria-label="Qué es esto">${ic('info')}</button></div>
+      <p class="ayuda info-texto" id="oh-info" hidden>Las sub recetas marcadas se muestran en <b>Recetas del día</b>, primero y con su tarjeta completa (ingredientes, tandas, ajuste, terminada), con la línea "Para:" de los productos que las usan. Las no marcadas quedan en <b>Elaboraciones previas</b> (masa madre, poolish…). Solo cambia dónde se ven: marcarla terminada, la bodega y el historial son iguales. Vale para todos los días de esta área y la dupla lo ve al instante.</p>
+      <fieldset class="lista-check"><legend class="rotulo">Sub recetas que van en Recetas del día</legend>
+        ${subs.map(s => `<label class="check"><input type="checkbox" data-oh="${esc(s.id)}" ${vaEnRecetasDia(s) ? 'checked' : ''}> ${esc(s.nombre)}${typeof el[s.id] === 'boolean' ? '' : ' <span class="ayuda">(por defecto)</span>'}</label>`).join('')}
+      </fieldset>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Guardar</button></div>
+    </form>`;
+  d.showModal();
+  d.onsubmit = ev => ev.preventDefault();
+  d.oninput = null;
+  d.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.infoHoy) { const p = $('oh-info'), abrir = p.hidden; p.hidden = !abrir; b.setAttribute('aria-expanded', String(abrir)); return; }
+    if (b.dataset.cerrar) { d.close(); return; }
+    if (b.dataset.guardar) {
+      const recetasDia = {}; d.querySelectorAll('[data-oh]').forEach(i => { recetasDia[i.dataset.oh] = i.checked; });
+      d.close();
+      const datos = { area: E.area, recetaId: CLAVE_HOY, hoy: { recetasDia, por: quien(), en: ahoraIso() } };
+      if (!E.ajustes[CLAVE_HOY]) datos.periodos = [];
+      guardarSinEsperar(setDoc(doc(db, 'ajustes', `${E.area}_${CLAVE_HOY}`), datos, { merge: true }), 'Hoy ordenado.');
+    }
+  };
 }
 
 
@@ -1480,6 +1551,7 @@ $('principal').addEventListener('click', async ev => {
   }
   if (ds.cierre) { dialogoCierre(); return; }
   if (ds.tandas) { dialogoTandas(ds.tandas); return; }
+  if (ds.ordenarHoy) { dialogoOrdenarHoy(); return; }
   if (ds.ajustar) { dialogoAjuste(ds.ajustar); return; }
   if (ds.accion === 'agregar') {
     const id = $('agregar-receta').value; if (!id) { avisar('Elige una receta.', true); return; }

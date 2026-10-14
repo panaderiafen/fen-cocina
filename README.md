@@ -1,6 +1,6 @@
-# fën · Cocina · v0.16.3
+# fën · Cocina · v0.16.4
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 y v0.16.3: 13 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,33 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.16.4 · Panadería → Hoy: las masas van en "Recetas del día" (pedido de Emmanuel con las jefas de Panadería, 13-oct)
+**Esta entrega incluye la v0.16.3** (chips de estado, pie de masa madre destacado, check en lo terminado; ver abajo). Si la v0.16.3 no se instaló, se instalan juntas.
+
+**1. Masa ciabatta, Masa baguette (y cualquier "Masa …") en Recetas del día.** Van **primero**, antes de los productos, con la misma tarjeta completa que tenían (ingredientes escalados, tandas, ajuste de harina/agua, Marcar terminada, pasos) y una línea nueva: **"Para: 150 Ciabatta · 20 Focaccia (1,5 c/u)"** (cuántos de cada producto y cuánta masa lleva cada uno cuando no es 1).
+- **Masa madre blanca, Poolish y el pie** siguen en **Elaboraciones previas** (se hacen antes).
+- Si no queda ninguna elaboración previa, esa sección no aparece.
+- En la Ciabatta / Focaccia dice "Harina y agua: se ajustan en Masa ciabatta (arriba, en Recetas del día)".
+
+**2. "Ordenar Hoy"** (link chico junto a "Recetas del día", con botón (i)): la jefa marca qué sub recetas van en Recetas del día. Por defecto: las que empiezan con "Masa " (menos masa madre, poolish y pie). Vale para todos los días del área y la dupla lo ve al instante. Se guarda en `ajustes/PAN__hoy` (`{ area, recetaId: '_hoy', periodos: [], hoy: { recetasDia: { SR020: true, … }, por, en } }`): las reglas v1.7.0 ya dejan escribir ahí a la cuenta del área (**no cambian las reglas**). Lo que no se tocó sigue lo de por defecto.
+
+**3. "Marcar todo como hecho"** incluye las masas, con **las mismas claves de siempre** (`sub_SR020`…): la bodega y el historial quedan iguales (la bodega descuenta solo los productos, `rec_…`; la masa no se cuenta dos veces). **Insumos del día** sin cambios.
+
+**4. Bollería, Pastelería y Cafetería:** sin cambios (su Hoy no tiene "Ordenar Hoy").
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** cambian `app.js` y `estilos.css`; solo versión: `config.js`, `index.html` y `README.md`. Si no instalaste la v0.16.3, sube también `editor.js` (lo más simple: **todos** los del zip). Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `consumo.js` (los cuatro iguales a los de Sistema Fën), `buscador.js`, `cafeteria.js`, `congelado.js`, `firebase.js`, reglas (siguen las v1.7.0, no hay que publicar nada en Firebase) y script. Sistema Fën: nada.
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.16.4** (y lo de la lista de la v0.16.3, si se instalan juntas).
+- [ ] Panadería → Hoy: **Masa ciabatta** y **Masa baguette** aparecen arriba en "Recetas del día", con "Para: 150 Ciabatta · 20 Focaccia (1,5 c/u)" (con los números del día).
+- [ ] Masa madre blanca y Poolish siguen en "Elaboraciones previas".
+- [ ] "Marcar todo como hecho" marca también las masas; el stock de la bodega queda igual que antes (solo cuentan los productos).
+- [ ] "Ordenar Hoy" → (i) explica; desmarcar Masa ciabatta → Guardar: vuelve a Elaboraciones previas (si estaba terminada, sigue terminada). Volver a marcarla.
+- [ ] Bollería y Pastelería → Hoy: igual que antes.
+- [ ] Celular, tablet y PC: nada cortado ni corrido hacia el lado.
+
+**Si algo sale mal:** vuelve a subir la v0.16.3 (no cambia datos; el documento `ajustes/PAN__hoy` queda y no molesta).
 
 ## Novedades v0.16.3 · estado de cada receta a la vista, pie de masa madre destacado y check en lo terminado (pedido de Emmanuel, 13-oct)
 Solo cambia cómo se ve: los datos, las reglas y los cálculos son los mismos.
