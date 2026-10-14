@@ -1,6 +1,6 @@
-# fën · Cocina · v0.16.2
+# fën · Cocina · v0.16.3
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2: 13 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 y v0.16.3: 13 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,35 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.16.3 · estado de cada receta a la vista, pie de masa madre destacado y check en lo terminado (pedido de Emmanuel, 13-oct)
+Solo cambia cómo se ve: los datos, las reglas y los cálculos son los mismos.
+
+**1. Recetas (las 4 áreas): un chip con el estado en cada receta**, en la lista, en Propuestas, en el detalle y en el formulario:
+- **Borrador** (rojo suave) · **En prueba** (amarillo) · **En revisión** (celeste; "aprobándose" también se ve como En revisión) · **Consolidada** (verde: la vigente, aprobada) · **Anulada** (gris).
+- **Devuelta** (rojo más fuerte, con ícono de alerta): va **arriba de la lista** y debajo dice **"Devuelta por Administración: <comentario>"**.
+- Una receta consolidada con un cambio pendiente muestra los dos: **"Consolidada" + "Cambio en revisión"** (o "Cambio en prueba", "Cambio en borrador", "Cambio devuelto").
+- En la lista, las anuladas quedan al final. Colores en pastel con texto legible (contraste AA, ≥ 4,5:1).
+
+**2. Panadería → Hoy: el pie de masa madre** (sigue primero) tiene **borde azul** y el nombre va en un **chip azul** ("Pie de masa madre blanca"), como el chip "Hoy" pero en azul, para que no se confunda con el color de Panadería. Vale para cualquier pie (blanca o integral).
+
+**3. Terminada:** al marcar terminada una tarjeta (recetas, elaboraciones previas, masas, empastes), además del título en verde aparece un **check junto al título** (para lectores de pantalla: "Terminada"). En el pie de masa madre, el check va junto al chip al marcarlo hecho.
+
+**Revisado** en celular (390), tablet vertical (768), tablet acostada (1024) y PC (1280): en el celular los chips del detalle y del formulario bajan a una línea propia bajo el título.
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** cambian `app.js`, `editor.js` y `estilos.css`; solo versión: `config.js`, `index.html` y `README.md`. Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `consumo.js` (los cuatro iguales a los de Sistema Fën), `buscador.js`, `cafeteria.js`, `congelado.js`, `firebase.js`, reglas (siguen las v1.7.0) y script. Requiere la v0.16.2 instalada (si no, sube todos los del zip).
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.16.3**.
+- [ ] Recetas: cada receta tiene su chip (Consolidada verde, En prueba amarillo, Borrador rojo suave, En revisión celeste, Anulada gris).
+- [ ] Una receta con un cambio pendiente muestra "Consolidada" + "Cambio en revisión".
+- [ ] Si Administración devuelve un cambio: esa receta queda primera, con el chip rojo "Cambio devuelto" y la línea "Devuelta por Administración: …". También arriba en Propuestas.
+- [ ] Al abrir una receta (o su propuesta), los mismos chips junto al título; en el celular, en una línea bajo el título.
+- [ ] Panadería → Hoy: el pie de masa madre sigue primero, con borde azul y el nombre en el chip azul.
+- [ ] Marcar terminada una receta o elaboración: el título en verde y el check al lado.
+- [ ] Celular, tablet y PC: nada cortado ni corrido hacia el lado.
+
+**Si algo sale mal:** vuelve a subir la v0.16.2 (solo cambia cómo se ve).
 
 ## Novedades v0.16.2 · cada pantalla se ve bien en el celular, las tablets y el PC (regla de Emmanuel, 13-oct)
 Se revisaron **todas las pantallas** de las 4 áreas (Hoy, Planificación, Bitácora, Metas, Masas, Merma, Bodega, Recetas y el formulario, Bitácora de turno) y los diálogos (anotar en la Bitácora, inventario, empastes, hice empastes, merma, derramado, calibración, conteo, llegada, ajuste, tandas, copiar semana, cambiar de área) en celular (390×844), tablet vertical (768×1024), tablet horizontal (1024×768) y PC (1280×900). Solo cambia cómo se ve: los datos y los cálculos son los mismos.

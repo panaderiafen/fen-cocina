@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.15.0
+//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.16.3
+//  v0.16.3: chip de estado (chipEstado) en la lista, las propuestas (devueltas arriba) y el formulario.
 //  v0.5.0: Pastelería también crea y edita recetas aquí. v0.8.0: Cafetería también; v0.15.0: textos propios de
 //  Cafetería (se vende en la caja, un tamaño = una receta, café en gramos por shot, vasos y tapas como insumos).
 //  Las jefas de Panadería y Bollería crean y editan recetas aquí. Una receta vigente NUNCA
@@ -13,7 +14,7 @@
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
 import * as M from './modelo.js?v=0.11.0';
-import { conBuscador } from './buscador.js?v=0.16.2';
+import { conBuscador } from './buscador.js?v=0.16.3';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }
 export function configurar(api) { A = api; }
@@ -22,6 +23,24 @@ export const AREAS_EDITAN = ['PAN', 'BOL', 'PAS', 'CAF'];   // v0.8.0: Cafeterí
 export const ESTADOS_P = { borrador: 'Borrador', en_prueba: 'En prueba', en_revision: 'En revisión', aprobando: 'Aprobándose', devuelta: 'Devuelta', aprobada: 'Aprobada', anulada: 'Anulada' };
 const ABIERTA = p => p && !['aprobada', 'anulada'].includes(p.estado);
 const EDITABLE = p => p && ['borrador', 'en_prueba', 'devuelta'].includes(p.estado);
+// v0.16.3: chip de estado, igual en todas las áreas (lista de recetas, propuestas, detalle y formulario).
+// Recetas de la planilla (consolidada, en_prueba, borrador, pendiente_aprobación, anulada) y propuestas
+// (borrador, en_prueba, en_revision, aprobando, devuelta, aprobada, anulada). "Aprobando" se ve como En revisión.
+const CHIP = {
+  borrador: ['borrador', 'Borrador', 'Cambio en borrador'], en_prueba: ['prueba', 'En prueba', 'Cambio en prueba'],
+  en_revision: ['revision', 'En revisión', 'Cambio en revisión'], aprobando: ['revision', 'En revisión', 'Cambio en revisión'],
+  'pendiente_aprobación': ['revision', 'En revisión', 'Cambio en revisión'], pendiente_aprobacion: ['revision', 'En revisión', 'Cambio en revisión'],
+  consolidada: ['consolidada', 'Consolidada', 'Cambio consolidado'], aprobada: ['consolidada', 'Consolidada', 'Cambio consolidado'], vigente: ['consolidada', 'Consolidada', 'Cambio consolidado'],
+  anulada: ['anulada', 'Anulada', 'Cambio anulado'], devuelta: ['devuelta', 'Devuelta', 'Cambio devuelto']
+};
+// cambio = true: la propuesta abierta de una receta ya consolidada ("Cambio en revisión")
+export function chipEstado(estado, cambio = false) {
+  const c = CHIP[estado] || ['borrador', String(estado || 'Sin estado').replace(/_/g, ' '), 'Cambio propuesto'];
+  return `<span class="chip-est est-${c[0]}">${c[0] === 'devuelta' ? A.ic('alerta') : ''}${A.esc(cambio ? c[2] : c[1])}</span>`;
+}
+// El último "devuelta" del historial: { por, comentario }
+export const devueltaDe = p => p && p.estado === 'devuelta' ? [...(p.historial || [])].reverse().find(h => h.estado === 'devuelta') || {} : null;
+export const lineaDevuelta = p => { const d = devueltaDe(p); return d ? `<span class="linea-devuelta">Devuelta por Administración${d.comentario ? ': ' + A.esc(d.comentario) : ''}</span>` : ''; };
 const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const esHarina = n => /^harina/.test(norm(n));
 const nuevoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -174,7 +193,7 @@ function subEnUnidades(id) {
 export function vistaPropuestas() {
   const E = A.E, esc = A.esc;
   if (!AREAS_EDITAN.includes(E.area)) return '';
-  const abiertas = Object.values(E.propuestas || {}).filter(ABIERTA).sort((a, b) => String(b.pid).localeCompare(String(a.pid)));
+  const abiertas = Object.values(E.propuestas || {}).filter(ABIERTA).sort((a, b) => (b.estado === 'devuelta') - (a.estado === 'devuelta') || String(b.pid).localeCompare(String(a.pid)));
   const pedidos = Object.values(E.solicitudes || {}).filter(s => s.estado === 'pendiente' || (s.resueltaEn && Date.now() - new Date(s.resueltaEn).getTime() < 7 * 864e5))
     .sort((a, b) => String(b.en || '').localeCompare(String(a.en || '')));
   const nombreP = p => (p.datos && p.datos.nombre) || 'Receta nueva sin nombre';
@@ -182,7 +201,8 @@ export function vistaPropuestas() {
     ${abiertas.length ? `<h2 class="titulo">Propuestas · ${abiertas.length}</h2><div class="lista-recetas">${abiertas.map(p => `<button type="button" class="item-receta" data-ed-abrir="${esc(p.pid)}">
         <b>${esc(nombreP(p))}</b>
         <small>${p.recetaId ? 'Cambio a una receta vigente' : 'Receta nueva'}${p.origen === 'ajuste' ? ' · desde el ajuste de harina/agua' : ''} · ${esc((p.historial || []).slice(-1)[0]?.por || p.creadaPor || '')}</small>
-        <span class="estado est-${esc(p.estado)}">${esc(ESTADOS_P[p.estado] || p.estado)}</span>
+        <span class="chips-est">${p.recetaId ? chipEstado('consolidada') + chipEstado(p.estado, true) : chipEstado(p.estado)}</span>
+        ${lineaDevuelta(p)}
       </button>`).join('')}</div>` : ''}
     ${pedidos.length ? `<h2 class="titulo">Materias primas pedidas</h2><div class="lista-bit">${pedidos.map(s => `<div class="anot"><div><b>${esc(s.tipo === 'habilitar' ? 'Habilitar ' : 'Nueva: ')}${esc(s.nombre)}</b><span class="ayuda">${esc(s.por || '')}${s.receta ? ' · para ' + esc(s.receta) : ''}</span></div><span class="estado">${s.estado === 'pendiente' ? 'Pedida' : s.estado === 'resuelta' ? 'Lista' : 'No se creó'}</span></div>`).join('')}</div>` : ''}`;
 }
@@ -226,7 +246,7 @@ export function vistaEditor() {
   if (p.estado === 'en_prueba') acciones.push(`<button type="button" class="btn-sec" data-ed-estado="borrador">Volver a borrador</button>`);
   if (p.estado === 'en_revision') acciones.push(`<button type="button" class="btn-sec" data-ed-estado="borrador">Retirar de revisión</button>`);
   return `<div class="nav-fecha"><button type="button" class="btn-flecha" data-ed-cerrar="1" aria-label="Volver a Recetas">${ic('izq')}</button>
-      <h2>${esc(d.nombre || 'Receta nueva')}</h2><span class="estado est-${esc(p.estado)}">${esc(ESTADOS_P[p.estado] || p.estado)}</span>
+      <h2>${esc(d.nombre || 'Receta nueva')}</h2><span class="chips-est">${vigente ? chipEstado('consolidada') + chipEstado(p.estado, true) : chipEstado(p.estado)}</span>
       ${puede ? '<span class="ayuda" id="ed-guardado" aria-live="polite">Guardado</span>' : ''}</div>
     ${vigente ? `<p class="ayuda">Cambio a la versión vigente de <b>${esc(vigente.nombre)}</b> (v${esc(String(vigente.version || 1))}). La vigente sigue en la planificación hasta que Administración apruebe esta propuesta.</p>` : `<p class="ayuda">Receta nueva. Cuando Administración la apruebe, aparece en Recetas y en la planificación.</p>`}
     ${p.origen === 'ajuste' ? `<div class="nota neutra">${ic('ajuste')}<span>Viene del ajuste de harina/agua. El ajuste del día sigue valiendo mientras se revisa.</span></div>` : ''}

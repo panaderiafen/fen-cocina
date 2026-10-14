@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.16.2 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.16.3 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -7,6 +7,15 @@
   --mal: #8A3B32; --mal-fondo: #F8ECEA;
   /* área (por defecto Panadería) */
   --acento: #C68A63; --acento-texto: #8A5634; --tinte: #FBF3EC; --tinte-borde: #F0DECF;
+  /* v0.16.3 · estados de receta (pastel; texto sobre fondo ≥ 4,5:1) */
+  --est-borrador: #8A3B32; --est-borrador-fondo: #FBEAE7; --est-borrador-borde: #EFC9C3;
+  --est-prueba: #6B5212; --est-prueba-fondo: #FBF1CF; --est-prueba-borde: #EAD898;
+  --est-revision: #285B7A; --est-revision-fondo: #E3F1F9; --est-revision-borde: #BBD9EA;
+  --est-consolidada: #3F5E44; --est-consolidada-fondo: #E6F1E7; --est-consolidada-borde: #C3DCC6;
+  --est-anulada: #5E5852; --est-anulada-fondo: #EFEDEA; --est-anulada-borde: #DAD5CF;
+  --est-devuelta: #FFFFFF; --est-devuelta-fondo: #B23A2E; --est-devuelta-texto: #9A2B20;
+  /* pie de masa madre: azul que contrasta con el naranja/café de Panadería (6,1:1 con blanco) */
+  --pie: #2F6690;
 }
 body[data-area="BOL"] { --acento: #8F7DAE; --acento-texto: #5E4C7E; --tinte: #F4F1F8; --tinte-borde: #E6E0EE; }
 body[data-area="PAS"] { --acento: #7E9B82; --acento-texto: #4A6A4F; --tinte: #EFF4EF; --tinte-borde: #D9E5DA; }
@@ -489,4 +498,34 @@ input { text-overflow: ellipsis; }
   table.plan td.nombre { min-width: 130px; }
   table.metas td.nombre { min-width: 150px; }
   table.metas td input { width: 84px; }
+}
+
+/* v0.16.3 · Chips de estado de las recetas (todas las áreas) */
+.chips-est { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; align-self: flex-start; min-width: 0; }
+.nav-fecha .chips-est { align-self: center; }
+.chip-est { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; line-height: 1.3; padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+.chip-est svg.ic { width: 14px; height: 14px; stroke-width: 2; }
+.chip-est.est-borrador { background: var(--est-borrador-fondo); color: var(--est-borrador); border-color: var(--est-borrador-borde); }
+.chip-est.est-prueba { background: var(--est-prueba-fondo); color: var(--est-prueba); border-color: var(--est-prueba-borde); }
+.chip-est.est-revision { background: var(--est-revision-fondo); color: var(--est-revision); border-color: var(--est-revision-borde); }
+.chip-est.est-consolidada { background: var(--est-consolidada-fondo); color: var(--est-consolidada); border-color: var(--est-consolidada-borde); }
+.chip-est.est-anulada { background: var(--est-anulada-fondo); color: var(--est-anulada); border-color: var(--est-anulada-borde); }
+.chip-est.est-devuelta { background: var(--est-devuelta-fondo); color: var(--est-devuelta); border-color: var(--est-devuelta-fondo); }
+.linea-devuelta { font-size: 13px; line-height: 1.4; color: var(--est-devuelta-texto); font-weight: 600; overflow-wrap: anywhere; }
+.nav-fecha .linea-devuelta { flex-basis: 100%; }
+.item-receta:has(.est-devuelta) { border-color: var(--est-devuelta-fondo); border-width: 1.5px; }
+
+/* v0.16.3 · Pie de masa madre en Hoy (Panadería): borde azul y el nombre en un chip azul, como el de "Hoy" */
+.caja.caja-pie { border: 2px solid var(--pie); }
+.caja.caja-pie.hecha { border-color: var(--pie); }
+.rotulo-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.chip-pie { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; padding: 2px 10px; border-radius: 999px; background: var(--pie); color: #fff; }
+
+/* v0.16.3 · Terminada: el check junto al título (además del verde) */
+.marca-terminada { display: inline-flex; vertical-align: -3px; margin-left: 6px; color: var(--ok); }
+.marca-terminada svg.ic { width: 20px; height: 20px; stroke-width: 2.4; }
+.rotulo-pie .marca-terminada { margin-left: 0; vertical-align: middle; }
+@media (max-width: 600px) {
+  /* Encabezado de receta/propuesta en el celular: los chips bajo el título (el título no queda en una columna angosta) */
+  .nav-fecha .chips-est, .nav-fecha .linea-devuelta { flex-basis: 100%; padding-left: 52px; }
 }

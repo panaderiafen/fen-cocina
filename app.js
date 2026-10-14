@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.16.2
+//  fën · Cocina — la app de las jefas  v0.16.3
+//  v0.16.3: chips de estado en Recetas (todas las áreas), pie de masa madre destacado en Hoy, check junto al título de lo terminado.
 //  v0.16.2: revisión de pantallas (celular, tablets, PC): marcarTablasAnchas() avisa cuando una tabla se desliza.
 //  Base en vivo (Firebase fen-produccion): abre al tiro con lo guardado en el equipo,
 //  la dupla ve lo mismo al instante y cada cambio se guarda por separado (nunca
@@ -68,14 +69,14 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.16.2';
+} from './firebase.js?v=0.16.3';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.16.2';
+import * as ED from './editor.js?v=0.16.3';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.16.0';
-import * as CG from './congelado.js?v=0.16.2';
-import * as CF from './cafeteria.js?v=0.16.2';
+import * as CG from './congelado.js?v=0.16.3';
+import * as CF from './cafeteria.js?v=0.16.3';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -139,6 +140,8 @@ const IC = {
   imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
+// v0.16.3: el check junto al título de lo terminado (además del título en verde)
+const marcaTerminada = `<span class="marca-terminada" role="img" aria-label="Terminada">${ic('check')}</span>`;
 
 function avisar(texto, mal) {
   const f = $('flotante'); f.textContent = texto; f.classList.toggle('mal', !!mal); f.classList.remove('oculto');
@@ -501,8 +504,8 @@ function vistaHoy() {
       : `<button type="button" class="btn-sec" data-hecho="${esc(k)}" data-valor="1">${ic('caja')}${texto}</button>`;
   };
   const cajaPie = !pie ? '' : ['blanca', 'integral'].filter(t => pie[t].total > 0).map(t => `
-      <div class="caja ${hecho('pie_' + t) ? 'hecha' : ''}">
-        <span class="rotulo">Pie de masa madre ${t} · toca hoy</span>
+      <div class="caja caja-pie ${hecho('pie_' + t) ? 'hecha' : ''}" data-pie-card="${t}">
+        <span class="rotulo rotulo-pie"><span class="chip-pie">Pie de masa madre ${t}</span> · toca hoy${hecho('pie_' + t) ? marcaTerminada : ''}</span>
         <span class="grande num">${M.gramos(pie[t].total)}</span>
         <div class="lista-mini">${pie[t].desglose.map(x => `<div class="fila sub"><span>${esc(x.nombre)}</span><span>${M.gramos(x.gramos)}</span></div>`).join('')}</div>
         <span class="ayuda">Cubre hasta el ${esc(M.fechaCorta(pie.cubiertos[pie.cubiertos.length - 1]))} + reserva ${pie.reservaPct} %.</span>
@@ -583,7 +586,7 @@ function tarjeta(o) {
       <div class="receta-cab">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
           ${o.rotulo || o.elab ? `<span class="rotulo">${esc(o.rotulo || 'Elaboración previa')}</span>` : ''}
-          <b>${esc(o.nombre)}</b>
+          <b>${esc(o.nombre)}${h ? marcaTerminada : ''}</b>
           <span class="det">${o.detalle}${T.tandas.length > 1 ? ` · ${T.tandas.length} tandas (${T.tandas.map(fmt).join(' + ')})${T.usual ? ' · como siempre' : T.defecto ? ' · según la amasadora' : ''}` : ''}${h ? ` · terminada por ${esc(h.por)} a las ${esc(horaDe(h.en))}` : ''}</span>
           ${o.para ? `<span class="det">${o.para}</span>` : ''}
         </div>
@@ -1376,23 +1379,31 @@ function vistaRecetas() {
   if (!E.cargado.recetas) return '<div class="vacio">Cargando…</div>';
   if (E.recetaVista) return detalleReceta(E.recetas.find(r => r.id === E.recetaVista));
   const q = E.buscar.trim().toLowerCase();
+  // v0.16.3: las que tienen un cambio devuelto, arriba; después las consolidadas; las anuladas al final
+  const dev = r => { const p = ED.propuestaAbierta(r.id); return p && p.estado === 'devuelta' ? 0 : 1; };
+  const orden = r => r.estado === 'consolidada' ? 0 : r.estado === 'anulada' ? 2 : 1;
   const lista = E.recetas.filter(r => r.area === E.area && (!q || r.nombre.toLowerCase().includes(q)))
-    .sort((a, b) => (a.estado === 'consolidada' ? 0 : 1) - (b.estado === 'consolidada' ? 0 : 1) || a.nombre.localeCompare(b.nombre, 'es'));
+    .sort((a, b) => dev(a) - dev(b) || orden(a) - orden(b) || a.nombre.localeCompare(b.nombre, 'es'));
   return `${ED.vistaPropuestas()}${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
     <div class="campo"><label for="buscar-receta">Buscar</label><input id="buscar-receta" value="${esc(E.buscar)}" placeholder="Nombre de la receta" autocomplete="off"></div>
     ${ED.AREAS_EDITAN.includes(E.area) ? '<h2 class="titulo">Recetas</h2>' : ''}
     <div class="lista-recetas">${lista.map(r => `<button type="button" class="item-receta" data-receta="${esc(r.id)}">
         <b>${esc(r.nombre)}</b>
         <small>${r.tipo === 'sub_receta' ? 'Sub receta · ' : ''}rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}</small>
-        ${r.estado !== 'consolidada' ? `<span class="estado">${esc(ESTADOS[r.estado] || r.estado || 'Sin estado')}</span>` : ED.propuestaAbierta(r.id) ? '<span class="estado">Con cambios propuestos</span>' : ''}
+        ${chipsReceta(r)}
       </button>`).join('') || '<p class="ayuda">No hay recetas con ese nombre.</p>'}</div>`;
+}
+// v0.16.3: chip del estado de la receta + el de su propuesta abierta ("Consolidada" + "Cambio en revisión") y, si la devolvieron, el comentario
+function chipsReceta(r) {
+  const p = ED.propuestaAbierta(r.id);
+  return `<span class="chips-est">${ED.chipEstado(r.estado || 'borrador')}${p ? ED.chipEstado(p.estado, true) : ''}</span>${p ? ED.lineaDevuelta(p) : ''}`;
 }
 function detalleReceta(r) {
   if (!r) { E.recetaVista = null; return vistaRecetas(); }
   const cant = E.cantidadVista ?? M.porciones(r), e = M.escalar(r, cant, null, ctx()), esPan = E.area === 'PAN';
   const pasos = (r.pasos || []).filter(Boolean);
   return `<div class="nav-fecha"><button type="button" class="btn-flecha" data-volver="1" aria-label="Volver a la lista">${ic('izq')}</button><h2>${esc(r.nombre)}</h2>
-      ${r.estado !== 'consolidada' ? `<span class="estado">${esc(ESTADOS[r.estado] || r.estado || '')}</span>` : ''}
+      ${chipsReceta(r)}
       ${ED.AREAS_EDITAN.includes(E.area) && r.area === E.area ? `<button type="button" class="btn-sec" data-ed-editar="${esc(r.id)}">${ic('libro')}${ED.propuestaAbierta(r.id) ? 'Ver la propuesta abierta' : 'Editar (nueva versión)'}</button>` : ''}</div>
     <div class="caja">
       <div class="campo" style="max-width:260px"><label for="cant-receta">Cantidad (${r.unidad === 'g' ? 'gramos' : 'unidades'})</label><input id="cant-receta" inputmode="decimal" value="${esc(M.unidades(cant))}"></div>
