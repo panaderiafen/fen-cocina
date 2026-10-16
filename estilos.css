@@ -547,3 +547,8 @@ input { text-overflow: ellipsis; }
 
 /* v0.17.0 · Bodega por área responsable: el (i) en la línea de la ayuda (mismo toque de 44 px, sin agrandar la línea) */
 .btn-i.btn-i-linea { width: 44px; height: 44px; margin: -12px -6px -12px 0; vertical-align: middle; }
+
+/* v0.17.1 · Fermentación en bloque: la línea de lo terminado ("Hecho · Ana 11:00 · f.b. hasta 13:00") y la f.b. lista */
+.linea-hecho { display: inline-flex; align-items: flex-start; gap: 6px; align-self: flex-start; max-width: 100%; font-size: 14px; font-weight: 600; color: var(--ok); line-height: 1.35; overflow-wrap: anywhere; }
+.linea-hecho svg.ic { width: 18px; height: 18px; flex: none; margin-top: 1px; stroke-width: 2.4; }
+.linea-hecho.fb-lista { color: var(--ojo); background: var(--ojo-fondo); border: 1px solid #E8D29E; border-left: 4px solid var(--ojo); border-radius: 8px; padding: 4px 10px; }

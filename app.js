@@ -1,5 +1,8 @@
-// ═══════════════════════════════════════════════ 
-//  fën · Cocina — la app de las jefas  v0.17.0
+// ═══════════════════════════════════════════════
+//  fën · Cocina — la app de las jefas  v0.17.1
+//  v0.17.1: FERMENTACIÓN EN BLOQUE. Lo terminado dice "Hecho · Ana 11:00" (nombre corto y hora) y, si la receta tiene f.b.
+//    en config/{AREA}.fermentacionBloque (Sistema Fën), "· f.b. hasta 13:00"; el día de hoy, al llegar la hora,
+//    "· f.b. lista desde las 13:00" destacada (se revisa cada minuto sin leer nada). Cálculo en fermentacion.js.
 //  v0.17.0: BODEGAS POR ÁREA RESPONSABLE (Sistema Fën v0.65.0 → "Asignar responsables"). Cuando se confirman, cada área ve,
 //  cuenta y recibe en Bodega solo las materias primas de las que es responsable (Panadería la harina, aunque la use Bollería;
 //  Bollería, Pastelería y Cafetería las suyas). El aviso de bajo el mínimo (arriba de la Bodega y en Hoy) es solo de lo suyo
@@ -77,14 +80,15 @@
 import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
-} from './firebase.js?v=0.17.0';
+} from './firebase.js?v=0.17.1';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.17.0';
+import * as ED from './editor.js?v=0.17.1';
 import * as R from './registros.js?v=0.11.0';
-import * as K from './consumo.js?v=0.17.0';
-import * as CG from './congelado.js?v=0.17.0';
-import * as CF from './cafeteria.js?v=0.17.0';
+import * as K from './consumo.js?v=0.17.1';
+import * as CG from './congelado.js?v=0.17.1';
+import * as CF from './cafeteria.js?v=0.17.1';
+import * as FBQ from './fermentacion.js?v=0.17.1';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -127,6 +131,7 @@ const IC = {
   ajuste: '<path d="M5 7h9M18 7h1M5 17h3M12 17h7"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
   capas: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>',
   check: '<path d="M6 12.5l4 4 8-9"/>',
+  reloj: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>',
   gota: '<path d="M12 3.5c3 4 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6 5.5-10z"/>',
   caja: '<rect x="4" y="4" width="16" height="16" rx="4"/>',
@@ -508,7 +513,7 @@ function vistaHoy() {
   const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
   const btnHecho = (k, texto = 'Marcar hecho') => {
     const h = hecho(k);
-    return h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(k)}" data-valor="0">${ic('check')}Hecho · ${esc(h.por)} ${esc(horaDe(h.en))}</button>`
+    return h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(k)}" data-valor="0">${ic('check')}Hecho · ${esc(FBQ.nombreCorto(h.por))} ${esc(horaDe(h.en))}</button>`
       : `<button type="button" class="btn-sec" data-hecho="${esc(k)}" data-valor="1">${ic('caja')}${texto}</button>`;
   };
   const cajaPie = !pie ? '' : ['blanca', 'integral'].filter(t => pie[t].total > 0).map(t => `
@@ -600,8 +605,9 @@ function tarjeta(o) {
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
           ${o.rotulo || o.elab ? `<span class="rotulo">${esc(o.rotulo || 'Elaboración previa')}</span>` : ''}
           <b>${esc(o.nombre)}${h ? marcaTerminada : ''}</b>
-          <span class="det">${o.detalle}${T.tandas.length > 1 ? ` · ${T.tandas.length} tandas (${T.tandas.map(fmt).join(' + ')})${T.usual ? ' · como siempre' : T.defecto ? ' · según la amasadora' : ''}` : ''}${h ? ` · terminada por ${esc(h.por)} a las ${esc(horaDe(h.en))}` : ''}</span>
+          <span class="det">${o.detalle}${T.tandas.length > 1 ? ` · ${T.tandas.length} tandas (${T.tandas.map(fmt).join(' + ')})${T.usual ? ' · como siempre' : T.defecto ? ' · según la amasadora' : ''}` : ''}</span>
           ${o.para ? `<span class="det">${o.para}</span>` : ''}
+          ${h ? lineaHechoHtml(h, o.fbIds || [o.rid]) : ''}
         </div>
         ${o.aj && o.receta ? `<span class="chip">Ajuste: ${esc(textoAjuste(o.receta, o.aj))}</span>` : ''}
       </div>
@@ -616,6 +622,22 @@ function tarjeta(o) {
       </div>
     </article>`;
 }
+
+// v0.17.1 · La línea de lo terminado: "Hecho · Ana 11:00" y, con fermentación en bloque (config/{AREA}.fermentacionBloque),
+// "· f.b. hasta 13:00" o, el día de hoy y ya cumplida, "· f.b. lista desde las 13:00" (destacada: ícono, texto y borde).
+// Otro día: solo las horas. data-fb-fin: revisarFB() (cada minuto) repinta cuando llega la hora.
+function lineaHechoHtml(h, ids) {
+  const esHoy = E.fecha === M.hoyTxt(), min = FBQ.minutosFB(E.config, ids);
+  const l = FBQ.lineaHecho(h, min, esHoy ? Date.now() : null); if (!l) return '';
+  return `<span class="linea-hecho${l.lista ? ' fb-lista' : ''}"${l.fb && esHoy && !l.lista ? ` data-fb-fin="${l.fb.fin}"` : ''}>${ic(l.lista ? 'reloj' : 'check')}<span>${esc(l.texto)}</span></span>`;
+}
+function revisarFB() {
+  if ($('app').classList.contains('oculto') || vistaActual() !== 'hoy') return;
+  const ahora = Date.now();
+  if ([...document.querySelectorAll('[data-fb-fin]')].some(x => Number(x.dataset.fbFin) <= ahora)) repintar();
+}
+setInterval(revisarFB, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') revisarFB(); });
 
 function tarjetaReceta({ receta: r, unidades }, aj, dia, hecho, enDia) {
   const c = ctx(), esPan = E.area === 'PAN', P = M.panadero(r);
@@ -635,7 +657,7 @@ function tarjetaElab(s, aj, dia, hecho, c, planDia) {
   // v0.16.4: una masa que va en "Recetas del día" dice para cuántos productos es (y cuánto lleva cada uno)
   const enDia = !!planDia;
   return tarjeta({ clave: 'sub_' + s.id, idCard: s.id, elab: true, rid: rs ? rs.id : null, receta: rs, nombre: s.nombre, unidad: s.porUnidades ? 'un' : 'g', total, dia, hecho,
-    claveHecho: 'sub_' + s.id, aj, escalar: t => M.escalarSub(s, t, aj, c), conPct: E.area === 'PAN',
+    claveHecho: 'sub_' + s.id, fbIds: [s.id, s.recetaId], aj, escalar: t => M.escalarSub(s, t, aj, c), conPct: E.area === 'PAN',
     rotulo: enDia ? 'Masa · sub receta' : '', clase: enDia ? 'masa-dia' : '',
     detalle: s.porUnidades ? `${M.unidades(s.unidades)} un · ${M.gramos(s.gramos)}` : M.gramos(s.gramos),
     para: enDia ? esc(paraLinea(s, planDia)) : `Para ${esc(para.join(', '))}`, ajustable: E.area === 'PAN' && !!(P && P.ajustable) });

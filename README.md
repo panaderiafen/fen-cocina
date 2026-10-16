@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.0
+# fën · Cocina · v0.17.1
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,39 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.17.1 · Fermentación en bloque en lo terminado (pedido de Emmanuel, 15-oct)
+Va con **Sistema Fën v0.65.3** (ahí se pone cuánto dura la f.b. de cada receta). Sin reglas, script ni datos nuevos.
+
+**1. Lo terminado dice quién y a qué hora, en todas las tarjetas** (recetas, masas, elaboraciones previas, masas de Bollería, empastes): una línea verde bajo el título, **"✓ Hecho · Camila 11:00"** (el primer nombre). Reemplaza el "· terminada por Camila Fuentes a las 11:00" de antes. El pie de masa madre también usa el nombre corto ("Hecho · Camila 11:00").
+
+**2. Fermentación en bloque (f.b.).** Si en Sistema Fën la receta tiene f.b. (por ejemplo Masa ciabatta 2:00), al marcarla terminada:
+- **"✓ Hecho · Camila 11:00 · f.b. hasta 13:00"** (si pasa la medianoche: "hasta 01:00 (día siguiente)").
+- Cuando llega la hora (el día de hoy): **"f.b. lista desde las 13:00"**, destacada con un **reloj**, fondo amarillo suave y **borde a la izquierda** (no depende solo del color). Con Hoy abierto se revisa sola **cada minuto** (sin leer nada de la base; solo repinta si algo cambió de estado).
+- **Deshacer y volver a marcar**: la f.b. se calcula desde la nueva hora. **"Marcar todo como hecho"**: una sola hora para todo y la f.b. desde esa hora.
+- **Otro día** (flechas): se ven las horas guardadas ("f.b. hasta 13:00"), sin "lista".
+- **Sin f.b.**: solo "✓ Hecho · Camila 11:00".
+- Vale para cualquier área (lee `config/{AREA}.fermentacionBloque`, el mismo documento de configuración que ya escuchaba); por ahora solo Panadería tiene.
+
+**Cómo queda guardado (para el que venga):** `config/PAN.fermentacionBloque = { 'PAN-001': 90, SR020: 120, 'PAN-012': null }` (minutos; null o sin número = sin f.b.). Las recetas por su ID; las sub recetas ("Masa …") por su ID de materia prima (SR…, la misma clave que `sub_SR020` y `ajustes/PAN__hoy`); si la sub receta no tiene, se mira su receta de origen. La hora de inicio es `hechos[clave].en` (lo de siempre). El cálculo está en `fermentacion.js` (nuevo; copia exacta en Sistema Fën v0.65.3).
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** nuevo `fermentacion.js`; cambian `app.js` y `estilos.css`; solo versión: `config.js`, `index.html` y `README.md`. Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `consumo.js` (los cuatro iguales a los de Sistema Fën), `buscador.js`, `cafeteria.js`, `congelado.js`, `editor.js`, `firebase.js`, `logo-fen.png`, reglas (siguen las v1.8.0) y script. Lo más simple: subir **todos** los del zip. **Recarga las tablets** (abajo debe decir Cocina v0.17.1).
+
+**Orden:** 1) Sistema Fën v0.65.3; 2) Cocina v0.17.1; 3) en Sistema Fën pon las f.b. (Producción → Configuración de Producción → Fermentación en bloque · Panadería). Da igual el orden: sin f.b. puesta, Cocina solo muestra "Hecho · Camila 11:00".
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.17.1**.
+- [ ] Panadería → Hoy: marcar terminada una receta sin f.b. → bajo el título "✓ Hecho · <tu nombre> <hora>".
+- [ ] En Sistema Fën pon 2:00 a Masa ciabatta → en la tablet, marcarla terminada: "· f.b. hasta" (2 horas después). Sin recargar.
+- [ ] Pasada esa hora, con Hoy abierto, en menos de un minuto: "f.b. lista desde las …", con el reloj y el borde.
+- [ ] Deshacer y volver a marcar: la hora y la f.b. cambian a la nueva.
+- [ ] "Marcar todo como hecho": todas con la misma hora.
+- [ ] Día anterior (flecha): las horas guardadas, sin "lista".
+- [ ] Celular, tablet y PC: la línea no se corta ni corre la pantalla (en el celular baja a dos líneas).
+
+**Si algo sale mal:** vuelve a subir la v0.17.0 (no cambia datos; `fermentacionBloque` queda en la configuración y no molesta).
+
+**Pruebas:** `pruebas/cocina/fermentacion.test.mjs` (unitaria: h:mm, medianoche, "lista", nombre corto) y `pruebas/sistemafen/fb-v0171.test.js` (Sistema Fën guarda 2:00 → Cocina "f.b. hasta"; reloj simulado → "lista desde"; sin f.b. solo "Hecho"; deshacer, marcar todo y otro día). Capturas en `pruebas/capturas/fb-v0171/` (celular 390, tablets 768 y 1024, PC 1280). También se arreglaron dos pruebas que dependían del día de la semana (sin tocar la app): cocina-p1 "v0.12.0 Bollería" (el congelado se cuenta desde el inventario con la merma congelada, como la Bitácora) y cocina-pantallas "pie de masa madre" (durante la prueba el día del pie es hoy).
 
 ## Novedades v0.17.0 · Bodegas por área responsable (decisión de Emmanuel, 14-oct)
 Va con **Sistema Fën v0.65.0**, el **script de Producción v2.11.0** y las **reglas v1.8.0**. Hasta que confirmes los responsables en Sistema Fën, Cocina funciona **igual que la v0.16.4**.
