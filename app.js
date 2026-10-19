@@ -1,5 +1,8 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.1
+//  fën · Cocina — la app de las jefas  v0.17.2
+//  v0.17.2: PANADERÍA, TERMINADA POR TANDA. Con 2 o más tandas, cada una se marca por separado (quién, hora y su f.b.);
+//  la receta queda terminada (hechos.rec_/sub_, con la hora de la última) cuando están todas. BOLLERÍA → BITÁCORA:
+//  el inventario del congelador marca cada línea sin cambios (check) o editada (lápiz + "antes X").
 //  v0.17.1: FERMENTACIÓN EN BLOQUE. Lo terminado dice "Hecho · Ana 11:00" (nombre corto y hora) y, si la receta tiene f.b.
 //    en config/{AREA}.fermentacionBloque (Sistema Fën), "· f.b. hasta 13:00"; el día de hoy, al llegar la hora,
 //    "· f.b. lista desde las 13:00" destacada (se revisa cada minuto sin leer nada). Cálculo en fermentacion.js.
@@ -88,7 +91,7 @@ import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.17.1';
 import * as CG from './congelado.js?v=0.17.1';
 import * as CF from './cafeteria.js?v=0.17.1';
-import * as FBQ from './fermentacion.js?v=0.17.1';
+import * as FBQ from './fermentacion.js?v=0.17.2';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -150,6 +153,7 @@ const IC = {
   bodega: '<path d="M4 9l8-5 8 5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M8 20v-7h8v7M8 16h8"/>',
   copiar: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   deshacer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  lapiz: '<path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -590,13 +594,19 @@ function tarjeta(o) {
   const enG = o.unidad === 'g', h = o.hecho(o.claveHecho);
   const un = o.un || 'un', fmt = x => enG ? M.gramos(x) : M.unidades(x);
   const T = tandasHoy(o.clave, o.total, o.rid, enG, o.dia, o.defecto);
-  E.tarjetas[o.clave] = { nombre: o.nombre, total: o.total, unidad: o.unidad, un, rid: o.rid, escalar: o.escalar, tandas: T.tandas, aj: o.aj, porTanda: o.porTanda };
+  // v0.17.2: Panadería con 2 o más tandas → cada tanda se marca terminada por separado (dias.tandasHechas)
+  const PT = porTandaActivo(o, T) ? marcasTandas(o.dia, o.claveHecho, T.tandas.length, h) : null;
+  E.tarjetas[o.clave] = { nombre: o.nombre, total: o.total, unidad: o.unidad, un, rid: o.rid, escalar: o.escalar, tandas: T.tandas, aj: o.aj, porTanda: o.porTanda,
+    claveHecho: o.claveHecho, marcas: PT ? PT.marcas : null, explicitas: PT ? PT.explicitas : 0 };
+  if (PT && PT.todas && !h) completarReceta(o.claveHecho, PT.marcas);
   const columnas = T.tandas.map((t, i) => {
-    const e = o.escalar(t);
-    return `<div class="tanda">
+    const e = o.escalar(t), mt = PT ? PT.marcas[i] : null;
+    return `<div class="tanda${mt ? ' tanda-hecha' : ''}">
         ${T.tandas.length > 1 ? `<span class="rotulo">Tanda ${i + 1} · ${enG ? M.gramos(t) : M.unidades(t) + ' ' + un}</span>` : ''}
         ${e.filas.map(x => filaIng(x, o.conPct)).join('')}
         <div class="fila total"><span>Total masa</span><span>${M.gramos(e.total)}</span></div>
+        ${PT ? (mt ? `<button type="button" class="btn-sec btn-hecho btn-tanda" data-tanda-hecho="${esc(o.clave)}|${i}" data-valor="0">${ic('check')}Tanda ${i + 1} hecha · deshacer</button>`
+          : `<button type="button" class="btn btn-tanda" data-tanda-hecho="${esc(o.clave)}|${i}" data-valor="1">${ic('check')}Marcar tanda ${i + 1} terminada</button>`) : ''}
       </div>`;
   }).join('');
   const pasos = o.receta ? (o.receta.pasos || []).filter(Boolean) : [], proc = o.receta && o.receta.procedimiento;
@@ -607,7 +617,9 @@ function tarjeta(o) {
           <b>${esc(o.nombre)}${h ? marcaTerminada : ''}</b>
           <span class="det">${o.detalle}${T.tandas.length > 1 ? ` · ${T.tandas.length} tandas (${T.tandas.map(fmt).join(' + ')})${T.usual ? ' · como siempre' : T.defecto ? ' · según la amasadora' : ''}` : ''}</span>
           ${o.para ? `<span class="det">${o.para}</span>` : ''}
-          ${h ? lineaHechoHtml(h, o.fbIds || [o.rid]) : ''}
+          ${PT ? `<span class="lineas-tanda">${PT.marcas.map((m, i) => m ? lineaHechoHtml(m, o.fbIds || [o.rid], `Tanda ${i + 1} · `)
+            : `<span class="linea-tanda-pend">${ic('caja')}<span>Tanda ${i + 1} · pendiente</span></span>`).join('')}</span>`
+            : h ? lineaHechoHtml(h, o.fbIds || [o.rid]) : ''}
         </div>
         ${o.aj && o.receta ? `<span class="chip">Ajuste: ${esc(textoAjuste(o.receta, o.aj))}</span>` : ''}
       </div>
@@ -617,7 +629,8 @@ function tarjeta(o) {
       <div class="receta-pie">
         ${o.ajustable ? `<button type="button" class="btn-sec" data-ajustar="${esc(o.rid)}">${ic('ajuste')}Ajustar harina / agua</button>` : o.ajusteEn ? `<span class="ayuda">${esc(o.ajusteEn)}</span>` : ''}
         <button type="button" class="btn-sec" data-tandas="${esc(o.clave)}">${ic('capas')}Tandas</button>
-        <span class="der">${o.botonFinal ? o.botonFinal : h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(o.claveHecho)}" data-valor="0">${ic('check')}Terminada · deshacer</button>`
+        <span class="der">${o.botonFinal ? o.botonFinal : PT ? (h ? `<span class="chip-ok avance-tandas">${ic('ok')}Terminada · ${PT.n} de ${PT.n} tandas</span>`
+          : `<span class="der-tandas"><span class="avance-tandas">${PT.hechas} de ${PT.n} tandas terminadas</span><button type="button" class="btn-sec" data-hecho="${esc(o.claveHecho)}" data-valor="1">${ic('check')}${PT.hechas ? 'Marcar las que faltan' : 'Marcar todas las tandas'}</button></span>`) : h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(o.claveHecho)}" data-valor="0">${ic('check')}Terminada · deshacer</button>`
           : `<button type="button" class="btn" data-hecho="${esc(o.claveHecho)}" data-valor="1">${ic('check')}Marcar terminada</button>`}</span>
       </div>
     </article>`;
@@ -626,10 +639,60 @@ function tarjeta(o) {
 // v0.17.1 · La línea de lo terminado: "Hecho · Ana 11:00" y, con fermentación en bloque (config/{AREA}.fermentacionBloque),
 // "· f.b. hasta 13:00" o, el día de hoy y ya cumplida, "· f.b. lista desde las 13:00" (destacada: ícono, texto y borde).
 // Otro día: solo las horas. data-fb-fin: revisarFB() (cada minuto) repinta cuando llega la hora.
-function lineaHechoHtml(h, ids) {
+function lineaHechoHtml(h, ids, antes = '') {
   const esHoy = E.fecha === M.hoyTxt(), min = FBQ.minutosFB(E.config, ids);
   const l = FBQ.lineaHecho(h, min, esHoy ? Date.now() : null); if (!l) return '';
-  return `<span class="linea-hecho${l.lista ? ' fb-lista' : ''}"${l.fb && esHoy && !l.lista ? ` data-fb-fin="${l.fb.fin}"` : ''}>${ic(l.lista ? 'reloj' : 'check')}<span>${esc(l.texto)}</span></span>`;
+  return `<span class="linea-hecho${l.lista ? ' fb-lista' : ''}"${l.fb && esHoy && !l.lista ? ` data-fb-fin="${l.fb.fin}"` : ''}>${ic(l.lista ? 'reloj' : 'check')}<span>${esc(antes + l.texto)}</span></span>`;
+}
+
+// ── v0.17.2 · Panadería: "Marcar terminada" por tanda ──
+// Solo Panadería (pedido de Emmanuel) y solo cuando la receta del día va en 2 o más tandas (las del diálogo "Tandas",
+// las "de siempre" o las de la amasadora). Con una sola tanda todo sigue igual que en la v0.17.1.
+// Guardado (en el mismo documento del día, dias/PAN_{fecha}):
+//   tandasHechas = { [claveHecho]: { t1: { por, en }, t2: null, … } }   (claveHecho: rec_{id} / sub_{id}, como hechos)
+//   hechos[claveHecho] = { por, en } se escribe SOLO cuando están todas las tandas, con la hora de la última.
+// Así la bodega (consumo.js, que lee hechos.rec_…), la f.b. de la receta, "Marcar todo como hecho" y el historial
+// siguen leyendo lo mismo y la receta se descuenta UNA vez (al terminar la última tanda; al deshacer, se devuelve).
+// Una tanda sin marca propia pero con la receta terminada (marcada antes de dividir, o con "Marcar todo como hecho")
+// toma la hora de la receta.
+const porTandaActivo = (o, T) => E.area === 'PAN' && !o.botonFinal && T.tandas.length > 1;
+function marcasTandas(dia, claveHecho, n, h) {
+  const th = ((dia && dia.tandasHechas) || {})[claveHecho] || {};
+  const marcas = [];
+  let explicitas = 0;
+  for (let i = 0; i < n; i++) {
+    const m = th['t' + (i + 1)];
+    if (m && m.por) { marcas.push({ por: m.por, en: m.en }); explicitas++; } else marcas.push(h ? { por: h.por, en: h.en } : null);
+  }
+  const hechas = marcas.filter(Boolean).length;
+  return { marcas, explicitas, hechas, n, todas: hechas === n };
+}
+// La última tanda (la de hora más tarde): su hora y quién, para la receta
+const ultimaMarca = marcas => marcas.filter(Boolean).reduce((a, m) => (!a || String(m.en) > String(a.en) ? m : a), null);
+// Si las dos de la dupla marcan la última tanda casi juntas (cada una sin ver la otra), nadie escribió la receta:
+// la tablet que lo ve la completa (una vez; la misma hora y persona en cualquier tablet, así que no se pisa nada)
+const completadas = new Set();
+function completarReceta(claveHecho, marcas) {
+  const k = E.area + '_' + E.fecha + '|' + claveHecho; if (completadas.has(k)) return;
+  completadas.add(k);
+  const u = ultimaMarca(marcas), f = E.fecha;
+  setTimeout(() => guardarSinEsperar(guardarDia(f, { hechos: { [claveHecho]: { por: u.por, en: u.en } } })), 0);
+}
+// Marcar / deshacer una tanda (un solo guardado en el día)
+function cambiosTanda(T, i, marcar) {
+  const ch = T.claveHecho, marcas = T.marcas.slice(), th = {}, cambios = { tandasHechas: { [ch]: th } };
+  const recetaHecha = marcas.every(Boolean);
+  if (marcar) {
+    const nueva = { por: quien(), en: ahoraIso() };
+    marcas[i] = nueva; th['t' + (i + 1)] = nueva;
+    if (marcas.every(Boolean)) { const u = ultimaMarca(marcas); cambios.hechos = { [ch]: { por: u.por, en: u.en } }; }
+  } else {
+    // Las demás tandas quedan con su marca propia (las que tomaban la hora de la receta, la guardan ahora)
+    marcas.forEach((m, j) => { if (j !== i && m) th['t' + (j + 1)] = m; });
+    th['t' + (i + 1)] = null;
+    if (recetaHecha) cambios.hechos = { [ch]: null };
+  }
+  return cambios;
 }
 function revisarFB() {
   if ($('app').classList.contains('oculto') || vistaActual() !== 'hoy') return;
@@ -1121,14 +1184,17 @@ function productosBol() {
 }
 // v0.12.1: cada anotación es un título y una línea por cosa (nombre a la izquierda, número a la derecha),
 // como "Congelado al cierre"
-function anotFilas(a) {
+function anotFilas(a, f) {
   const un = (n, s1, s2) => `${M.miles(n)} ${M.num(n) === 1 ? s1 : s2}`;
   if (a.tipo === 'inventario') {
-    const filas = [];
-    Object.entries(a.masas || {}).forEach(([id, n]) => filas.push([nombreDe(id), un(n, 'masa', 'masas')]));
-    Object.entries(a.empastes || {}).forEach(([id, n]) => filas.push([`Empastes de ${nombreDe(id)}`, M.miles(n)]));
-    Object.entries(a.productos || {}).forEach(([id, n]) => { if (M.num(n)) filas.push([nombreDe(id), M.miles(n)]); });
-    return { titulo: 'Inventario del congelador', filas: filas.length ? filas : [['Vacío', '']] };
+    // v0.17.2: cada línea con su marca: igual a lo que había antes (check verde) o editada (lápiz naranjo + "antes X")
+    const ant = f ? antesInventario(a, f) : null, filas = [];
+    const marca = (k, id, n) => { if (!ant) return null; const x = M.num((ant[k] || {})[id]); return Math.round(x * 100) === Math.round(M.num(n) * 100) ? { igual: true } : { antes: M.miles(x) }; };
+    Object.entries(a.masas || {}).forEach(([id, n]) => filas.push([nombreDe(id), un(n, 'masa', 'masas'), marca('masas', id, n)]));
+    Object.entries(a.empastes || {}).forEach(([id, n]) => filas.push([`Empastes de ${nombreDe(id)}`, M.miles(n), marca('empastes', id, n)]));
+    // Los productos en 0 no se muestran, salvo que antes hubiera (así se ve que se corrigió a 0)
+    Object.entries(a.productos || {}).forEach(([id, n]) => { if (M.num(n) || (ant && M.num((ant.productos || {})[id]))) filas.push([nombreDe(id), M.miles(n), marca('productos', id, n)]); });
+    return { titulo: 'Inventario del congelador', filas: filas.length ? filas : [['Vacío', '']], conMarcas: !!ant, primero: !!f && !ant };
   }
   if (a.tipo === 'elaboro') return { titulo: `Elaboré masas → congelador${a.origen === 'hoy' ? ' (desde Hoy)' : ''}`,
     filas: [[nombreDe(a.masa), un(a.n, 'masa', 'masas')], ...(a.conEmpaste !== false ? [['Empastes (anotación antigua: con sus masas)', M.miles(a.n)]] : [])] };
@@ -1141,6 +1207,35 @@ function anotFilas(a) {
   return { titulo: a.tipo, filas: [] };
 }
 
+// v0.17.2 · "Lo que había antes" de un inventario = lo que la app tenía en el congelador justo antes de anotarlo
+// (el último inventario + lo anotado después, hasta ese momento): lo mismo que el diálogo trae escrito, así que una
+// línea igual es una que la jefa confirmó y una distinta es una que corrigió. Desde la v0.17.2 se guarda en la misma
+// anotación (antes: { masas, empastes, productos }; sinAnterior: true si no había inventario antes). En las anotadas
+// antes se calcula con la bitácora (lo anotado ese día antes de esa hora y los días anteriores), sin leer nada más.
+function antesInventario(a, f) {
+  if (a.sinAnterior) return null;
+  if (a.antes && typeof a.antes === 'object') return a.antes;
+  const docs = {}, previo = x => x && String(x.en || '') < String(a.en || '');
+  const filtrar = o => Object.fromEntries(Object.entries(o || {}).filter(([, x]) => previo(x)));
+  Object.entries(E.diasArea || {}).forEach(([d, doc]) => {
+    if (d < f) docs[d] = doc;
+    else if (d === f) docs[d] = { ...doc, bitacora: filtrar((doc || {}).bitacora), merma: filtrar((doc || {}).merma) };
+  });
+  const st = CG.stock(docs, f);
+  return st.conInventario ? fotoStock(st) : null;
+}
+// Lo que muestra el diálogo del inventario (las masas y productos tal cual; los empastes redondeados)
+function fotoStock(st) {
+  const r = { masas: {}, empastes: {}, productos: {} };
+  Object.entries(st.masas || {}).forEach(([id, n]) => { r.masas[id] = M.num(n); });
+  Object.entries(st.empastes || {}).forEach(([id, n]) => { r.empastes[id] = Math.round(M.num(n)); });
+  Object.entries(st.productos || {}).forEach(([id, n]) => { r.productos[id] = M.num(n); });
+  return r;
+}
+const marcaInvHtml = m => !m ? '' : m.igual ? `<span class="marca-inv igual" role="img" aria-label="Sin cambios">${ic('check')}</span>`
+  : `<span class="marca-inv editado" role="img" aria-label="Editado, antes ${esc(m.antes)}">${ic('lapiz')}<span class="antes" aria-hidden="true">antes ${esc(m.antes)}</span></span>`;
+const leyendaMarcas = `<p class="leyenda-marcas" aria-label="Marcas del inventario"><span class="marca-inv igual">${ic('check')}</span>sin cambios<span class="sep">·</span><span class="marca-inv editado">${ic('lapiz')}</span>editado</p>`;
+
 function vistaBitacora() {
   if (!E.cargado.recetas || !E.cargado.mps || !E.cargado.diasArea) return '<div class="vacio">Cargando…</div>';
   const f = E.fecha, lunes = M.lunesDe(f), m = asegurarMetas(lunes), dia = E.diasArea[f] || asegurarDia(f) || {};
@@ -1151,8 +1246,10 @@ function vistaBitacora() {
   const delDia = Object.entries(dia.bitacora || {}).map(([id, a]) => ({ ...a, id })).sort((a, b) => String(a.en || '').localeCompare(String(b.en || '')));
   const botones = Object.entries(B.TIPOS).map(([k, t]) => `<button type="button" class="btn-sec" data-anotar="${k}">${ic(k === 'inventario' ? 'copo' : k === 'formo' || k === 'horneo' ? 'pan' : 'capas')}${esc(t)}</button>`).join('')
     + `<button type="button" class="btn-sec" data-empastes="1">${ic('capas')}Empastes</button>`;   // v0.14.0: panel de la semana + "Hice empastes"
-  const lista = delDia.length ? `${listaAnot(delDia, a => `<div class="anot ${a.anulado ? 'anulada' : ''}">
-      <div class="anot-cuerpo">${(f => `<b>${esc(f.titulo)}</b><div class="lista-mini">${f.filas.map(([n, v]) => `<div class="fila sub"><span>${esc(n)}</span><span>${esc(v)}</span></div>`).join('')}</div>`)(anotFilas(a))}<span class="ayuda">${esc(a.por || '')} · ${esc(horaDe(a.en))}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
+  const filasDe = {}; delDia.forEach(a => { filasDe[a.id] = anotFilas(a, f); });
+  const conMarcas = delDia.some(a => filasDe[a.id].conMarcas);
+  const lista = delDia.length ? `${conMarcas ? leyendaMarcas : ''}${listaAnot(delDia, a => `<div class="anot ${a.anulado ? 'anulada' : ''}${filasDe[a.id].conMarcas ? ' con-marcas' : ''}">
+      <div class="anot-cuerpo">${(x => `<b>${esc(x.titulo)}</b>${x.primero ? '<span class="ayuda">Primer inventario: no hay uno anterior para comparar.</span>' : ''}<div class="lista-mini">${x.filas.map(([n, v, m]) => `<div class="fila sub"><span>${esc(n)}</span><span class="val-inv">${esc(v)}${marcaInvHtml(m)}</span></div>`).join('')}</div>`)(filasDe[a.id])}<span class="ayuda">${esc(a.por || '')} · ${esc(horaDe(a.en))}${a.anulado ? ` · anulada por ${esc(a.anulado.por || '')}` : ''}</span></div>
       ${a.anulado ? '' : `<button type="button" class="btn-link" data-anular="${esc(a.id)}">Anular</button>`}
     </div>`)}` : '<p class="ayuda">Sin anotaciones este día.</p>';
   // Congelado al final del día
@@ -1252,6 +1349,8 @@ function dialogoAnotar(tipo) {
       a = { tipo, masas: {}, empastes: {}, productos: {} };
       for (const r of masas) { const x = entero('inv-m-' + r.id), y = entero('inv-e-' + r.id); if (isNaN(x) || isNaN(y)) return err('Escribe números enteros.'); a.masas[r.id] = x; a.empastes[r.id] = y; }
       for (const r of prods) { const x = entero('inv-p-' + r.id); if (isNaN(x)) return err('Escribe números enteros.'); a.productos[r.id] = x; }
+      // v0.17.2: lo que la app tenía (lo que el diálogo trajo escrito), para marcar en la Bitácora qué se corrigió
+      if (st.conInventario) a.antes = fotoStock(st); else a.sinAnterior = true;
     } else if (tipo === 'elaboro' || tipo === 'descongelo') {
       const n = entero('an-n'); if (!(n > 0)) return err('Escribe cuántas masas (número entero mayor que 0).');
       a = { tipo, masa: $('an-masa').value, n };
@@ -1540,6 +1639,13 @@ $('principal').addEventListener('click', async ev => {
     guardarSinEsperar(guardarDia(E.fecha, cambios));
     return;
   }
+  if (ds.tandaHecho) {
+    const [clave, iTxt] = ds.tandaHecho.split('|'), T = (E.tarjetas || {})[clave], i = Number(iTxt);
+    if (!T || !T.marcas || !(i >= 0 && i < T.marcas.length)) return;
+    b.disabled = true;
+    guardarSinEsperar(guardarDia(E.fecha, cambiosTanda(T, i, ds.valor === '1')));
+    return;
+  }
   if (ds.anotar) { dialogoAnotar(ds.anotar); return; }
   if (ds.empastes) { dialogoEmpastes(ds.empastes, ds.n); return; }
   if (ds.todoHecho) {
@@ -1643,6 +1749,8 @@ function guardarSinEsperar(promesa, ok) {
 // "Dividir siempre así" lo guarda en la receta para los próximos días (ajustes/{AREA}_{receta}.tandaUsual).
 function dialogoTandas(clave) {
   const T = E.tarjetas && E.tarjetas[clave]; if (!T) return;
+  // v0.17.2: con tandas ya marcadas no se cambia la división (las marcas son de esas tandas)
+  if (T.explicitas > 0) { avisar('Hay tandas marcadas como terminadas: deshazlas antes de cambiar las tandas.', true); return; }
   const total = T.total, enG = T.unidad === 'g';
   const fmt = x => enG ? M.gramos(x) : M.unidades(x) + ' ' + (T.un || 'un');
   const usualPrev = T.rid ? ((E.ajustes[T.rid] || {}).tandaUsual || null) : null;

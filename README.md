@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.1
+# fën · Cocina · v0.17.2
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,53 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.17.2 · Panadería: terminada por tanda · Bollería: marcas en el inventario de la Bitácora (pedido de Emmanuel, 19-oct)
+Solo cambia Cocina. **Sistema Fën no cambia** (sigue en v0.70.0), **las reglas siguen las v1.8.0** (no hay que publicar nada en Firebase) y el script tampoco cambia.
+
+**1. Panadería → Hoy: "Marcar terminada" por tanda.** Cocina ya tenía tandas (el botón **Tandas**: en 1 a 6 o "de hasta N", "dividir siempre así", o las de la amasadora). Ahora:
+- **Receta en una sola tanda:** todo igual que antes ("Marcar terminada", "Hecho · Camila 11:00" con su check, "Terminada · deshacer").
+- **Receta en 2 o más tandas:** cada tanda tiene su botón al pie de su columna, **"Marcar tanda 1 terminada"**. Bajo el título, una línea por tanda:
+  - "Tanda 1 · Hecho · Camila 11:00 · f.b. hasta 13:00" (la f.b. de cada tanda se calcula desde su propia hora, con la misma configuración de siempre, y se pone "lista" a su hora);
+  - "Tanda 2 · pendiente".
+- Abajo dice "1 de 2 tandas terminadas". La receta queda **terminada solo cuando están todas**, con la hora de **la última** ("Terminada · 2 de 2 tandas", el check junto al título).
+- **Deshacer va por tanda** ("Tanda 2 hecha · deshacer"): la receta vuelve a pendiente y las otras tandas siguen marcadas.
+- "**Marcar las que faltan**" (o "Marcar todas las tandas") y "Marcar todo como hecho" siguen sirviendo: las tandas que faltaban quedan con esa hora.
+- Con alguna tanda marcada no se puede cambiar la división (avisa: "deshazlas antes de cambiar las tandas").
+- Vale para recetas, masas de "Recetas del día" y elaboraciones previas de **Panadería**. Bollería y Pastelería: igual que antes.
+
+**Bodega (sin doble consumo):** la bodega se descuenta **una sola vez**, con la receta completa, cuando se marca la última tanda (al deshacer una tanda, se devuelve). Lo que lee la bodega, el historial, "Marcar todo" y Sistema Fën es lo mismo de siempre (`hechos`), así que nada más cambia.
+
+**2. Bollería → Bitácora: marcas en el "Inventario del congelador".** Cada línea compara lo contado con **lo que la app tenía en ese momento** (el último inventario + lo anotado después: exactamente lo que el diálogo trae escrito):
+- **Igual:** un check verde.
+- **Corregida:** un lápiz naranjo y "antes 45".
+- Arriba de las anotaciones, una leyenda chica con los dos íconos: "sin cambios · editado" (no se escribe en cada línea). Abajo de cada anotación sigue quién y a qué hora.
+- El primer inventario (sin uno anterior) dice "Primer inventario: no hay uno anterior para comparar" y no lleva marcas.
+- Los inventarios anotados antes de esta versión también se marcan (se calcula con la bitácora, sin leer nada más).
+- Un producto que se corrigió a 0 se muestra ("0 · antes 5"); los que estaban y siguen en 0 no.
+- Sistema Fën no muestra esta bitácora: no hay nada que cambiar allá.
+
+**Cómo queda guardado (para el que venga):**
+- `dias/PAN_{fecha}.tandasHechas = { rec_PAN-001: { t1: { por, en }, t2: null }, sub_SR020: {…} }` (la misma clave que `hechos`). `hechos[clave] = { por, en }` se escribe **solo** al completar todas, con la última. Una tanda sin marca propia pero con la receta terminada toma la hora de la receta. Si la dupla marca la última tanda al mismo tiempo en dos tablets, la que ve todas marcadas completa la receta (una vez; mismo valor).
+- Inventario nuevo: `bitacora[id].antes = { masas, empastes, productos }` (lo que el diálogo traía) o `sinAnterior: true`.
+- Costo en Firebase: **cero lecturas nuevas** (todo está en el día que ya se escuchaba). Escrituras: una por tanda marcada o deshecha, en el mismo documento del día (antes, una por receta). El inventario: la misma escritura de siempre, un poco más grande.
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** cambian `app.js` y `estilos.css`; `fermentacion.js` solo cambia su comentario de arriba (queda **idéntico** al de Sistema Fën, que antes difería en esa línea); solo versión: `config.js`, `index.html` y `README.md`. Sin cambios: `modelo.js`, `bolleria.js`, `registros.js`, `consumo.js` (los cuatro iguales a los de Sistema Fën), `buscador.js`, `cafeteria.js`, `congelado.js`, `editor.js`, `firebase.js`, `logo-fen.png`, `firestore-produccion.rules` (v1.8.0). Lo más simple: subir **todos** los del zip. **Recarga las tablets** (abajo debe decir Cocina v0.17.2).
+
+**Revisar:**
+- [ ] Abajo dice **Cocina v0.17.2**.
+- [ ] Panadería → Hoy: una receta sin tandas se marca igual que antes.
+- [ ] Hogaza → Tandas → 2 tandas: aparecen "Marcar tanda 1 terminada" y "Marcar tanda 2 terminada"; bajo el título "Tanda 1 · pendiente" y "Tanda 2 · pendiente".
+- [ ] Marcar la tanda 1: "Tanda 1 · Hecho · <tu nombre> <hora>" (con f.b. si la receta tiene); la receta **no** queda terminada ("1 de 2 tandas terminadas").
+- [ ] Marcar la tanda 2: la receta queda terminada; cada tanda con su hora y su f.b.
+- [ ] Deshacer la tanda 2: la receta vuelve a pendiente; la tanda 1 sigue.
+- [ ] En Sistema Fën (Producción → Bodega → Calcular), la harina de la hogaza baja una sola vez.
+- [ ] Bollería → Bitácora → Inventario del congelador: dejar unas líneas igual y cambiar otra. Las iguales con check verde; la cambiada con lápiz naranjo y "antes …". La leyenda arriba; abajo, quién y la hora.
+- [ ] Celular, tablets (de pie y acostadas) y PC: nada cortado ni corrido hacia el lado.
+
+**Si algo sale mal:** vuelve a subir la v0.17.1. No se pierde nada: `tandasHechas` y `antes` quedan guardados y no molestan; las recetas que quedaron terminadas siguen terminadas. Una receta con una sola tanda marcada (sin terminar) aparece pendiente en la v0.17.1: se marca terminada como antes.
+
+**Pruebas:** `pruebas/sistemafen/cocina-tandas-bitacora-v0172.test.js` (sin tandas igual; 2 tandas: tanda 1 con su f.b., receta sin terminar, tanda 2 la termina, deshacer, "lista" por tanda; sin doble consumo con `consumo.js`; masa con "Marcar las que faltan"; la dupla; Bitácora: primer inventario, check, lápiz y "antes X", leyenda, pie, inventario antiguo sin `antes`, anulado). Capturas en `pruebas/capturas/cocina-v0172/` (390, tablet 768 de pie y acostada, tablet 1024 de pie y acostada, PC 1280). Se arreglaron dos pruebas sin tocar la app: `fb-v0171` "otro día (ayer)" fallaba los lunes (ayer era de la semana anterior, sin plan: ahora la planilla de la prueba trae también esa semana) y `cocina-p1` (si es martes, la hogaza en 2 tandas se deshace por tanda).
 
 ## Novedades v0.17.1 · Fermentación en bloque en lo terminado (pedido de Emmanuel, 15-oct)
 Va con **Sistema Fën v0.65.3** (ahí se pone cuánto dura la f.b. de cada receta). Sin reglas, script ni datos nuevos.

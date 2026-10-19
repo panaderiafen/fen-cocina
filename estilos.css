@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.16.3 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.17.2 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -552,3 +552,35 @@ input { text-overflow: ellipsis; }
 .linea-hecho { display: inline-flex; align-items: flex-start; gap: 6px; align-self: flex-start; max-width: 100%; font-size: 14px; font-weight: 600; color: var(--ok); line-height: 1.35; overflow-wrap: anywhere; }
 .linea-hecho svg.ic { width: 18px; height: 18px; flex: none; margin-top: 1px; stroke-width: 2.4; }
 .linea-hecho.fb-lista { color: var(--ojo); background: var(--ojo-fondo); border: 1px solid #E8D29E; border-left: 4px solid var(--ojo); border-radius: 8px; padding: 4px 10px; }
+
+/* v0.17.2 · Panadería: "Marcar terminada" por tanda. Una línea por tanda bajo el título
+   ("Tanda 1 · Hecho · Camila 11:00 · f.b. hasta 13:00" / "Tanda 2 · pendiente") y el botón al pie de cada tanda */
+.lineas-tanda { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; max-width: 100%; }
+.linea-tanda-pend { display: inline-flex; align-items: flex-start; gap: 6px; max-width: 100%; font-size: 14px; font-weight: 600; color: var(--suave); line-height: 1.35; overflow-wrap: anywhere; }
+.linea-tanda-pend svg.ic { width: 18px; height: 18px; flex: none; margin-top: 1px; stroke-width: 2; }
+.tanda.tanda-hecha { background: #F8FBF8; }
+.tanda .btn-tanda { align-self: flex-start; margin-top: 6px; max-width: 100%; white-space: normal; text-align: left; }
+.avance-tandas { font-size: 14px; font-weight: 600; color: var(--suave); }
+.chip-ok.avance-tandas { color: var(--ok); }
+@media (max-width: 600px) {
+  .tanda .btn-tanda { align-self: stretch; justify-content: center; text-align: center; }
+  .receta-pie > .der > .avance-tandas { justify-content: center; text-align: center; display: flex; }
+}
+
+/* v0.17.2 · Bollería → Bitácora: marcas del inventario del congelador (sin cambios / editado + "antes X") */
+:root { --editado: #A2470D; }
+.val-inv { display: inline-flex; align-items: center; justify-content: flex-end; gap: 0; }
+.marca-inv { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; }
+.marca-inv svg.ic { width: 17px; height: 17px; stroke-width: 2.2; }
+.marca-inv.igual { color: var(--ok); }
+.marca-inv.editado { color: var(--editado); }
+.marca-inv .antes { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.leyenda-marcas { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 0; font-size: 13px; color: var(--suave); }
+.leyenda-marcas .marca-inv { margin-left: 0; }
+.leyenda-marcas .sep { margin: 0 6px; }
+.anot.anulada .marca-inv { opacity: .8; }
+.der-tandas { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+@media (max-width: 600px) {
+  .receta-pie > .der > .der-tandas { display: grid; grid-template-columns: 1fr; justify-items: stretch; text-align: center; }
+  .der-tandas > .btn-sec { justify-content: center; }
+}
