@@ -1,4 +1,4 @@
-/* fën · Cocina · v0.17.4 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
+/* fën · Cocina · v0.17.7 · cada área con su color en pastel; fondos casi blancos, íconos lineales */
 :root {
   --fondo: #FAF8F5; --tarjeta: #FFFFFF; --linea: #ECE6DE; --borde: #E3DCD3; --suave-fondo: #FCFAF7;
   --texto: #2B2622; --suave: #6B625A;
@@ -601,3 +601,28 @@ input { text-overflow: ellipsis; }
   .botones-sab { display: grid; grid-template-columns: 1fr; }
   .botones-sab .btn-sec { justify-content: center; }
 }
+
+/* v0.17.7 · Compartir informes (Panadería: Masas del día; Bollería: Informe del viernes). El informe en sí (.inf) trae sus estilos (informes.js) */
+.acciones-hoy { display: inline-flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+.btn-compartir { color: var(--acento-texto); border-color: var(--tinte-borde); white-space: normal; text-align: left; padding-top: 8px; padding-bottom: 8px; }
+.fila-informe { display: flex; justify-content: flex-end; margin: 4px 0 14px; }
+.dialogo.dialogo-informe { width: min(780px, calc(100vw - 32px)); }
+.dlg-informe .info-texto p { margin: 0 0 6px; }
+.dlg-informe .info-texto p:last-child { margin: 0; }
+.inf-vista { border: 1px solid var(--linea); border-radius: 12px; background: #fff; min-width: 0; }
+.inf-vista .inf { border-radius: 12px; }
+.inf-msg { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--suave-fondo); border: 1px solid var(--linea); border-radius: 10px; padding: 10px 12px; margin: 0; max-height: 320px; overflow-y: auto; }
+.inf-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.inf-nav h3 { margin: 0; font-size: 16px; font-weight: 600; flex: 1 1 140px; text-align: center; min-width: 0; }
+.inf-acciones { position: sticky; bottom: 0; background: #fff; margin: 0 -20px -20px; padding: 12px 20px 16px; border-top: 1px solid var(--linea); z-index: 2; }
+.inf-acciones .btn, .inf-acciones .btn-sec { white-space: normal; text-align: left; }
+@media (max-width: 600px) {
+  .inf-acciones { margin: 0 -16px -18px; padding: 10px 16px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .inf-acciones .btn, .inf-acciones .btn-sec { justify-content: center; text-align: center; padding: 6px 10px; min-height: 44px; }
+  .inf-acciones [data-inf="pdf"] { grid-column: 1 / -1; order: -2; }
+  .inf-acciones [data-inf="mensaje"] { grid-column: 1 / -1; order: -1; }
+  .fila-informe { justify-content: stretch; }
+  .fila-informe .btn-compartir { flex: 1; justify-content: center; }
+  .acciones-hoy { width: 100%; justify-content: space-between; }
+}
+.inf-nav [hidden] { display: none; }

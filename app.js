@@ -1,5 +1,12 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.5
+//  fën · Cocina — la app de las jefas  v0.17.7
+//  v0.17.7: COMPARTIR INFORMES (PDF o mensaje de WhatsApp; informes.js). Panadería → Hoy → "Compartir masas del día": las masas
+//  del día con su cantidad, sus tandas, hora de inicio (cuando se marcó la tanda terminada) y hora de formado (inicio + f.b.);
+//  lo pendiente dice "pendiente"; el ajuste de sábado y los ajustes del día. Bollería → Bitácora → "Informe del viernes":
+//  congelado ahora, qué descongelar el domingo para el lunes (cierre del viernes + la semana de la meta) y qué revisar
+//  (empastes, poolish). Vista previa; "Enviar PDF" (Compartir en celular/tablet; en el PC baja el PDF y abre WhatsApp),
+//  "Enviar como mensaje" y "Copiar texto". Cero lecturas nuevas (todo sale de lo que ya se escucha); sin costos.
+//  v0.17.6: pedir materias primas sin trabas (editor.js).
 //  v0.17.5: SIN COPIAS A LA PLANILLA DE PRODUCCIÓN (Etapa 2b, Sistema Fën v0.75.0). Los planes, la merma, la bitácora, la bodega
 //  y la bitácora de turno quedan solo en Firestore (fen-produccion), que es lo que leen Sistema Fën y la bodega. Ya no se llama al
 //  script con cocina_planilla ni cocina_registros, y lo nuevo se guarda con planillaPendiente / registrosPendientes en false.
@@ -103,6 +110,7 @@ import * as K from './consumo.js?v=0.17.4';
 import * as CG from './congelado.js?v=0.17.4';
 import * as CF from './cafeteria.js?v=0.17.4';
 import * as FBQ from './fermentacion.js?v=0.17.2';
+import * as I from './informes.js?v=0.17.7';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -169,7 +177,11 @@ const IC = {
   lapiz: '<path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>',
   pausa: '<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
-  repetir: '<path d="M17 3l3 3-3 3"/><path d="M4 12V9a3 3 0 0 1 3-3h13"/><path d="M7 21l-3-3 3-3"/><path d="M20 12v3a3 3 0 0 1-3 3H4"/>'
+  repetir: '<path d="M17 3l3 3-3 3"/><path d="M4 12V9a3 3 0 0 1 3-3h13"/><path d="M7 21l-3-3 3-3"/><path d="M20 12v3a3 3 0 0 1-3 3H4"/>',
+  // v0.17.7 · compartir informes
+  compartir: '<circle cx="17.5" cy="5.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/><path d="M8.7 10.7l6.6-3.9M8.7 13.3l6.6 3.9"/>',
+  mensaje: '<path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-9l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8 9.5h8M8 12.5h5"/>',
+  pdf: '<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 16.5h6"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 // v0.16.3: el check junto al título de lo terminado (además del título en verde)
@@ -484,6 +496,7 @@ function pintar() {
     try { el.setSelectionRange(guardado.ini, guardado.fin); } catch (e) {}
     if (v === 'recetas' && E.editor) ED.trasPintar(el);
   }
+  if (INF.tipo) pintarInforme(false);   // v0.17.7: la vista previa abierta sigue lo que marca la dupla
 }
 
 // v0.16.2: una tabla más ancha que la pantalla (celular) se desliza dentro de su caja; se avisa con una línea
@@ -561,7 +574,7 @@ function vistaHoy() {
   return nav + `
     <section class="resumen" aria-label="Antes de empezar">${cajaPie}${cajaIns}</section>
     ${elabs ? `<h2 class="titulo">Elaboraciones previas · ${previas.length}</h2>${elabs}` : ''}
-    <div class="titulo-fila-hoy"><h2 class="titulo">Recetas del día · ${planDia.length + masasDia.length}</h2>${subRecetasSemana(lunes).length ? `<button type="button" class="btn-link" data-ordenar-hoy="1">${ic('ajuste')}Ordenar Hoy</button>` : ''}</div>
+    <div class="titulo-fila-hoy"><h2 class="titulo">Recetas del día · ${planDia.length + masasDia.length}</h2><span class="acciones-hoy"><button type="button" class="btn-sec btn-compartir" data-informe="pan">${ic('compartir')}Compartir masas del día</button>${subRecetasSemana(lunes).length ? `<button type="button" class="btn-link" data-ordenar-hoy="1">${ic('ajuste')}Ordenar Hoy</button>` : ''}</span></div>
     ${avisoHecho}
     ${masasHtml}
     ${recetas}
@@ -795,6 +808,122 @@ function dialogoOrdenarHoy() {
   };
 }
 
+
+// ═══════════════ v0.17.7 · Compartir informes (PDF o mensaje de WhatsApp) ═══════════════
+// Panadería → Hoy: "Masas del día". Bollería → Bitácora: "Informe del viernes" (cualquier día; parte con el lunes que viene).
+// informes.js arma el informe con lo mismo que pinta la pantalla: cero lecturas nuevas en la base y ningún costo.
+// Masas del día: las masas de "Recetas del día" (y las "Masa …" aunque estén en Elaboraciones previas) y las recetas con
+// harina propia (la Hogaza; un producto hecho de una masa, como la Ciabatta, va en su masa). La masa madre y el poolish no.
+const INF = { tipo: null, lunes: null, inf: null, archivo: null, clave: '' };
+const proxLunes = (h = M.hoyTxt()) => M.sumarDias(M.lunesDe(h), 7);
+function entradaPan(f) {
+  const plan = E.planes[M.lunesDe(f)], dia = E.dias[f] || E.diasArea[f];
+  if (!E.cargado.recetas || !E.cargado.mps || !plan || !dia) return null;
+  const c = ctx(), ajHoy = ajustesDe(f), hechos = dia.hechos || {};
+  const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
+  const planDia = M.planDelDia(plan, f, E.recetas), el = M.elaboracionesDia(planDia, ajHoy, c);
+  // Las mismas tandas y marcas de la tarjeta (tandasHoy, marcasTandas)
+  const item = o => {
+    const T = tandasHoy(o.clave, o.total, o.rid, o.unidad === 'g', dia, null), h = hecho(o.claveHecho);
+    const marcas = E.area === 'PAN' && T.tandas.length > 1 ? marcasTandas(dia, o.claveHecho, T.tandas.length, h).marcas : [h];
+    return { nombre: o.nombre, tipo: o.tipo, unidad: o.unidad, un: 'un', total: o.total, receta: o.receta, aj: o.aj, para: o.para || '', fbMin: FBQ.minutosFB(E.config, o.fbIds),
+      tandas: T.tandas.map((t, i) => ({ cantidad: t, gramos: o.escalar(t).total, marca: marcas[i] || null })) };
+  };
+  const masas = el.subRecetas.filter(s => vaEnRecetasDia(s) || masaPorDefecto(s.nombre)).map(s => {
+    const rs = s.recetaId ? recetaPorId(s.recetaId) : null, aj = s.recetaId ? ajHoy[s.recetaId] : null;
+    return item({ clave: 'sub_' + s.id, claveHecho: 'sub_' + s.id, rid: rs ? rs.id : null, nombre: s.nombre, tipo: 'masa', unidad: s.porUnidades ? 'un' : 'g',
+      total: s.porUnidades ? s.unidades : Math.round(s.gramos), receta: rs, aj, fbIds: [s.id, s.recetaId], escalar: t => M.escalarSub(s, t, aj, c), para: paraLinea(s, planDia) });
+  });
+  const recetas = planDia.filter(x => M.panadero(x.receta).ajustable).map(x => item({ clave: x.receta.id, claveHecho: 'rec_' + x.receta.id, rid: x.receta.id, nombre: x.receta.nombre, tipo: 'receta',
+    unidad: x.receta.unidad === 'g' ? 'g' : 'un', total: x.unidades, receta: x.receta, aj: ajHoy[x.receta.id], fbIds: [x.receta.id], escalar: t => M.escalar(x.receta, t, ajHoy[x.receta.id], c) }));
+  return { fecha: f, quien: quien(), generado: Date.now(), items: [...masas, ...recetas], notas: (dia.notas || {}).texto || '' };
+}
+// Bollería: las metas de 3 semanas antes (stock inicial y "dejar"), la del lunes y la siguiente (su PEM: las masas del lunes)
+function entradaBol(W) {
+  const ls = [-21, -14, -7, 0, 7].map(d => M.sumarDias(W, d)), metas = {};
+  ls.forEach(l => { metas[l] = asegurarMetas(l); });
+  if (!E.cargado.recetas || !E.cargado.mps || !E.cargado.diasArea || ls.some(l => !metas[l])) return null;
+  ls.forEach(l => { if (metas[l].sinPermiso) metas[l] = null; });
+  return { lunes: W, hoy: M.hoyTxt(), quien: quien(), generado: Date.now(), diasDocs: E.diasArea, metas, recetas: E.recetas, mps: E.mps, config: E.config };
+}
+function informeActual() {
+  const e = INF.tipo === 'pan' ? entradaPan(E.fecha) : entradaBol(INF.lunes);
+  return e ? (INF.tipo === 'pan' ? I.informePan(e) : I.informeBol(e)) : null;
+}
+function dialogoInforme(tipo) {
+  INF.tipo = tipo; INF.archivo = null;
+  if (tipo === 'bol') INF.lunes = proxLunes();
+  I.ponerEstilos();
+  const d = $('dialogo'), pan = tipo === 'pan';
+  d.classList.add('dialogo-informe');
+  d.innerHTML = `<form method="dialog" class="dlg dlg-informe">
+      <div class="dlg-cab-i"><h2>${pan ? 'Compartir · Masas del día' : 'Informe del viernes'}</h2><button type="button" class="btn-i" data-info-inf="1" aria-expanded="false" aria-controls="inf-info" aria-label="Qué es esto">${ic('info')}</button></div>
+      <div class="ayuda info-texto" id="inf-info" hidden>${pan
+        ? `<p>Las masas de hoy con su cantidad, sus tandas y las horas. <b>Hora de inicio</b>: cuando se marcó la tanda terminada (fin del amasado = empieza la fermentación en bloque). <b>Hora de formado</b>: inicio + la fermentación en bloque de esa receta (la que configura Administración en Sistema Fën, según la temporada). Una tanda sin marcar dice "pendiente". Si hay ajuste de sábado o de harina / agua, también va.</p>`
+        : `<p>Se puede pedir cualquier día; parte con el lunes que viene. <b>Congelado ahora</b>: de la Bitácora (último inventario + lo anotado después). <b>Descongelar el domingo</b>: lo que anotaron en el Cierre del viernes; abajo, la semana del lunes según Metas (meta − stock inicial + dejar), en masas como el PEM. <b>Revisar</b>: los empastes (como el panel Empastes), el poolish y lo que llevan las masas del lunes (PEM). Lo que la app no sabe queda como "Revisar", para hacerlo a mano.</p>`}
+        <p><b>Enviar PDF</b>: en el celular o la tablet se abre Compartir con el PDF (eliges el chat o el grupo); en el computador se descarga el PDF y se abre WhatsApp para adjuntarlo. <b>Enviar como mensaje</b>: el mismo informe en texto. Sin costos.</p></div>
+      ${pan ? '' : `<div class="inf-nav"><button type="button" class="btn-flecha" data-inf-lunes="-7" aria-label="Lunes anterior">${ic('izq')}</button><h3 id="inf-lunes"></h3><button type="button" class="btn-flecha" data-inf-lunes="7" aria-label="Lunes siguiente">${ic('der')}</button><button type="button" class="btn-sec" data-inf-lunes="prox" id="inf-prox">El lunes que viene</button></div>`}
+      <span class="rotulo">Vista previa</span>
+      <div class="inf-vista" id="inf-vista"></div>
+      <details class="desp"><summary>Ver el mensaje de texto</summary><pre class="inf-msg" id="inf-msg"></pre></details>
+      <div class="dlg-pie inf-acciones">
+        <button type="button" class="btn-sec" data-cerrar="1">Cerrar</button>
+        <button type="button" class="btn-sec" data-inf="copiar">${ic('copiar')}Copiar texto</button>
+        <button type="button" class="btn-sec" data-inf="mensaje">${ic('mensaje')}Enviar como mensaje</button>
+        <button type="button" class="btn btn-fuerte" data-inf="pdf">${ic('pdf')}Enviar PDF</button>
+      </div>
+    </form>`;
+  d.onsubmit = ev => ev.preventDefault(); d.oninput = null; d.onchange = null;
+  d.onclose = () => { d.classList.remove('dialogo-informe'); INF.tipo = null; INF.inf = null; INF.archivo = null; d.onclose = null; };
+  d.onclick = ev => { clickInforme(ev); };
+  pintarInforme(true);
+  if (!d.open) d.showModal();
+}
+// Vista previa y texto (al abrir y cada vez que cambia algo en la base mientras está abierto)
+function pintarInforme(abrir) {
+  const d = $('dialogo'), vista = $('inf-vista'); if (!INF.tipo || !vista || (!abrir && !d.open)) return;
+  const inf = informeActual(); INF.inf = inf;
+  vista.innerHTML = inf ? I.html(inf) : '<div class="vacio">Cargando…</div>';
+  $('inf-msg').textContent = inf ? I.texto(inf) : '';
+  d.querySelectorAll('[data-inf]').forEach(b => { if (!b.dataset.ocupado) b.disabled = !inf; });
+  if (INF.tipo === 'bol') {
+    $('inf-lunes').textContent = 'Para el ' + M.fechaLarga(INF.lunes).toLowerCase();
+    $('inf-prox').hidden = INF.lunes === proxLunes();
+  }
+  if (!inf) setTimeout(() => { if (INF.tipo && !INF.inf) pintarInforme(false); }, 400);   // las metas recién pedidas llegan al tiro
+}
+const claveInforme = inf => JSON.stringify({ ...inf, hora: '' });
+async function clickInforme(ev) {
+  const b = ev.target.closest('button'); if (!b) return;
+  const ds = b.dataset, d = $('dialogo');
+  if (ds.cerrar) { d.close(); return; }
+  if (ds.infoInf) { const p = $('inf-info'), abrir = p.hidden; p.hidden = !abrir; b.setAttribute('aria-expanded', String(abrir)); return; }
+  if (ds.infLunes) { INF.lunes = ds.infLunes === 'prox' ? proxLunes() : M.sumarDias(INF.lunes, Number(ds.infLunes)); INF.archivo = null; pintarInforme(false); return; }
+  const inf = INF.inf; if (!inf || !ds.inf) return;
+  if (ds.inf === 'copiar') {
+    const ok = await I.copiar(I.texto(inf));
+    avisar(ok ? 'Texto copiado: pégalo en el chat de WhatsApp.' : 'No se pudo copiar: abre "Ver el mensaje de texto" y cópialo a mano.', !ok); return;
+  }
+  if (ds.inf === 'mensaje') {
+    try { const r = await I.enviarMensaje(inf); if (r === 'whatsapp') avisar('Se abrió WhatsApp con el mensaje: elige el chat.'); }
+    catch (e) { avisar('No se pudo compartir: ' + mensajeError(e), true); }
+    return;
+  }
+  if (ds.inf !== 'pdf') return;
+  // Como en logística: si el PDF tardó, el celular pide otro toque ("Tocar para enviar") y el PDF ya hecho queda listo
+  const clave = claveInforme(inf), html0 = `${ic('pdf')}Enviar PDF`;
+  b.disabled = true; b.dataset.ocupado = '1'; b.textContent = 'Generando el PDF…';
+  try {
+    let archivo = INF.archivo && INF.clave === clave ? INF.archivo : null;
+    if (!archivo) { const r = await I.pdf(inf); archivo = new File([r.blob], r.nombre, { type: 'application/pdf' }); }
+    const r = await I.enviarPdf(inf, archivo);
+    if (r === 'otra') { INF.archivo = archivo; INF.clave = clave; b.innerHTML = `${ic('pdf')}Tocar para enviar`; return; }
+    INF.archivo = null;
+    if (r === 'descargado') avisar('PDF descargado: adjúntalo en el chat de WhatsApp que se abrió.');
+    b.innerHTML = html0;
+  } catch (e) { avisar('No se pudo hacer el PDF: ' + mensajeError(e), true); b.innerHTML = html0; }
+  finally { b.disabled = false; delete b.dataset.ocupado; }
+}
 
 // ═══════════════ Bollería ═══════════════
 const avisoPermiso = () => `<div class="nota ojo">${ic('alerta')}<span>Este equipo no puede leer las metas de Bollería. Pide a Administración que publique las reglas de fen-produccion v1.1.0 o más nuevas (ver README).</span></div>`;
@@ -1298,6 +1427,7 @@ function vistaBitacora() {
     return `<div class="fila sub"><span>${esc(nombreDe(id))}</span><span>${M.miles(x.masas)} masas descongeladas → piezas para ${M.unidades(x.esperadas)} masas${Math.abs(dif) >= 0.05 ? ` (${dif > 0 ? '+' : ''}${M.unidades(dif)})` : ''}</span></div>`;
   }).join('');
   return nav + `
+    <div class="fila-informe"><button type="button" class="btn-sec btn-compartir" data-informe="bol">${ic('compartir')}Informe del viernes · compartir</button></div>
     <div class="botones-bit">${botones}</div>
     <h2 class="titulo">Anotaciones del día</h2>${lista}
     <section class="resumen" style="margin-top:16px">${congelado}${avance}</section>
@@ -1682,6 +1812,7 @@ $('principal').addEventListener('click', async ev => {
     return;
   }
   if (ds.cierre) { dialogoCierre(); return; }
+  if (ds.informe) { dialogoInforme(ds.informe); return; }   // v0.17.7
   if (ds.tandas) { dialogoTandas(ds.tandas); return; }
   if (ds.ordenarHoy) { dialogoOrdenarHoy(); return; }
   if (ds.ajustar) { dialogoAjuste(ds.ajustar); return; }

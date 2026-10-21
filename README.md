@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.6
+# fën · Cocina · v0.17.7
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.6: 21 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.7: 21 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -9,6 +9,42 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - si algo no se guardó, lo dice;
 - desde la v0.17.5 ya no se copia nada a la planilla de Producción (Sistema Fën lee todo de la base).
 
+
+## Novedades de la v0.17.7: compartir informes por WhatsApp (PDF o mensaje)
+
+Panadería y Bollería pueden mandar un informe como **PDF** o como **mensaje de WhatsApp**, con una **vista previa** antes de enviarlo. Sin costos (las jefas no ven costos), sin emojis.
+
+- **Panadería → Hoy → "Compartir masas del día"** (junto a "Recetas del día"). El informe **Masas del día** trae, por cada masa: la cantidad (unidades y kg, o kg si la receta va en gramos), para qué productos es, las **tandas** (el tamaño de cada una), la **hora de inicio** y la **hora de formado** de cada tanda; lo que no se ha marcado dice **"pendiente"**. Si vale el **ajuste de sábado** va su chip azul con los valores ("Ajuste de sábado: Agua 70 % (receta 75 %)"); si hay un ajuste de harina / agua del día, también. Arriba: Fën · Panadería · fecha · quién lo envía; un resumen ("1 de 2 masas terminadas · 3 de 4 tandas") y las notas del día.
+  - Qué masas van: las de "Recetas del día" (las "Masa …", aunque estén en Elaboraciones previas) y las recetas con harina propia (la Hogaza). Un producto hecho de una masa (la Ciabatta) va en su masa. La masa madre y el poolish no van.
+- **Supuesto (lo dice la (i) del informe):** **hora de inicio** = la hora en que se marcó la tanda terminada (fin del amasado = empieza la fermentación en bloque); **hora de formado** = inicio + la fermentación en bloque de esa receta (la que se configura en Sistema Fën → Configuración de Producción, según la temporada; vale la configurada ahora). Sin f.b. configurada dice "sin f.b. configurada". Si pasa la medianoche, "(día siguiente)".
+- **Bollería → Bitácora → "Informe del viernes · compartir"** (arriba). Se puede pedir cualquier día; parte con **el lunes que viene** (flechas para otro lunes). Trae:
+  1. **Congelado ahora**: masas (con los empastes en el refri) y productos por variedad (con cajas), de la Bitácora (último inventario + lo anotado después), y la fecha del último inventario.
+  2. **Descongelar el domingo para el lunes**: lo que anotaron en **Cierre del viernes** (masas y productos). Debajo, la **semana del lunes** según Metas (meta − stock inicial + dejar) pasada a masas como el PEM: masas para formar, ya descongeladas, por descongelar, congeladas y si faltan; y las piezas por producto (1 masa rinde N).
+  3. **Revisar**: el **empaste** (alcanza o cuántos hay que hacer, en gramos; como el panel Empastes) y si para laminar el lunes faltan empastes; el **poolish** (y lo demás) que llevan las masas del lunes en el PEM (hay que hacerlo, ya está marcado hecho, o el lunes no hay masas); si faltan masas en el congelador para la semana.
+  - **Lo que no sale de los datos va como "Revisar" (a mano):** cuánto descongelar el domingo si no se anotó el Cierre del viernes (la meta es semanal: la app no sabe cuánto se forma el lunes); sin inventario del congelador; algo en negativo; sin meta para esa semana.
+- **Los botones** (los mismos en las dos): **Enviar PDF** (celular y tablet: se abre Compartir con el PDF y un mensaje corto, eliges el chat o el grupo; si el PDF tardó, el botón dice "Tocar para enviar". PC: se descarga el PDF y se abre WhatsApp con el mensaje corto, y el PDF se adjunta a mano), **Enviar como mensaje** (el informe completo en texto; WhatsApp no deja adjuntar archivos con un enlace) y **Copiar texto**. "Ver el mensaje de texto" muestra lo que se envía. La vista previa sigue lo que marca la dupla mientras está abierta.
+- **PDF:** el mismo método de la app de logística (html2canvas + jsPDF desde cdnjs, se cargan solo la primera vez que se pide un PDF; necesita internet). Tamaño carta; las hojas se cortan entre bloques.
+- **Lecturas y escrituras en Firebase:** cero nuevas (todo sale de lo que la app ya escucha). No guarda nada.
+- **Dónde va:** repo **fen-cocina**, raíz. Archivo nuevo: `informes.js`. Cambian `app.js`, `estilos.css`, `config.js`, `index.html` y este README. **Los módulos compartidos no cambian** (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`, `fermentacion.js` siguen idénticos a los de Sistema Fën v0.75.1): Sistema Fën no cambia.
+- **Reglas:** sin cambios (fen-produccion v1.8.0). El script tampoco cambia.
+
+**Instalación:** repo **fen-cocina**, raíz → sube todos los archivos del zip `fen-cocina-v0.17.7.zip` (incluye el nuevo `informes.js`) → **Commit changes** → en cada tablet, cierra y abre la app (o recarga). Abajo debe decir **Cocina v0.17.7**.
+
+### Lista de verificación v0.17.7
+- [ ] Abajo dice **Cocina v0.17.7**.
+- [ ] Panadería → Hoy → "Compartir masas del día": la vista previa muestra cada masa con sus tandas; una tanda marcada tiene inicio (su hora) y formado (inicio + f.b.); una sin marcar dice "pendiente".
+- [ ] La (i) explica de dónde salen la hora de inicio y la de formado.
+- [ ] Un sábado con ajuste de sábado: la masa trae "Ajuste de sábado: …".
+- [ ] En la tablet o el celular: "Enviar PDF" abre Compartir con el PDF; eliges WhatsApp y el chat.
+- [ ] En el PC: "Enviar PDF" descarga el PDF y abre WhatsApp con el mensaje; adjunta el PDF.
+- [ ] "Enviar como mensaje" abre WhatsApp con el texto; "Copiar texto" lo copia.
+- [ ] Bollería → Bitácora → "Informe del viernes · compartir": dice "Para el lunes …" (el que viene); congelado, descongelar el domingo (lo del Cierre del viernes), la semana y Revisar (empaste, poolish).
+- [ ] Sin Cierre del viernes: en Revisar aparece "Cuánto descongelar el domingo para el lunes".
+- [ ] Celular, tablets (de pie y acostadas) y PC: nada cortado ni corrido hacia el lado.
+
+**Si algo sale mal:** vuelve a subir la v0.17.6 (y borra `informes.js`, o déjalo: la v0.17.6 no lo usa). No se guarda nada nuevo en la base.
+
+**Pruebas:** `pruebas/sistemafen/cocina-informes-v0177.test.js` (lo puro: tandas, inicio y formado con la f.b., pendiente, día siguiente, ajuste de sábado y del día, congelado, descongelar el lunes, la semana, empaste y poolish, lo que va "a mano", cortes de hoja; en el navegador con la base simulada: vista previa, (i), texto, la vista previa sigue a la dupla, copiar, mensaje por wa.me, PDF descargado no vacío + WhatsApp en el PC, Compartir con el archivo y "Tocar para enviar", Bollería con otro lunes, sin scroll hacia el lado en 390/768/1024/1280). Capturas en `pruebas/capturas/cocina-informes/` (vista previa en 390 y 1024).
 
 ## Novedades de la v0.17.6: pedir materias primas sin trabas
 
