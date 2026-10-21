@@ -1,5 +1,9 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.4
+//  fën · Cocina — la app de las jefas  v0.17.5
+//  v0.17.5: SIN COPIAS A LA PLANILLA DE PRODUCCIÓN (Etapa 2b, Sistema Fën v0.75.0). Los planes, la merma, la bitácora, la bodega
+//  y la bitácora de turno quedan solo en Firestore (fen-produccion), que es lo que leen Sistema Fën y la bodega. Ya no se llama al
+//  script con cocina_planilla ni cocina_registros, y lo nuevo se guarda con planillaPendiente / registrosPendientes en false.
+//  El script sigue para revisar el PIN y para el correo de bodega bajo el mínimo (stock_alerta), que no son copias.
 //  v0.17.4: AJUSTE DE SÁBADO (masa para el lunes). Tercera opción del ajuste de harina/agua, "Todos los sábados": se guarda en
 //  ajustes/{AREA}_{receta}.sabado; se pausa, se salta un sábado ("Este sábado no") y, otro día (un feriado), se usa "solo este
 //  día". Qué ajuste vale cada día lo decide modelo.js → ajusteDelDia (la misma función que usa Sistema Fën).
@@ -233,8 +237,7 @@ function antesDeSalirDelArea() {
   Object.values(tiempos).forEach(t => clearTimeout(t)); tiempos = {};
   if (E.editor) ED.cerrarEditor();
   const dlg = $('dialogo'); if (dlg.open) dlg.close();
-  if (E.planilla.t) { clearTimeout(E.planilla.t); E.planilla.t = 0; pasarPlanilla(E.area); }   // el plan cambiado pasa a la planilla de su área
-  const rg = reg(); if (rg.t) { clearTimeout(rg.t); rg.t = 0; pasarRegistros(E.area); }
+  // v0.17.5: ya no hay copia pendiente a la planilla que despachar al cambiar de área
 }
 function dialogoArea() {
   const d = $('dialogo');
@@ -380,16 +383,16 @@ function iniciarEscuchas() {
     escuchar('solicitudes', query(collection(db, 'solicitudes'), where('area', '==', E.area)), sn => { E.solicitudes = {}; sn.docs.forEach(d => { const x = d.data(); E.solicitudes[x.id] = x; }); repintar(); });
   }
   // Todos los días del área: la bitácora de Bollería arma el stock congelado; la merma y la bitácora de
-  // Cafetería se ven por semana o mes. Lo que quedó sin copiar a la planilla se copia.
+  // Cafetería se ven por semana o mes. (v0.17.5: ya no se copia nada a la planilla.)
   escuchar('diasArea', query(collection(db, 'dias'), where('area', '==', E.area)), sn => {
-    E.diasArea = {}; sn.docs.forEach(d => { const x = d.data(); if (x.fecha) E.diasArea[x.fecha] = x; }); E.cargado.diasArea = true; repintar(); revisarRegistros();
+    E.diasArea = {}; sn.docs.forEach(d => { const x = d.data(); if (x.fecha) E.diasArea[x.fecha] = x; }); E.cargado.diasArea = true; repintar();
   });
   escuchar('ajustes', query(collection(db, 'ajustes'), where('area', '==', E.area)), sn => {
     E.ajustes = {}; sn.docs.forEach(d => { const a = d.data(); E.ajustes[a.recetaId] = a; }); E.cargado.ajustes = true; repintar();
   });
 }
 function asegurarPlan(lunes) {
-  escuchar('plan_' + lunes, doc(db, 'planes', `${E.area}_${lunes}`), sn => { E.planes[lunes] = sn.exists() ? sn.data() : { area: E.area, lunes, filas: {} }; repintar(); revisarPlanilla(); });
+  escuchar('plan_' + lunes, doc(db, 'planes', `${E.area}_${lunes}`), sn => { E.planes[lunes] = sn.exists() ? sn.data() : { area: E.area, lunes, filas: {} }; repintar(); });
   return E.planes[lunes];
 }
 // Bollería: metas/{AREA}_{lunes de la semana de la meta} = { productos: {receta: piezas}, elaboracion: {masa: {d0..d4}} }
@@ -1480,11 +1483,7 @@ function vistaPlan() {
       ${deshacer ? `<button type="button" class="btn-sec" data-accion="deshacer-copia">${ic('deshacer')}Deshacer la copia</button>` : ''}
     </div>
     ${deshacer ? `<p class="ayuda">Esta semana se copió de la del ${esc(M.etiquetaSemana(deshacer.desde))} (${esc(deshacer.por || '')} · ${esc(M.fechaCorta(String(deshacer.en || '').slice(0, 10) || M.hoyTxt()))} ${esc(horaDe(deshacer.en))}). "Deshacer la copia" la deja como estaba antes.</p>` : ''}
-    <p class="ayuda">Cada número se guarda solo al escribirlo, y la dupla lo ve al instante. La planilla de Producción se actualiza sola unos segundos después${planillaTexto()}.</p>`;
-}
-function planillaTexto() {
-  const pend = Object.values(E.planes).some(p => p && p.planillaPendiente);
-  return E.planilla.error ? ` · <b>planilla pendiente:</b> ${esc(E.planilla.error)}` : pend ? ' · hay cambios por pasar a la planilla' : '';
+    <p class="ayuda">Cada número se guarda solo al escribirlo, y la dupla y Sistema Fën lo ven al instante.</p>`;
 }
 
 let tiempos = {};
@@ -1500,10 +1499,9 @@ function guardarCelda(rid, d, texto) {
   // Queda en el equipo al tiro; "guardando" se apaga cuando el servidor confirma
   setDoc(doc(db, 'planes', `${E.area}_${lunes}`), {
     area: E.area, lunes, filas: { [rid]: { ['d' + d]: n } }, nombres: { [rid]: r ? r.nombre : rid },
-    planillaPendiente: true, actualizado: { por: quien(), en: serverTimestamp() }
+    planillaPendiente: false, actualizado: { por: quien(), en: serverTimestamp() }   // v0.17.5: sin copia a la planilla
   }, { merge: true }).then(() => { const el = $(`c-${rid}-${d}`); if (el) el.classList.remove('guardando'); })
     .catch(e => { const el = $(`c-${rid}-${d}`); if (el) { el.classList.remove('guardando'); el.classList.add('error-celda'); } avisar('No se guardó: ' + mensajeError(e), true); });
-  programarPlanilla();
 }
 // v0.12.0: copiar desde cualquier semana (las 12 anteriores, o las siguientes) y deshacer la última copia.
 // Antes de copiar se guarda cómo estaba la semana (antesDeCopiar.filas, como texto para que se reemplace entero).
@@ -1548,8 +1546,8 @@ function copiarSemana(lunes, desde, filasPrev, prev) {
   });
   const nombres = {}; Object.keys(filas).forEach(id => { const r = E.recetas.find(x => x.id === id); nombres[id] = r ? r.nombre : (((prev || {}).nombres || {})[id] || (actual.nombres || {})[id] || id); });
   const antes = { filas: JSON.stringify(filasConNumeros(actual.filas)), desde, por: quien(), en: ahoraIso() };
-  guardarSinEsperar(setDoc(doc(db, 'planes', `${E.area}_${lunes}`), { area: E.area, lunes, filas, nombres, antesDeCopiar: antes, planillaPendiente: true, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }));
-  avisar(`Copiada la semana del ${M.etiquetaSemana(desde)}. Revisa y ajusta lo que corresponda.`); programarPlanilla();
+  guardarSinEsperar(setDoc(doc(db, 'planes', `${E.area}_${lunes}`), { area: E.area, lunes, filas, nombres, antesDeCopiar: antes, planillaPendiente: false, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }));
+  avisar(`Copiada la semana del ${M.etiquetaSemana(desde)}. Revisa y ajusta lo que corresponda.`);
 }
 function deshacerCopia() {
   const lunes = E.lunesPlan, actual = E.planes[lunes] || {}, a = actual.antesDeCopiar;
@@ -1560,26 +1558,10 @@ function deshacerCopia() {
   new Set([...Object.keys(actual.filas || {}), ...Object.keys(antes)]).forEach(id => {
     filas[id] = {}; for (let i = 0; i < 7; i++) filas[id]['d' + i] = M.num(((antes[id] || {})['d' + i]) || 0);
   });
-  guardarSinEsperar(setDoc(doc(db, 'planes', `${E.area}_${lunes}`), { area: E.area, lunes, filas, antesDeCopiar: null, planillaPendiente: true, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }), 'La semana quedó como antes de copiar.');
-  programarPlanilla();
+  guardarSinEsperar(setDoc(doc(db, 'planes', `${E.area}_${lunes}`), { area: E.area, lunes, filas, antesDeCopiar: null, planillaPendiente: false, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true }), 'La semana quedó como antes de copiar.');
 }
 
-// La planilla (copia para Looker y la app antigua): el Apps Script lee los planes cambiados y los escribe
-E.planilla = { t: 0, corriendo: false, error: '' };
-function programarPlanilla(ms = 15000, area = E.area) { clearTimeout(E.planilla.t); E.planilla.t = setTimeout(() => pasarPlanilla(area), ms); }
-function revisarPlanilla() { if (Object.values(E.planes).some(p => p && p.planillaPendiente) && !E.planilla.t && !E.planilla.corriendo) programarPlanilla(5000); }
-async function pasarPlanilla(area) {
-  E.planilla.t = 0;
-  const deArea = typeof area === 'string' ? area : E.area;
-  if (E.planilla.corriendo || !E.usuario || navigator.onLine === false) { programarPlanilla(60000, deArea); return; }
-  E.planilla.corriendo = true;
-  try {
-    const r = await llamarScript({ action: 'cocina_planilla', area: deArea });
-    if (!r || r.ok !== true) throw new Error((r && (r.error || r.msg)) || 'sin respuesta');
-    E.planilla.error = '';
-  } catch (e) { E.planilla.error = e.message || String(e); programarPlanilla(120000, deArea); }
-  finally { E.planilla.corriendo = false; repintar(); }
-}
+// v0.17.5: la copia de los planes a la planilla (para Looker y la app antigua) está apagada: nada llama al script cocina_planilla.
 
 // ── Recetas (consulta) ──
 function vistaRecetas() {
@@ -1684,7 +1666,7 @@ $('principal').addEventListener('click', async ev => {
   if (ds.anularReg) {
     const [campo, fecha, id] = ds.anularReg.split('|');
     if (!confirm('¿Anular esta anotación? Queda en el registro como anulada y deja de contar.')) return;
-    guardarSinEsperar(guardarDia(fecha, { [campo]: { [id]: { anulado: { por: quien(), en: ahoraIso() } } }, ...(campo === 'bodega' ? { movIds: [id] } : {}), registrosPendientes: true }), 'Anotación anulada.');
+    guardarSinEsperar(guardarDia(fecha, { [campo]: { [id]: { anulado: { por: quien(), en: ahoraIso() } } }, ...(campo === 'bodega' ? { movIds: [id] } : {}), registrosPendientes: false }), 'Anotación anulada.');
     const b0 = campo === 'bodega' ? (((E.diasArea[fecha] || {}).bodega) || {})[id] : null;
     // v0.16.0: el último conteo es por bodega; v0.17.0: el documento de la bodega de esa anotación ('PROD' o sin campo = el de siempre)
     const b0d = b0 ? K.destinoMov('ADM', b0, mapaB()) : null;
@@ -2002,9 +1984,7 @@ const PERIODOS = [['hoy', 'Hoy'], ['semana', 'Esta semana'], ['semana_ant', 'Sem
 function chipsPeriodo(clave, valor, cuales) {
   return `<div class="botones-n" role="group" aria-label="Período">${PERIODOS.filter(([k]) => cuales.includes(k)).map(([k, t]) => `<button type="button" class="btn-sec" data-periodo="${k}" data-periodo-de="${clave}" aria-pressed="${valor === k}">${t}</button>`).join('')}</div>`;
 }
-function avisoCopia() {
-  const r = reg(); return r.error ? `<p class="ayuda">La copia a la planilla quedó pendiente (${esc(r.error)}). Se reintenta sola; lo anotado está guardado.</p>` : '';
-}
+function avisoCopia() { return ''; }   // v0.17.5: ya no hay copia a la planilla
 // v0.12.2: en todas las listas de anotaciones (Bitácora, Merma, Bitácora de turno, Bodega) las anuladas van
 // abajo, en un desplegable cerrado; siguen tachadas y sin botón
 function listaAnot(lista, fila) {
@@ -2120,7 +2100,7 @@ function dialogoMerma() {
     const a = { tipo: elegido.tipo, item: elegido.x.id, nombre: elegido.x.nombre, sub: !!elegido.sub, cantidad: n, unidad: u, motivo, nota: $('mm-nota').value.trim().slice(0, 200), por: quien(), en: ahoraIso() };
     if (cong) { a.congelado = true; a.congeladoDe = masas.includes(elegido.x.id) ? 'masa' : 'producto'; }
     d.close();
-    guardarSinEsperar(guardarDia(fecha, { merma: { [idAnot()]: a }, registrosPendientes: true }), fecha === hoyM ? 'Merma anotada.' : `Merma anotada en el ${M.fechaCorta(fecha)} (aquí se ve solo hoy).`);
+    guardarSinEsperar(guardarDia(fecha, { merma: { [idAnot()]: a }, registrosPendientes: false }), fecha === hoyM ? 'Merma anotada.' : `Merma anotada en el ${M.fechaCorta(fecha)} (aquí se ve solo hoy).`);
     programarRegistros();
   };
 }
@@ -2202,7 +2182,7 @@ function dialogoCalibracion() {
     if (!/^\d+$/.test(n) || Number(n) > 200) { $('cd-error').textContent = 'Escribe cuántos shots (número entero, 0 si no se calibró).'; return; }
     d.close();
     // v0.16.0: registrosPendientes → el script la copia a CAF_registros (una fila por día; si se vuelve a editar, se corrige)
-    guardarSinEsperar(guardarDia(hoy, { calibracionDiaria: CF.nuevaCalibracion(ed, cal.shots, Number(n), gps, quien(), ahoraIso()), registrosPendientes: true }), `Calibración diaria: ${M.miles(Number(n))} shots.`);
+    guardarSinEsperar(guardarDia(hoy, { calibracionDiaria: CF.nuevaCalibracion(ed, cal.shots, Number(n), gps, quien(), ahoraIso()), registrosPendientes: false }), `Calibración diaria: ${M.miles(Number(n))} shots.`);
     programarRegistros();
   };
 }
@@ -2266,7 +2246,7 @@ function dialogoDerramado() {
     const merma = CF.entradasDerramado(elegidos.map(x => ({ receta: x.r, cantidad: String(x.cant).trim() })),
       { barista: { email: p.id, nombre: p.nombre }, nota: $('dr-nota').value, por: quien(), en: ahoraIso(), grupo: idAnot() });
     d.close();
-    guardarSinEsperar(guardarDia(hoy, { merma, registrosPendientes: true }), elegidos.length === 1 ? 'Derramado anotado.' : `Derramado anotado (${elegidos.length} preparaciones).`);
+    guardarSinEsperar(guardarDia(hoy, { merma, registrosPendientes: false }), elegidos.length === 1 ? 'Derramado anotado.' : `Derramado anotado (${elegidos.length} preparaciones).`);
     programarRegistros();
   };
 }
@@ -2313,7 +2293,7 @@ function dialogoTurno(tipo) {
     const sel = $('tu-barista'), p = opciones.find(x => x.id === sel.value) || { id: '', nombre: '' };
     Object.assign(a, { barista: { email: p.id, nombre: p.nombre }, nota: $('tu-nota').value.trim().slice(0, 200), por: quien(), en: ahoraIso() });
     d.close();
-    guardarSinEsperar(guardarDia(M.hoyTxt(), { turno: { [idAnot()]: a }, registrosPendientes: true }), 'Anotado.');
+    guardarSinEsperar(guardarDia(M.hoyTxt(), { turno: { [idAnot()]: a }, registrosPendientes: false }), 'Anotado.');
     programarRegistros();
   };
 }
@@ -2493,7 +2473,7 @@ function dialogoBodega(tipo) {
     const ids = Object.keys(entradas);
     for (let i = 0; i < ids.length; i += 30) {
       const parte = Object.fromEntries(ids.slice(i, i + 30).map(k => [k, entradas[k]]));
-      guardarSinEsperar(guardarDia(hoy, { bodega: parte, movIds: Object.keys(parte), registrosPendientes: true }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
+      guardarSinEsperar(guardarDia(hoy, { bodega: parte, movIds: Object.keys(parte), registrosPendientes: false }), conteo ? 'Conteo guardado.' : 'Llegada anotada.');
     }
     // El último conteo de cada una, para que lo vean las otras áreas
     // v0.16.0: por bodega (conteosmp/{mpId} en Producción, conteosmp/CAF__{mpId} en Cafetería; reglas v1.7.0)
@@ -2503,30 +2483,9 @@ function dialogoBodega(tipo) {
   };
 }
 
-// La merma y la bitácora de Cafetería se copian a la planilla ("Registro_merma" y "CAF_registros"): el
-// script lee los días con registrosPendientes y no duplica (cada anotación lleva su id).
-// Un reloj por área (una tablet con varias áreas no pisa el reintento de otra)
-E.registros = {};
-const reg = (area = E.area) => E.registros[area] || (E.registros[area] = { t: 0, corriendo: false, error: '' });
-function programarRegistros(ms = 10000, area = E.area) { const r = reg(area); clearTimeout(r.t); r.t = setTimeout(() => pasarRegistros(area), ms); }
-function revisarRegistros() { const r = reg(); if (Object.values(E.diasArea).some(d => d && d.registrosPendientes) && !r.t && !r.corriendo) programarRegistros(5000); }
-async function pasarRegistros(area) {
-  const deArea = typeof area === 'string' ? area : E.area, R0 = reg(deArea);
-  R0.t = 0;
-  if (R0.corriendo || !E.usuario || navigator.onLine === false) { programarRegistros(60000, deArea); return; }
-  R0.corriendo = true;
-  try {
-    const r = await llamarScript({ action: 'cocina_registros', area: deArea });
-    if (!r || r.ok !== true) throw new Error((r && (r.error || r.msg)) || 'sin respuesta');
-    R0.error = '';
-  } catch (e) { R0.error = e.message || String(e); programarRegistros(120000, deArea); }
-  finally {
-    R0.corriendo = false;
-    // Si se anotó algo mientras copiaba, ese día quedó pendiente: se vuelve a revisar
-    if (deArea === E.area) revisarRegistros();
-    repintar();
-  }
-}
+// v0.17.5: la merma, la bitácora, la bodega y la bitácora de turno ya no se copian a la planilla ("Registro_merma",
+// "CAF_registros", "MP_stock_movimientos"): quedan solo en Firestore. Nada llama al script cocina_registros.
+function programarRegistros() {}
 
 function recortar(lista) { return lista.slice(-30); }
 

@@ -1,4 +1,4 @@
-# fën · Cocina · v0.17.4
+# fën · Cocina · v0.17.5
 
 **App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 y v0.17.4: 21 de octubre)
 
@@ -7,7 +7,26 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - la dupla ve lo mismo al instante;
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
-- la planilla de Producción recibe una copia automática del plan semanal.
+- desde la v0.17.5 ya no se copia nada a la planilla de Producción (Sistema Fën lee todo de la base).
+
+## Novedades v0.17.5 · Sin copias a la planilla de Producción (Etapa 2b, 21-oct)
+Va con **Sistema Fën v0.75.0**. **Reglas: las mismas v1.8.0** (no hay que publicar nada). **El script no cambia.**
+
+- **Qué cambia:** los planes semanales, la merma, la bitácora (Bollería y Cafetería), la bodega (llegadas y conteos) y la bitácora de turno **ya no se copian a la planilla de Producción**. Quedan solo en la base (fen-produccion), que es lo que leen Sistema Fën, la bodega y el Plan de Panadería. La planilla queda como estaba (historial).
+- **Para las jefas no cambia nada:** se anota igual, se guarda igual y la dupla lo ve al instante. Ya no aparece "hay cambios por pasar a la planilla" ni "la copia a la planilla quedó pendiente".
+- **Lo que sigue usando el script:** revisar el PIN (con Asistencia) y el correo de bodega bajo el mínimo (`stock_alerta`). No son copias a la planilla.
+- **Cómo queda guardado:** lo nuevo se guarda con `planillaPendiente: false` (planes) y `registrosPendientes: false` (días). Nada se borra. Lecturas: las mismas; escrituras: menos (ya no hay llamadas al script con `cocina_planilla` ni `cocina_registros`).
+- **Módulos compartidos:** `modelo.js`, `bolleria.js`, `registros.js` y `consumo.js` **no cambian** (siguen idénticos a los de Sistema Fën, con `?v=0.17.4`). Cambian `app.js`, `config.js`, `index.html` y este README.
+
+**Instalación:** repo **fen-cocina**, raíz → sube todos los archivos del zip `fen-cocina-v0.17.5.zip` → **Commit changes** → en cada tablet, cierra y abre la app (o recarga). Abajo debe decir **Cocina v0.17.5**.
+
+**Lista de verificación:**
+- [ ] Abajo dice **Cocina v0.17.5**.
+- [ ] Cambia un número del plan de la semana: se guarda (sin aviso de "planilla pendiente").
+- [ ] Anota una merma y una llegada en Bodega: quedan en la lista; en Sistema Fën → Producción → Merma y → Bodega aparecen.
+- [ ] El PIN se pide y se acepta como siempre.
+
+**Si algo sale mal:** vuelve a subir la v0.17.4 (vuelve a copiar a la planilla; lo anotado con la v0.17.5 no se copia solo).
 
 ## Novedades v0.17.4 · Ajuste de sábado (masa para el lunes) (pedido de Emmanuel, 21-oct)
 Va con **Sistema Fën v0.72.1** (la bodega y el Plan de Panadería calculan con la misma regla). **Las reglas siguen las v1.8.0** (no hay que publicar nada en Firebase) y el script tampoco cambia.

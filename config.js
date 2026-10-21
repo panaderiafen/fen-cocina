@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina (app de las jefas) — configuración  v0.17.4
+//  fën · Cocina (app de las jefas) — configuración  v0.17.5
 //  (i) La configuración web de Firebase no es secreta: solo dice cuál es el
 //  proyecto (fen-produccion). Lo que protege los datos son las reglas de
 //  fen-produccion y la cuenta de cada área (cuentas/{uid}).
@@ -7,7 +7,7 @@
 //  revisa la sesión de Firebase en cada pedido.
 // ═══════════════════════════════════════════════
 window.FEN_COCINA = {
-  VERSION: '0.17.4',
+  VERSION: '0.17.5',
   // Proyecto fen-produccion (no es secreto: solo dice cuál es el proyecto)
   firebase: {
     apiKey: 'AIzaSyC1Ea_zVHgPLu3Ij58JRcAQtWHnXIM6MeU',
@@ -17,7 +17,7 @@ window.FEN_COCINA = {
     messagingSenderId: '848731856981',
     appId: '1:848731856981:web:6dee7dada2116b1ec4f4dc'
   },
-  // Apps Script de Producción (revisa el PIN con Asistencia y copia los planes a la planilla)
+  // Apps Script de Producción (revisa el PIN con Asistencia y manda el correo de bodega bajo el mínimo; v0.17.5: ya no copia nada a la planilla)
   SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw-D1gOezUuFEhhqXQ69zYR0Sp4Bekg3CHhy3lEMzB8CV9kp6ty0iXTreyq5aULmz5L8g/exec',
   // App actual de Producción (las áreas que aún no pasan a la nueva)
   APP_ANTIGUA: 'https://panaderiafen.github.io/fen-produccion/',
