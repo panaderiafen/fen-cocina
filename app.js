@@ -1,5 +1,8 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.3
+//  fën · Cocina — la app de las jefas  v0.17.4
+//  v0.17.4: AJUSTE DE SÁBADO (masa para el lunes). Tercera opción del ajuste de harina/agua, "Todos los sábados": se guarda en
+//  ajustes/{AREA}_{receta}.sabado; se pausa, se salta un sábado ("Este sábado no") y, otro día (un feriado), se usa "solo este
+//  día". Qué ajuste vale cada día lo decide modelo.js → ajusteDelDia (la misma función que usa Sistema Fën).
 //  v0.17.3: RECETAS ARCHIVADAS (Sistema Fën v0.72.0 → Catálogo, "Qué está vivo"). Una receta con estado 'archivada' se trata
 //  como una anulada: no se lista ni se puede elegir (Recetas, buscador del editor, planificación, metas, Merma, derramado,
 //  inventario de Bollería). Un plan que ya la tiene conserva sus números con la nota "receta archivada". En Recetas quedan
@@ -88,13 +91,13 @@ import {
   auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence,
   collection, doc, getDoc, setDoc, query, where, onSnapshot, serverTimestamp
 } from './firebase.js?v=0.17.1';
-import * as M from './modelo.js?v=0.11.0';
-import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.17.3';
-import * as R from './registros.js?v=0.11.0';
-import * as K from './consumo.js?v=0.17.1';
-import * as CG from './congelado.js?v=0.17.1';
-import * as CF from './cafeteria.js?v=0.17.1';
+import * as M from './modelo.js?v=0.17.4';
+import * as B from './bolleria.js?v=0.17.4';
+import * as ED from './editor.js?v=0.17.4';
+import * as R from './registros.js?v=0.17.4';
+import * as K from './consumo.js?v=0.17.4';
+import * as CG from './congelado.js?v=0.17.4';
+import * as CF from './cafeteria.js?v=0.17.4';
 import * as FBQ from './fermentacion.js?v=0.17.2';
 
 const C = window.FEN_COCINA;
@@ -160,7 +163,9 @@ const IC = {
   copiar: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   deshacer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   lapiz: '<path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
-  imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>'
+  imprimir: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/>',
+  pausa: '<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+  repetir: '<path d="M17 3l3 3-3 3"/><path d="M4 12V9a3 3 0 0 1 3-3h13"/><path d="M7 21l-3-3 3-3"/><path d="M20 12v3a3 3 0 0 1-3 3H4"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
 // v0.16.3: el check junto al título de lo terminado (además del título en verde)
@@ -412,14 +417,10 @@ function guardarDia(fecha, cambios) {
   return setDoc(doc(db, 'dias', `${E.area}_${fecha}`), { area: E.area, fecha, ...cambios, actualizado: { por: quien(), en: serverTimestamp() } }, { merge: true });
 }
 
-// Ajuste vigente para una fecha (desde ≤ fecha ≤ hasta)
-// Ajuste que vale un día: el último período que lo cubre (desde ≤ día ≤ hasta)
-function vigenteDe(a, f) {
-  const ps = (a && a.periodos) || [];
-  for (let i = ps.length - 1; i >= 0; i--) { const p = ps[i]; if (M.tieneAjuste(p) && p.desde <= f && (!p.hasta || f <= p.hasta)) return p; }
-  return null;
-}
-const ajustesDe = f => { const r = {}; Object.values(E.ajustes).forEach(a => { const v = vigenteDe(a, f); if (v) r[a.recetaId] = v; }); return r; };
+// Ajuste que vale un día. v0.17.4: la regla está en modelo.js (ajusteDelDia, la misma de Sistema Fën):
+// "solo este día" > ajuste de sábado (los sábados) > el último período que lo cubre (desde ≤ día ≤ hasta)
+const vigenteDe = (a, f) => M.ajusteDelDia(a, f);
+const ajustesDe = f => M.ajustesDelDia(E.ajustes, f);
 const ctx = () => ({ recetas: E.recetas, mps: E.mps, config: E.config });
 
 // ═══════════════ La app ═══════════════
@@ -627,13 +628,13 @@ function tarjeta(o) {
             : `<span class="linea-tanda-pend">${ic('caja')}<span>Tanda ${i + 1} · pendiente</span></span>`).join('')}</span>`
             : h ? lineaHechoHtml(h, o.fbIds || [o.rid]) : ''}
         </div>
-        ${o.aj && o.receta ? `<span class="chip">Ajuste: ${esc(textoAjuste(o.receta, o.aj))}</span>` : ''}
+        ${o.aj && o.receta ? chipAjuste(o.receta, o.aj) : ''}
       </div>
       ${T.descuadre ? `<div class="nota ojo" style="margin:12px 20px 0">${ic('alerta')}<span>El plan cambió a ${fmt(o.total)}: las tandas guardadas (${T.descuadre.map(fmt).join(' + ')}) ya no suman eso. Vuelve a dividir.</span></div>` : ''}
       <div class="tandas">${columnas}</div>
       ${pasos.length || proc ? `<details class="desp" style="padding:0 20px"><summary>${ic('pasos')}&nbsp;Pasos</summary>${pasos.length ? `<ol class="pasos">${pasos.map(p => `<li>${esc(p)}</li>`).join('')}</ol>` : `<p class="texto-proc">${esc(proc)}</p>`}</details>` : ''}
       <div class="receta-pie">
-        ${o.ajustable ? `<button type="button" class="btn-sec" data-ajustar="${esc(o.rid)}">${ic('ajuste')}Ajustar harina / agua</button>` : o.ajusteEn ? `<span class="ayuda">${esc(o.ajusteEn)}</span>` : ''}
+        ${o.ajustable ? `<button type="button" class="btn-sec" data-ajustar="${esc(o.rid)}">${ic('ajuste')}Ajustar harina / agua</button>${botonesSabado(o.rid)}` : o.ajusteEn ? `<span class="ayuda">${esc(o.ajusteEn)}</span>` : ''}
         <button type="button" class="btn-sec" data-tandas="${esc(o.clave)}">${ic('capas')}Tandas</button>
         <span class="der">${o.botonFinal ? o.botonFinal : PT ? (h ? `<span class="chip-ok avance-tandas">${ic('ok')}Terminada · ${PT.n} de ${PT.n} tandas</span>`
           : `<span class="der-tandas"><span class="avance-tandas">${PT.hechas} de ${PT.n} tandas terminadas</span><button type="button" class="btn-sec" data-hecho="${esc(o.claveHecho)}" data-valor="1">${ic('check')}${PT.hechas ? 'Marcar las que faltan' : 'Marcar todas las tandas'}</button></span>`) : h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(o.claveHecho)}" data-valor="0">${ic('check')}Terminada · deshacer</button>`
@@ -1702,6 +1703,11 @@ $('principal').addEventListener('click', async ev => {
   if (ds.tandas) { dialogoTandas(ds.tandas); return; }
   if (ds.ordenarHoy) { dialogoOrdenarHoy(); return; }
   if (ds.ajustar) { dialogoAjuste(ds.ajustar); return; }
+  if (ds.sab && ds.sabRid) {   // v0.17.4: desde la tarjeta, los sábados
+    const r = E.recetas.find(x => x.id === ds.sabRid);
+    if (ds.sab === 'pausar' && !confirm(`¿Pausar el ajuste de sábado de ${r ? r.nombre : 'esta receta'}? Desde hoy los sábados van con lo normal; sus valores quedan guardados para reactivarlo.`)) return;
+    accionSabado(ds.sabRid, ds.sab); return;
+  }
   if (ds.accion === 'agregar') {
     const id = $('agregar-receta').value; if (!id) { avisar('Elige una receta.', true); return; }
     (E.filasNuevas[E.lunesPlan] = E.filasNuevas[E.lunesPlan] || []).push(id); pintar();
@@ -1825,9 +1831,49 @@ function dialogoTandas(clave) {
 // ── Diálogo: ajuste de harina / agua ──
 // ajustes/{AREA}_{receta} guarda períodos; el último que cubre un día es el que vale ese día
 // (un "solo este día" encima de uno largo no lo borra). "Quitar" termina todo desde ese día.
+// v0.17.4 · "Todos los sábados (masa para el lunes)": ajustes/{AREA}_{receta}.sabado (forma y precedencia en modelo.js,
+// ajusteDelDia). Se pausa (guarda los valores), se salta un sábado ("Este sábado no") y, otro día (un feriado), se usa
+// "solo este día" (un período de un día con los valores del sábado). Los feriados nunca son automáticos.
+const INFO_SAB = 'Todos los sábados (masa para el lunes): el sábado se amasa lo que se hornea el lunes (el domingo no hay producción) y la masa madre se hace el viernes en la tarde. El ajuste de sábado vale todos los sábados, hasta que lo pauses.\nQué vale un día: primero un ajuste "Solo el …" de ese día; después, si es sábado, el ajuste de sábado (aunque haya otro "hasta que lo quite"); si no, el último ajuste que cubre el día.\n"Este sábado no": ese sábado va con lo normal (la receta o el ajuste "hasta que lo quite"). "Pausar": deja de valer desde hoy y guarda los valores para reactivarlo.\nFeriados: no son automáticos. Si un día antes de un feriado se amasa para dos días, abre este ajuste ese día y toca "Usar el ajuste de sábado solo este día".';
+// Guarda el ajuste de sábado (setDoc con merge; los % que ya no van quedan en null: modelo.js los limpia)
+function guardarSabado(rid, nuevo, ok) {
+  const doc0 = E.ajustes[rid], datos = { area: E.area, recetaId: rid, sabado: M.sabadoParaGuardar(nuevo, doc0 && doc0.sabado) };
+  if (!doc0) datos.periodos = [];
+  guardarSinEsperar(setDoc(doc(db, 'ajustes', `${E.area}_${rid}`), datos, { merge: true }), ok);
+}
+function accionSabado(rid, accion) {
+  const doc0 = E.ajustes[rid], sab = doc0 && doc0.sabado, f = E.fecha; if (!sab) return;
+  if (accion === 'saltar') guardarSabado(rid, M.sabadoSaltar(sab, f, true), `Este sábado (${M.fechaCorta(f)}) va sin el ajuste de sábado.`);
+  else if (accion === 'usar') guardarSabado(rid, M.sabadoSaltar(sab, f, false), 'Este sábado vuelve a usar el ajuste de sábado.');
+  else if (accion === 'pausar') guardarSabado(rid, M.sabadoPausar(sab, f, quien(), ahoraIso()), 'Ajuste de sábado en pausa: sus valores quedan guardados.');
+  else if (accion === 'reactivar') guardarSabado(rid, M.sabadoReactivar(sab, f, quien(), ahoraIso()), 'Ajuste de sábado activo otra vez.');
+  else if (accion === 'unDia') {
+    const p = M.periodoDesdeSabado(sab, f, quien(), ahoraIso()); if (!p) return;
+    const periodos = ((doc0 && doc0.periodos) || []).map(x => ({ ...x }));
+    guardarSinEsperar(setDoc(doc(db, 'ajustes', `${E.area}_${rid}`), { area: E.area, recetaId: rid, periodos: recortar([...periodos, p]), quitado: null }, { merge: true }), `El ajuste de sábado vale solo el ${M.fechaCorta(f)}.`);
+  }
+}
+// Botones de la tarjeta, los sábados que vale (o se saltó) el ajuste de sábado
+function botonesSabado(rid) {
+  if (!rid) return '';
+  const st = M.estadoSabado(E.ajustes[rid], E.fecha);
+  if (!st.hay || !st.sabadoHoy || !st.activo) return '';
+  if (st.saltado) return `<button type="button" class="btn-sec" data-sab="usar" data-sab-rid="${esc(rid)}">${ic('repetir')}Usar el ajuste de sábado</button>`;
+  if (!st.aplica) return '';
+  return `<button type="button" class="btn-sec" data-sab="saltar" data-sab-rid="${esc(rid)}">${ic('deshacer')}Este sábado no</button>
+    <button type="button" class="btn-sec" data-sab="pausar" data-sab-rid="${esc(rid)}">${ic('pausa')}Pausar ajuste de sábado</button>`;
+}
+// El chip de la tarjeta: "Ajuste de sábado: …" (también el de un día copiado del sábado) o "Ajuste: …"
+function chipAjuste(r, a) {
+  if (!a || !r) return '';
+  const t = textoAjuste(r, a);
+  if (a.origen === 'sabado') return `<span class="chip chip-sab">${ic('repetir')}<span>Ajuste de sábado${t ? ': ' + esc(t) : ''}</span></span>`;
+  if (a.deSabado) return `<span class="chip chip-sab">${ic('repetir')}<span>Ajuste de sábado, solo hoy${t ? ': ' + esc(t) : ''}</span></span>`;
+  return `<span class="chip">Ajuste: ${esc(t)}</span>`;
+}
 function dialogoAjuste(rid) {
   const r = E.recetas.find(x => x.id === rid); if (!r) return;
-  const f = E.fecha, doc0 = E.ajustes[rid], vig = vigenteDe(doc0, f);
+  const f = E.fecha, doc0 = E.ajustes[rid], vig = vigenteDe(doc0, f), st = M.estadoSabado(doc0, f), esSab = M.esSabado(f);
   // % panadero: los de la receta, o calculados de los gramos si la receta no los trae (masa madre…)
   const P = M.panadero(r), orig = P.harina;
   const harinas = (r.ingredientes || []).filter(i => /^harina/i.test(i.nombre));
@@ -1842,23 +1888,47 @@ function dialogoAjuste(rid) {
   let sugerida = null;
   let harina = vig && M.num(vig.harina) > 0 ? M.num(vig.harina) : orig;
   const pct = {}; ingsPct.forEach(i => { pct[i.id] = vig && vig.pct && vig.pct[i.id] !== undefined ? M.num(vig.pct[i.id]) : pctOrig(i); });
-  let vigencia = vig ? (vig.hasta === vig.desde ? 'dia' : 'seguir') : 'dia';   // uno nuevo parte "solo este día"
+  // Uno nuevo parte "solo este día"; un sábado con el ajuste de sábado vigente, en "todos los sábados" (con sus valores)
+  let vigencia = !vig ? 'dia' : vig.origen === 'sabado' ? 'sabado' : vig.hasta === vig.desde ? 'dia' : 'seguir';
+  const esDato = vig && vig.origen !== 'sabado';   // hay un ajuste con fecha que vale hoy (se puede quitar o llevar a la receta)
+  const fc = esc(M.fechaCorta(f));
+  const cajaSab = !st.hay ? '' : `<div class="nota neutra caja-sab" id="aj-sab">${ic('repetir')}<div class="caja-sab-txt">
+      <span><b>${st.activo ? 'Ajuste de sábado' : 'Ajuste de sábado en pausa'}</b> · ${esc(textoAjuste(r, st) || 'sin cambios')}</span>
+      <span class="ayuda">${st.activo ? `Vale todos los sábados desde el ${esc(M.fechaCorta(st.desde))}.` : `En pausa desde el ${esc(M.fechaCorta(st.pausadoDesde || f))}${st.pausadoPor ? ` (${esc(FBQ.nombreCorto(st.pausadoPor))})` : ''}; sus valores quedan guardados.`}${esSab && st.activo ? (st.saltado ? ' Este sábado no se usa.' : st.tapadoPorDia ? ' Hoy vale el ajuste "solo este día".' : st.aplica ? ' Hoy vale.' : '') : ''}</span>
+      <span class="botones-sab">${esSab && st.activo ? (st.saltado ? `<button type="button" class="btn-sec" data-sab="usar">${ic('repetir')}Usarlo este sábado</button>` : `<button type="button" class="btn-sec" data-sab="saltar">${ic('deshacer')}Este sábado no</button>`) : ''}
+        ${st.activo ? `<button type="button" class="btn-sec" data-sab="pausar">${ic('pausa')}Pausar ajuste de sábado</button>` : `<button type="button" class="btn-sec" data-sab="reactivar">${ic('repetir')}Reactivar ajuste de sábado</button>`}
+        ${!esSab ? `<button type="button" class="btn-sec" data-sab="unDia">${ic('plan')}Usar el ajuste de sábado solo este día</button>` : ''}</span>
+    </div></div>`;
   const d = $('dialogo');
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>Ajustar harina / agua · ${esc(r.nombre)}</h2>
-      <p class="ayuda">Para cuando llega una harina que absorbe distinto. La receta original no cambia: el ajuste vale para las tarjetas, las tandas, las elaboraciones previas y los insumos.${esSubR ? (r.unidad !== 'g' ? ' Se mantiene la harina de cada unidad; abajo ves cómo cambia el peso por pieza y la harina que lo conserva.' : ' Se mantienen los kilos que piden los panes; cambian las proporciones.') : ''}${P.calculado ? ' Los % se calculan de los gramos de la receta.' : ''}</p>
+      <p class="ayuda">Para cuando llega una harina que absorbe distinto, o para la masa del sábado (se hornea el lunes). La receta original no cambia: el ajuste vale para las tarjetas, las tandas, las elaboraciones previas y los insumos.${esSubR ? (r.unidad !== 'g' ? ' Se mantiene la harina de cada unidad; abajo ves cómo cambia el peso por pieza y la harina que lo conserva.' : ' Se mantienen los kilos que piden los panes; cambian las proporciones.') : ''}${P.calculado ? ' Los % se calculan de los gramos de la receta.' : ''}</p>
+      ${vig && vig.origen === 'sabado' ? '<p class="ayuda aj-de-sab">Estos son los valores del ajuste de sábado.</p>' : ''}
       <div class="filas-aj">
         <div class="fila-aj"><label for="aj-harina">Harina base (100 %)<small>Receta: ${M.gramos(orig)}</small></label><input id="aj-harina" inputmode="decimal" value="${enCampo(harina)}"><span class="gr">g</span></div>
         ${ingsPct.map(i => `<div class="fila-aj"><label for="aj-${esc(i.id)}">${esc(i.nombre)}<small>Receta: ${M.unidades(pctOrig(i))} %</small></label><input id="aj-${esc(i.id)}" data-pct="${esc(i.id)}" inputmode="decimal" value="${enCampo(pct[i.id])}"><span class="gr" id="aj-g-${esc(i.id)}"></span></div>`).join('')}
       </div>
       ${mostrarPeso ? '<div class="nota neutra peso-aj" id="aj-peso" role="status"></div>' : ''}
-      <fieldset class="opciones" style="border:0;padding:0;margin:0"><legend class="rotulo">¿Hasta cuándo?</legend>
-        <label><input type="radio" name="vig" value="dia" ${vigencia === 'dia' ? 'checked' : ''}>Solo el ${esc(M.fechaCorta(f))}</label>
-        <label><input type="radio" name="vig" value="seguir" ${vigencia === 'seguir' ? 'checked' : ''}>Desde el ${esc(M.fechaCorta(f))}, hasta que lo quite (por ejemplo, mientras dure esta harina)</label>
+      <fieldset class="opciones" style="border:0;padding:0;margin:0"><legend class="rotulo leyenda-i">¿Cuándo vale? <button type="button" class="btn-i btn-i-linea" data-info-sab="1" aria-expanded="false" aria-controls="aj-info" aria-label="Qué ajuste vale cada día">${ic('info')}</button></legend>
+        <p class="ayuda info-texto" id="aj-info" hidden>${esc(INFO_SAB).replace(/\n/g, '<br>')}</p>
+        <label><input type="radio" name="vig" value="dia" ${vigencia === 'dia' ? 'checked' : ''}>Solo el ${fc}</label>
+        <label><input type="radio" name="vig" value="seguir" ${vigencia === 'seguir' ? 'checked' : ''}>Desde el ${fc}, hasta que lo quite (por ejemplo, mientras dure esta harina)</label>
+        <label><input type="radio" name="vig" value="sabado" ${vigencia === 'sabado' ? 'checked' : ''}>Todos los sábados (masa para el lunes)</label>
       </fieldset>
-      ${vig ? `<p class="ayuda">¿Esta harina llegó para quedarse? <button type="button" class="btn-link" data-llevar="1">Llevar el ajuste a la receta</button> (la envía a revisión; el ajuste sigue mientras se aprueba).</p>` : ''}
-      <div class="dlg-pie">${vig ? '<button type="button" class="btn-sec izq" data-quitar="1">Quitar ajuste</button>' : ''}<button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Guardar ajuste</button></div>
+      <p class="ayuda" id="aj-nota-vig" role="status"></p>
+      ${cajaSab}
+      ${esDato ? `<p class="ayuda">¿Esta harina llegó para quedarse? <button type="button" class="btn-link" data-llevar="1">Llevar el ajuste a la receta</button> (la envía a revisión; el ajuste sigue mientras se aprueba).</p>` : ''}
+      <div class="dlg-pie">${esDato ? '<button type="button" class="btn-sec izq" data-quitar="1">Quitar ajuste</button>' : ''}<button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Guardar ajuste</button></div>
     </form>`;
+  // Lo que pasa con lo elegido, en una línea (para que no sorprenda la precedencia)
+  const notaVig = () => {
+    const el = $('aj-nota-vig'); if (!el) return;
+    let t = '';
+    if (vigencia === 'sabado') t = esSab ? `Vale hoy y todos los sábados que vienen${st.hay ? ' (reemplaza los valores del ajuste de sábado)' : ''}.` : `Vale desde el próximo sábado, ${esc(M.fechaCorta(M.sumarDias(f, (M.SABADO - M.indiceDia(f) + 7) % 7 || 7)))}, y todos los que siguen${st.hay ? ' (reemplaza los valores del ajuste de sábado)' : ''}.`;
+    else if (vigencia === 'seguir' && st.hay && st.activo) t = esSab && !st.saltado ? `Los sábados sigue valiendo el ajuste de sábado: para cambiar solo hoy, elige "Solo el ${fc}".` : 'Los sábados sigue valiendo el ajuste de sábado.';
+    else if (vigencia === 'dia' && esSab && st.aplica) t = 'Solo hoy, en vez del ajuste de sábado (que sigue para los próximos).';
+    el.innerHTML = t; el.hidden = !t;
+  };
   const marcar = () => {
     const h = $('aj-harina'); h.classList.toggle('cambiado', Math.abs(harina - orig) > 0.1);
     ingsPct.forEach(i => { const el = $('aj-' + i.id), g = $('aj-g-' + i.id); if (el) el.classList.toggle('cambiado', Math.abs(pct[i.id] - pctOrig(i)) > 0.001); if (g) g.textContent = M.gramos(harina * pct[i.id] / 100); });
@@ -1869,19 +1939,24 @@ function dialogoAjuste(rid) {
     caja.innerHTML = `<span>Peso por pieza: <b>${pieza(w.peso)}</b>${distinto ? ` (receta ${pieza(w.original)})` : ' · igual que la receta'}.`
       + (distinto && sugerida ? ` Para que cada pieza pese ${pieza(w.original)}, la harina base va en <b>${gH(sugerida)}</b>.</span> <button type="button" class="btn-sec" data-mantener="1">Usar ${gH(sugerida)}</button>` : '</span>');
   };
-  marcar(); d.showModal();
+  marcar(); notaVig(); d.showModal();
   d.onsubmit = ev => ev.preventDefault();
   d.oninput = ev => {
     const t = ev.target;
     if (t.id === 'aj-harina') harina = M.num(t.value);
     else if (t.dataset.pct) pct[t.dataset.pct] = M.num(t.value);
-    else if (t.name === 'vig') vigencia = t.value;
+    else if (t.name === 'vig') { vigencia = t.value; notaVig(); }
     marcar();
   };
-  d.onchange = ev => { if (ev.target.name === 'vig') vigencia = ev.target.value; };
+  d.onchange = ev => { if (ev.target.name === 'vig') { vigencia = ev.target.value; notaVig(); } };
   d.onclick = ev => {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.cerrar) { d.close(); return; }
+    if (b.dataset.infoSab) { const p = $('aj-info'), abrir = p.hidden; p.hidden = !abrir; b.setAttribute('aria-expanded', String(abrir)); return; }
+    if (b.dataset.sab) {
+      if (b.dataset.sab === 'pausar' && !confirm(`¿Pausar el ajuste de sábado de ${r.nombre}? Desde hoy los sábados van con lo normal; sus valores quedan guardados para reactivarlo.`)) return;
+      d.close(); accionSabado(rid, b.dataset.sab); return;
+    }
     if (b.dataset.mantener) { if (sugerida) { harina = sugerida; $('aj-harina').value = enCampo(sugerida); marcar(); } return; }
     if (b.dataset.llevar) {
       const abierta = ED.propuestaAbierta(rid);
@@ -1896,14 +1971,22 @@ function dialogoAjuste(rid) {
     const terminarDesde = lista => lista.filter(x => x.desde < f).map(x => (!x.hasta || x.hasta >= f) ? { ...x, hasta: M.sumarDias(f, -1) } : x);
     if (b.dataset.quitar) {
       d.close();
-      guardarSinEsperar(setDoc(ref, { area: E.area, recetaId: rid, periodos: recortar(terminarDesde(periodos)), quitado: { por: quien(), en: ahoraIso(), desde: f } }, { merge: true }), 'Ajuste quitado: vuelve a la receta original.');
+      guardarSinEsperar(setDoc(ref, { area: E.area, recetaId: rid, periodos: recortar(terminarDesde(periodos)), quitado: { por: quien(), en: ahoraIso(), desde: f } }, { merge: true }), st.hay && st.activo ? 'Ajuste quitado. El ajuste de sábado sigue (se pausa aparte).' : 'Ajuste quitado: vuelve a la receta original.');
       return;
     }
     if (b.dataset.guardar) {
       if (!(harina > 0) || Object.values(pct).some(v => !(v >= 0 && v < 1000))) { avisar('Revisa los números: la harina debe ser mayor que 0 y los % entre 0 y 999.', true); return; }
       const cambios = {}; ingsPct.forEach(i => { if (Math.abs(pct[i.id] - pctOrig(i)) > 0.001) cambios[i.id] = pct[i.id]; });
       const cambiaHarina = Math.abs(harina - orig) > 0.1;
-      if (!cambiaHarina && !Object.keys(cambios).length) { if (vig) b.closest('form').querySelector('[data-quitar]').click(); else d.close(); return; }
+      const sinCambios = !cambiaHarina && !Object.keys(cambios).length;
+      if (vigencia === 'sabado') {
+        // Sin cambios = como la receta: si había un ajuste de sábado activo, se pausa (sus valores quedan)
+        if (sinCambios) { d.close(); if (st.hay && st.activo) accionSabado(rid, 'pausar'); return; }
+        d.close();
+        guardarSabado(rid, M.sabadoGuardar(doc0 && doc0.sabado, { harina: cambiaHarina ? harina : null, pct: cambios }, f, quien(), ahoraIso()), esSab ? 'Ajuste de sábado guardado: vale hoy y todos los sábados.' : 'Ajuste de sábado guardado: vale todos los sábados.');
+        return;
+      }
+      if (sinCambios) { if (esDato) b.closest('form').querySelector('[data-quitar]').click(); else d.close(); return; }
       const nuevo = { harina: cambiaHarina ? harina : null, pct: cambios, desde: f, hasta: vigencia === 'dia' ? f : null, por: quien(), en: ahoraIso() };
       // "Hasta que lo quite" reemplaza lo que venía desde ese día; "solo este día" va encima sin borrar lo demás
       const base = vigencia === 'dia' ? periodos : terminarDesde(periodos);

@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.3
+# fën · Cocina · v0.17.4
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3: 21 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 y v0.17.4: 21 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,45 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.17.4 · Ajuste de sábado (masa para el lunes) (pedido de Emmanuel, 21-oct)
+Va con **Sistema Fën v0.72.1** (la bodega y el Plan de Panadería calculan con la misma regla). **Las reglas siguen las v1.8.0** (no hay que publicar nada en Firebase) y el script tampoco cambia.
+
+Las recetas "48 h" (por ejemplo, ciabatta 48 h) existían solo porque la app antigua no se podía ajustar: cambian solo los %. Cada sábado se amasa lo que se hornea el **lunes** (el domingo no hay producción) y la masa madre se hace el viernes en la tarde. Ahora ese cambio va en la misma receta, como un ajuste permanente de los sábados que se puede apagar cuando quieras.
+
+- **Dónde va:** repo **fen-cocina**, raíz. Sube todos los archivos del zip `fen-cocina-v0.17.4.zip` → **Commit changes** → en cada tablet, cierra y abre la app (o recarga).
+- **Ajustar harina / agua** tiene una tercera opción en "¿Cuándo vale?": **"Todos los sábados (masa para el lunes)"**. Vale todos los sábados desde el día en que se guarda (si se guarda un sábado, también ese día). La (i) junto a "¿Cuándo vale?" explica qué ajuste vale cada día.
+- **Qué ajuste vale un día** (en este orden):
+  1. un ajuste **"Solo el …"** de ese día;
+  2. si es **sábado**: el ajuste de sábado (**gana a uno "hasta que lo quite"**, por ejemplo el de una harina nueva);
+  3. si no, el último ajuste que cubre el día (como siempre).
+- **Los sábados**, la tarjeta muestra el chip azul **"Ajuste de sábado: Agua 70 % (receta 75 %)"** y dos botones: **"Este sábado no"** (ese sábado va con lo normal; se deshace con "Usar el ajuste de sábado") y **"Pausar ajuste de sábado"** (desde ese día deja de valer y sus valores quedan guardados). Pausado o saltado: la tarjeta no muestra nada del sábado.
+- **En el diálogo** (cualquier día con ajuste de sábado) hay una caja azul con sus valores y su estado, y los botones: "Este sábado no" / "Usarlo este sábado" (los sábados), "Pausar ajuste de sábado" o "Reactivar ajuste de sábado". Un sábado, el diálogo trae los valores del sábado.
+- **Feriados: nunca automáticos.** Si un día antes de un feriado se amasa para dos días, abre el ajuste ese día y toca **"Usar el ajuste de sábado solo este día"**: queda un ajuste "Solo el …" con los valores del sábado (chip "Ajuste de sábado, solo hoy").
+- "Quitar ajuste" y "Llevar el ajuste a la receta" siguen siendo de los ajustes con fecha; el de sábado se pausa aparte. Guardar "Todos los sábados" con los valores de la receta lo pausa.
+- Lo pasado no cambia: pausar, reactivar o cambiar los valores no recalcula los sábados anteriores (la bodega y el historial siguen igual).
+
+**Cómo queda guardado (para el que venga):** en el mismo documento `ajustes/{AREA}_{recetaId}`, un campo nuevo:
+`sabado = { harina|null, pct: { ingId: % }, activo, desde, por, en, pausadoDesde|null, pausadoPor, pausadoEn, saltar: [fechas (12 últimas)], antes: [{ harina, pct, desde, hasta, por, en }] (12 últimos tramos) }`.
+"Usar el ajuste de sábado solo este día" agrega un período `{ …, desde = hasta = ese día, deSabado: true }` a `periodos`. La regla de qué vale cada día está en `modelo.js` → `ajusteDelDia` / `ajustesDelDia` (la usa también Sistema Fën vía `consumo.ajustesDe`). Como `setDoc` con `merge` mezcla los mapas, un % que se quita del sábado se guarda en `null` (y no cuenta). Costo en Firebase: cero lecturas nuevas (el documento ya se escuchaba); una escritura por acción.
+
+**Archivos → GitHub, repo `fen-cocina` (raíz):** cambian `app.js`, `estilos.css`, `modelo.js` y `consumo.js` (las reglas nuevas); `bolleria.js`, `registros.js`, `editor.js`, `congelado.js` y `cafeteria.js` solo cambian la versión con que importan `modelo.js` (para que el navegador no use uno viejo guardado); solo versión: `config.js`, `index.html`, `README.md`. Sin cambios: `fermentacion.js`, `buscador.js`, `firebase.js`, `logo-fen.png`, `firestore-produccion.rules` (v1.8.0). Los cinco módulos compartidos (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`, `fermentacion.js`) siguen **idénticos** a las copias de Sistema Fën v0.72.1. Lo más simple: subir **todos** los del zip.
+
+**Reglas:** sin cambios. fen-produccion v1.8.0 ya deja a la jefa escribir `ajustes` de su área sin restringir los nombres de campos (solo pide que `periodos` sea una lista de hasta 30; Cocina lo escribe también en un documento nuevo).
+
+### Lista de verificación v0.17.4
+- [ ] Abajo dice **Cocina v0.17.4**.
+- [ ] Un sábado (o con la fecha en un sábado): en una receta, Ajustar harina / agua → baja el agua → "Todos los sábados (masa para el lunes)" → Guardar. La tarjeta dice "Ajuste de sábado: …" y los gramos cambian.
+- [ ] "Este sábado no": el chip se va; "Usar el ajuste de sábado" lo vuelve a poner.
+- [ ] El viernes (flecha atrás): la receta va sin el ajuste de sábado.
+- [ ] Un jueves: el diálogo ofrece "Usar el ajuste de sábado solo este día"; al tocarlo, la tarjeta dice "Ajuste de sábado, solo hoy".
+- [ ] "Pausar ajuste de sábado": el sábado vuelve a lo normal; en el diálogo, "Reactivar ajuste de sábado".
+- [ ] En Sistema Fën → Producción → Configuración → "Ajuste de sábado · Panadería" aparece la receta (Activo / En pausa).
+- [ ] Celular y tablets (de pie y acostadas): nada cortado ni corrido hacia el lado.
+
+**Si algo sale mal:** vuelve a subir la v0.17.3 (y Sistema Fën v0.72.0). No se pierde nada: el campo `sabado` queda guardado y la v0.17.3 lo ignora (los sábados irían sin ese ajuste). Los "solo este día" copiados del sábado siguen valiendo como ajustes de un día.
+
+**Pruebas:** `pruebas/sistemafen/ajuste-sabado-v0721.test.js` (20: la precedencia, saltar, pausar, reactivar, tramos pasados, feriado, `null` con merge, bodega con el ajuste de sábado, Plan sábado → lunes, el diálogo y la tarjeta en el navegador con la base simulada y el reloj en sábado). Capturas en `pruebas/capturas/ajuste-sabado/` (390 y 1024).
 
 ## Novedades v0.17.3 · Recetas archivadas (Sistema Fën v0.72.0 → Catálogo, "Qué está vivo")
 Solo cambian `app.js` y `editor.js` (y la versión en `index.html` y `config.js`). Los módulos compartidos (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`, `fermentacion.js`) **no cambian** y siguen iguales a las copias de Sistema Fën. **Las reglas siguen las v1.8.0** (no hay que publicar nada en Firebase) y el script tampoco cambia.

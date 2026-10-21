@@ -14,7 +14,7 @@
 //  · Materia prima que falta: se pide desde aquí (solicitudes/{AREA}_{id}); la crea o habilita
 //    Administración en Sistema Fën.
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.11.0';
+import * as M from './modelo.js?v=0.17.4';
 import { conBuscador } from './buscador.js?v=0.16.3';
 
 let A = null;   // { E, db, doc, setDoc, esc, ic, avisar, quien, ahoraIso, serverTimestamp, $, pintar, guardarSinEsperar, ctx }

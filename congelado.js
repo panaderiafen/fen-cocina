@@ -36,8 +36,8 @@
 //      usados al laminar (Formé desde el lunes), en el refri, hechos (desde el domingo antes) y
 //      faltan = máx(0, necesarios − usados − en el refri).
 // ═══════════════════════════════════════════════
-import * as M from './modelo.js?v=0.11.0';
-import * as B from './bolleria.js?v=0.11.0';
+import * as M from './modelo.js?v=0.17.4';
+import * as B from './bolleria.js?v=0.17.4';
 
 const sumar = (o, k, n) => { if (k) o[k] = (o[k] || 0) + M.num(n); };
 const r2 = n => Math.round(M.num(n) * 100) / 100;
