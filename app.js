@@ -110,7 +110,7 @@ import * as K from './consumo.js?v=0.17.4';
 import * as CG from './congelado.js?v=0.17.4';
 import * as CF from './cafeteria.js?v=0.17.4';
 import * as FBQ from './fermentacion.js?v=0.17.2';
-import * as I from './informes.js?v=0.17.7';
+import * as I from './informes.js?v=0.17.9';
 
 const C = window.FEN_COCINA;
 const AREAS = {

@@ -50,6 +50,8 @@ export function ajusteInfo(r, a) {
 // ═══════════════ Panadería · Masas del día ═══════════════
 // items: [{ nombre, tipo: 'masa'|'receta', unidad: 'un'|'g', un, total, receta, aj (ajusteDelDia), fbMin, para,
 //           tandas: [{ cantidad, gramos, marca: { por, en } | null }] }]   (los arma app.js con lo mismo que pinta Hoy)
+// Fecha guardada (texto ISO, Timestamp de Firestore o número) → milisegundos
+const msDe = x => typeof x === 'number' ? x : typeof x === 'string' ? Date.parse(x) : x && typeof x.toMillis === 'function' ? x.toMillis() : x && x.seconds ? x.seconds * 1000 : NaN;
 export function informePan({ fecha, quien = '', generado, items = [], notas = '' }) {
   const masas = items.map(it => {
     const enG = it.unidad === 'g', un = it.un || 'un', fb = n0(it.fbMin) > 0 ? Math.round(n0(it.fbMin)) : null;
@@ -57,7 +59,9 @@ export function informePan({ fecha, quien = '', generado, items = [], notas = ''
       const m = t.marca && t.marca.por ? t.marca : null, e = m ? FBQ.estadoFB(m.en, fb) : null;
       return {
         n: i + 1, tamano: enG ? M.gramos(t.cantidad) : `${M.unidades(t.cantidad)} ${un} · ${M.gramos(t.gramos)}`,
-        pendiente: !m, inicio: m ? FBQ.hora(m.en) : null, formado: e ? e.hasta : null, diaSiguiente: !!(e && e.diaSiguiente), por: m ? FBQ.nombreCorto(m.por) : ''
+        pendiente: !m, inicio: m ? FBQ.hora(m.en) : null, formado: e ? e.hasta : null, diaSiguiente: !!(e && e.diaSiguiente), por: m ? FBQ.nombreCorto(m.por) : '',
+        // v0.17.8: para ordenar el día (inicio de la f. en bloque y formado, en milisegundos)
+        tIni: m ? msDe(m.en) : null, tForm: m && fb ? msDe(m.en) + fb * 60000 : null
       };
     });
     const gramos = (it.tandas || []).reduce((s, t) => s + n0(t.gramos), 0);
@@ -65,21 +69,35 @@ export function informePan({ fecha, quien = '', generado, items = [], notas = ''
     return {
       nombre: it.nombre, tipo: it.tipo || 'receta', para: it.para || '',
       cantidad: enG ? M.gramos(it.total) : `${M.unidades(it.total)} ${un}${gramos > 0 ? ' · ' + M.gramos(gramos) : ''}`,
+      total: enG ? M.gramos(it.total) : `${M.unidades(it.total)} ${un}`, kg: !enG && gramos > 0 ? M.gramos(gramos) : '',   // v0.17.9
       fb: fb ? FBQ.aHHMM(fb) : '', ajuste: ajusteInfo(it.receta, it.aj), tandas, hechas, terminada: tandas.length > 0 && hechas === tandas.length
     };
   });
+  // v0.17.8: las masas en el orden en que se forman (la que se forma primero, arriba); las sin marcar, al final
+  const primero = x => { const v = x.tandas.map(t => t.tForm ?? t.tIni).filter(n => Number.isFinite(n)); return v.length ? Math.min(...v) : Infinity; };
+  masas.sort((a, b) => primero(a) - primero(b));
+  // Orden del día: cada tanda marcada da dos momentos (empieza la f. en bloque, se forma), de más temprano a más tarde
+  const orden = [];
+  masas.forEach(x => x.tandas.forEach(t => {
+    if (t.pendiente) return;
+    const quien = x.tandas.length > 1 ? `${x.nombre} · tanda ${t.n}` : x.nombre;
+    if (Number.isFinite(t.tIni)) orden.push({ t: t.tIni, hora: t.inicio, que: 'inicio', texto: `Empieza la fermentación en bloque · ${quien}` });
+    if (Number.isFinite(t.tForm)) orden.push({ t: t.tForm, hora: t.formado + (t.diaSiguiente ? ' (día sig.)' : ''), que: 'formar', texto: `Formar · ${quien}` });
+  }));
+  const rango = o => o.que === 'formar' ? 0 : 1;   // a la misma hora, primero lo que hay que formar
+  orden.sort((a, b) => a.t - b.t || rango(a) - rango(b));
   const tandas = masas.reduce((s, x) => s + x.tandas.length, 0), hechas = masas.reduce((s, x) => s + x.hechas, 0);
   return {
     tipo: 'pan', area: 'Panadería', titulo: 'Masas del día', fecha, fechaTxt: M.fechaLarga(fecha), quien, hora: horaDe(generado),
-    masas, notas: String(notas || '').trim(),
+    masas, orden, notas: String(notas || '').trim(),
     resumen: { masas: masas.length, terminadas: masas.filter(x => x.terminada).length, tandas, hechas, sabado: masas.some(x => x.ajuste && x.ajuste.tipo !== 'dia') }
   };
 }
 const lineaTanda = (x, t) => {
-  const que = x.tandas.length > 1 ? `Tanda ${t.n}` : 'Una tanda';
-  if (t.pendiente) return `${que} · ${t.tamano} · pendiente`;
-  const formado = t.formado ? `formado ${t.formado}${t.diaSiguiente ? ' (día siguiente)' : ''}` : 'formado: sin f.b. configurada';
-  return `${que} · ${t.tamano} · inicio ${t.inicio} · ${formado}${t.por ? ` (${t.por})` : ''}`;
+  const que = x.tandas.length > 1 ? `Tanda ${t.n}` : 'Tanda';
+  if (t.pendiente) return `${que} (${t.tamano}): pendiente`;
+  const formado = t.formado ? `formado ${t.formado}${t.diaSiguiente ? ' (día siguiente)' : ''}` : 'formado —';
+  return `${que} (${t.tamano}): inicio ${t.inicio} · ${formado}`;
 };
 
 // ═══════════════ Bollería · Informe del viernes ═══════════════
@@ -174,14 +192,14 @@ export function texto(inf) {
   const L = [];
   if (inf.tipo === 'pan') {
     L.push(`*Fën · Panadería · Masas del día*`, `${inf.fechaTxt}${inf.quien ? ` · envía ${inf.quien}` : ''}`);
-    L.push(`Inicio = cuando se marcó la tanda terminada; formado = inicio + fermentación en bloque.`);
+    if (inf.orden && inf.orden.length) { L.push('', '*Orden del día*'); inf.orden.forEach(o => L.push(`${o.hora} · ${o.texto}`)); }
     if (!inf.masas.length) L.push('', 'Sin masas planificadas para este día.');
     inf.masas.forEach(x => {
-      L.push('', `*${x.nombre}* · ${x.cantidad}${x.terminada ? ' · terminada' : ''}`);
-      if (x.para) L.push(x.para);
-      if (x.ajuste) L.push(`${x.ajuste.etiqueta}: ${x.ajuste.texto}`);
-      if (!x.fb) L.push('Sin fermentación en bloque configurada');
-      x.tandas.forEach(t => L.push('- ' + lineaTanda(x, t)));
+      // v0.17.9: masa y total; cada tanda con sus horas; lo demás en cursiva al final
+      L.push('', `*${x.nombre}* · total ${x.total}`);
+      x.tandas.forEach(t => L.push(lineaTanda(x, t)));
+      const chico = [x.kg, x.para, x.fb ? `fermentación en bloque ${x.fb}` : 'sin fermentación en bloque configurada', x.ajuste ? `${x.ajuste.etiqueta}: ${x.ajuste.texto}` : ''].filter(Boolean);
+      L.push(`_${chico.join(' · ')}_`);
     });
     if (inf.masas.length) L.push('', `Resumen: ${inf.resumen.terminadas} de ${plural(inf.resumen.masas, 'masa terminada', 'masas terminadas')} · ${inf.resumen.hechas} de ${plural(inf.resumen.tandas, 'tanda', 'tandas')}`);
     if (inf.notas) L.push('', `Notas del día: ${inf.notas}`);
@@ -227,7 +245,7 @@ const SVG = {
 };
 // Íconos lineales con el color escrito (html2canvas no siempre toma currentColor)
 const icono = (n, color) => `<svg class="inf-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${SVG[n] || ''}</svg>`;
-const COL = { texto: '#2B2622', suave: '#6B625A', ok: '#3F5E44', ojo: '#7A5718', sab: '#2F5A7A', linea: '#ECE6DE' };
+const COL = { texto: '#2B2622', suave: '#6B625A', ok: '#3F5E44', ojo: '#7A5718', sab: '#2F5A7A', linea: '#ECE6DE', fondoSuave: '#F7F3EE' };
 const fila = (nombre, valor, clase = '') => `<div class="inf-fila inf-bloque ${clase}"><span class="inf-n">${nombre}</span><span class="inf-v">${valor}</span></div>`;
 const cab = inf => `<div class="inf-cab inf-bloque"><img class="inf-logo" src="logo-fen.png" alt="Fën"><div class="inf-cab-t">
     <div class="inf-area">Fën · ${esc(inf.area)}</div><div class="inf-t1">${esc(inf.titulo)}</div>
@@ -236,19 +254,21 @@ const cab = inf => `<div class="inf-cab inf-bloque"><img class="inf-logo" src="l
 export function html(inf) {
   if (inf.tipo === 'pan') {
     const r = inf.resumen;
-    const masas = inf.masas.map(x => `<section class="inf-masa${x.terminada ? ' inf-terminada' : ''}">
-        <div class="inf-masa-cab inf-bloque"><div class="inf-masa-n"><b>${esc(x.nombre)}</b>${x.terminada ? `<span class="inf-chip inf-chip-ok">${icono('check', COL.ok)}Terminada</span>` : ''}</div><span class="inf-masa-c">${esc(x.cantidad)}</span></div>
-        ${x.para ? `<div class="inf-sub inf-bloque">${esc(x.para)}</div>` : ''}
-        ${x.ajuste ? `<div class="inf-bloque"><span class="inf-chip ${x.ajuste.tipo === 'dia' ? '' : 'inf-chip-sab'}">${icono(x.ajuste.tipo === 'dia' ? 'ajuste' : 'repetir', x.ajuste.tipo === 'dia' ? COL.suave : COL.sab)}${esc(x.ajuste.etiqueta)}: ${esc(x.ajuste.texto)}</span></div>` : ''}
-        <div class="inf-sub inf-bloque">${x.tandas.length > 1 ? `${x.tandas.length} tandas` : 'Una tanda'} · ${x.fb ? `fermentación en bloque ${esc(x.fb)}` : 'sin fermentación en bloque configurada'}</div>
+    // v0.17.9: primero la masa y su total, después cada tanda con sus horas; lo demás, en letra chica al final
+    const masas = inf.masas.map(x => {
+      const chico = [x.kg, x.para, x.fb ? `fermentación en bloque ${x.fb}` : 'sin fermentación en bloque configurada', x.ajuste ? `${x.ajuste.etiqueta}: ${x.ajuste.texto}` : ''].filter(Boolean);
+      return `<section class="inf-masa${x.terminada ? ' inf-terminada' : ''}">
+        <div class="inf-masa-cab inf-bloque"><b class="inf-masa-t">${esc(x.nombre)}</b><span class="inf-masa-tot">total ${esc(x.total)}</span></div>
         ${x.tandas.map(t => `<div class="inf-tanda inf-bloque${t.pendiente ? ' inf-pend' : ''}">
-          <span class="inf-tanda-n">${icono(t.pendiente ? 'caja' : 'check', t.pendiente ? COL.suave : COL.ok)}<span><b>${x.tandas.length > 1 ? `Tanda ${t.n}` : 'Tanda'}</b> · ${esc(t.tamano)}</span></span>
-          <span class="inf-horas">${t.pendiente ? '<span class="inf-pend-t">pendiente</span>' : `<span>Inicio <b>${esc(t.inicio)}</b></span><span>Formado <b>${t.formado ? esc(t.formado) + (t.diaSiguiente ? ' (día sig.)' : '') : '—'}</b></span>${t.por ? `<span class="inf-por">${esc(t.por)}</span>` : ''}`}</span>
+          <span class="inf-tanda-n">${icono(t.pendiente ? 'caja' : 'check', t.pendiente ? COL.suave : COL.ok)}<b>${x.tandas.length > 1 ? `Tanda ${t.n}` : 'Tanda'}</b><span class="inf-tam">${esc(t.tamano)}</span></span>
+          <span class="inf-horas">${t.pendiente ? '<span class="inf-pend-t">pendiente</span>' : `<span>inicio <b>${esc(t.inicio)}</b></span><span>formado <b>${t.formado ? esc(t.formado) + (t.diaSiguiente ? ' (día sig.)' : '') : '—'}</b></span>`}</span>
         </div>`).join('')}
-      </section>`).join('');
+        <div class="inf-chico inf-bloque">${chico.map(esc).join(' · ')}</div>
+      </section>`;
+    }).join('');
     return `<div class="inf">${cab(inf)}
       <div class="inf-banda inf-bloque"><div><div class="inf-banda-v">${r.terminadas} de ${r.masas}</div><div class="inf-banda-e">${r.masas === 1 ? 'masa terminada' : 'masas terminadas'}</div></div><div><div class="inf-banda-v">${r.hechas} de ${r.tandas}</div><div class="inf-banda-e">tandas</div></div></div>
-      <p class="inf-nota inf-bloque">${icono('reloj', COL.suave)}<span>${esc(SUPUESTO)}</span></p>
+      ${inf.orden && inf.orden.length ? `<div class="inf-sec inf-bloque">Orden del día</div><div class="inf-orden">${inf.orden.map(o => `<div class="inf-orden-f inf-bloque${o.que === 'formar' ? ' inf-orden-formar' : ''}"><b>${esc(o.hora)}</b><span>${esc(o.texto)}</span></div>`).join('')}</div><div class="inf-sec inf-bloque">Masas, en el orden en que se forman</div>` : ''}
       ${masas || '<p class="inf-nota inf-bloque">Sin masas planificadas para este día.</p>'}
       ${inf.notas ? `<div class="inf-sec inf-bloque">Notas del día</div><p class="inf-texto inf-bloque">${esc(inf.notas)}</p>` : ''}
       <div class="inf-pie inf-bloque">Fën · Cocina · Panadería · informe interno (sin costos)</div></div>`;
@@ -280,7 +300,9 @@ export function html(inf) {
     <div class="inf-pie inf-bloque">Fën · Cocina · Bollería · informe interno (sin costos)</div></div>`;
 }
 // Estilos del informe (los mismos en la vista previa y en el PDF; ancho fluido: cabe en el celular)
-export const CSS = `.inf{background:#fff;color:${COL.texto};font-family:Figtree,system-ui,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0;overflow-wrap:anywhere}
+export const CSS = `.inf-masa-t{font-size:18px}.inf-masa-tot{font-size:16px;font-weight:700}.inf .inf-tanda{font-size:15.5px;align-items:baseline}.inf-tam{font-size:12px;color:${COL.suave};margin-left:6px;font-weight:400}.inf-horas b{font-size:16px}.inf-chico{font-size:11.5px;color:${COL.suave};line-height:1.4}
+.inf-orden{display:flex;flex-direction:column;border:1px solid ${COL.linea};border-radius:10px;overflow:hidden}.inf-orden-f{display:grid;grid-template-columns:minmax(3.2em,max-content) minmax(0,1fr);gap:12px;padding:6px 10px;border-top:1px solid ${COL.linea}}.inf-orden-f:first-child{border-top:0}.inf-orden-formar{background:${COL.fondoSuave}}
+.inf{background:#fff;color:${COL.texto};font-family:Figtree,system-ui,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0;overflow-wrap:anywhere}
 .inf *{box-sizing:border-box}.inf b{font-weight:700}
 .inf-ic{flex:none;vertical-align:-3px}
 .inf-cab{display:flex;align-items:center;gap:14px}.inf-logo{width:56px;height:auto;flex:none}.inf-cab-t{min-width:0}

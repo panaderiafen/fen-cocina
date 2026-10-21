@@ -1,4 +1,4 @@
-# fën · Cocina · v0.17.7
+# fën · Cocina · v0.17.9
 
 **App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.7: 21 de octubre)
 
@@ -9,6 +9,30 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - si algo no se guardó, lo dice;
 - desde la v0.17.5 ya no se copia nada a la planilla de Producción (Sistema Fën lee todo de la base).
 
+
+
+
+## Novedades de la v0.17.9: Masas del día más simple
+
+- **Jerarquía:** cada masa parte con su nombre y su **total** en grande; debajo, cada **tanda** con su **inicio** y su hora de **formado** destacadas. Lo menos importante va al final de cada masa en letra chica: los kg, para qué es, el tiempo de fermentación en bloque y los ajustes.
+- **Sin la explicación de la hora de inicio** en el PDF ni en el mensaje (sigue en el (i) de la pantalla).
+- El mensaje de WhatsApp sigue el mismo orden; lo de letra chica va en cursiva.
+- **Dónde va:** repo **fen-cocina**, raíz. Cambian `informes.js` y la versión. Reglas sin cambios.
+
+### Lista de verificación v0.17.9
+- [ ] Abajo dice **v0.17.9**.
+- [ ] Hoy → Compartir masas del día: masa y total arriba, tandas con inicio y formado destacados, el resto en letra chica.
+
+## Novedades de la v0.17.8: Masas del día en orden
+
+- **Orden del día:** en el informe de Panadería, al comienzo, aparece la lista de lo que pasa en el día de más temprano a más tarde: cuándo **empieza la fermentación en bloque** de cada tanda y cuándo **se forma**. Así se ve qué viene primero y qué viene después.
+- **Las masas también van en orden:** la que se forma primero, arriba. Las que todavía no tienen tandas marcadas quedan al final.
+- Va igual en el PDF y en el mensaje de WhatsApp.
+- **Dónde va:** repo **fen-cocina**, raíz. Cambian `informes.js`, `config.js`, `index.html` y `app.js` (solo la versión). Reglas sin cambios.
+
+### Lista de verificación v0.17.8
+- [ ] Abajo dice **v0.17.8**.
+- [ ] Hoy → Compartir masas del día: arriba aparece "Orden del día" con las horas de inicio y de formado, de más temprano a más tarde.
 
 ## Novedades de la v0.17.7: compartir informes por WhatsApp (PDF o mensaje)
 
