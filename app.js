@@ -1,5 +1,9 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.2
+//  fën · Cocina — la app de las jefas  v0.17.3
+//  v0.17.3: RECETAS ARCHIVADAS (Sistema Fën v0.72.0 → Catálogo, "Qué está vivo"). Una receta con estado 'archivada' se trata
+//  como una anulada: no se lista ni se puede elegir (Recetas, buscador del editor, planificación, metas, Merma, derramado,
+//  inventario de Bollería). Un plan que ya la tiene conserva sus números con la nota "receta archivada". En Recetas quedan
+//  abajo, en "Archivadas (N)" cerrado (para consultarlas). Lo que ya pasó (bodega, historial) sigue contando igual.
 //  v0.17.2: PANADERÍA, TERMINADA POR TANDA. Con 2 o más tandas, cada una se marca por separado (quién, hora y su f.b.);
 //  la receta queda terminada (hechos.rec_/sub_, con la hora de la última) cuando están todas. BOLLERÍA → BITÁCORA:
 //  el inventario del congelador marca cada línea sin cambios (check) o editada (lápiz + "antes X").
@@ -86,7 +90,7 @@ import {
 } from './firebase.js?v=0.17.1';
 import * as M from './modelo.js?v=0.11.0';
 import * as B from './bolleria.js?v=0.11.0';
-import * as ED from './editor.js?v=0.17.1';
+import * as ED from './editor.js?v=0.17.3';
 import * as R from './registros.js?v=0.11.0';
 import * as K from './consumo.js?v=0.17.1';
 import * as CG from './congelado.js?v=0.17.1';
@@ -100,7 +104,9 @@ const AREAS = {
   PAS: { nombre: 'Pastelería', icono: 'torta', nueva: true },
   CAF: { nombre: 'Cafetería', icono: 'cafe', nueva: true }
 };
-const ESTADOS = { consolidada: 'Aprobada', en_prueba: 'En prueba', borrador: 'Borrador', 'pendiente_aprobación': 'En revisión', pendiente_aprobacion: 'En revisión' };
+const ESTADOS = { consolidada: 'Aprobada', en_prueba: 'En prueba', borrador: 'Borrador', 'pendiente_aprobación': 'En revisión', pendiente_aprobacion: 'En revisión', archivada: 'Archivada' };
+// v0.17.3: archivada en Sistema Fën (Catálogo): como una anulada (no se lista ni se elige; lo planificado se mantiene)
+const archivada = r => !!r && r.estado === 'archivada';
 const K_PERSONA = 'fen_cocina_persona', K_AREA = 'fen_cocina_area';
 // Secciones de cada área (las que no están, solo Recetas)
 const SECCIONES = {
@@ -884,7 +890,7 @@ function vistaMetas() {
   const prods = B.productos(E.recetas, c).filter(p => p.receta.estado === 'consolidada' || M.num(metas[p.receta.id]) > 0);
   const NM = necesidadesMeta(E.lunesMeta, m), nec = NM.nec;
   const sinMasa = E.recetas.filter(r => r.area === E.area && r.tipo !== 'sub_receta' && r.estado === 'consolidada' && !prods.some(p => p.receta.id === r.id));
-  const enPrueba = B.productos(E.recetas, c).filter(p => p.receta.estado !== 'consolidada' && !(M.num(metas[p.receta.id]) > 0));
+  const enPrueba = B.productos(E.recetas, c).filter(p => p.receta.estado !== 'consolidada' && !archivada(p.receta) && !(M.num(metas[p.receta.id]) > 0));
   const el = semanaElab(E.lunesMeta);
   const plan = NM.plan || {};
   const filas = prods.map(p => {
@@ -1298,7 +1304,8 @@ function vistaBitacora() {
 // ── Diálogo: anotar en la bitácora ──
 function dialogoAnotar(tipo) {
   const d = $('dialogo'), f = E.fecha, st = CG.stock(E.diasArea, f);
-  const masas = B.masasBase(E.recetas, E.area), prods = productosBol();
+  // v0.17.3: una masa o un producto archivado aparece solo si todavía queda en el congelador
+  const masas = B.masasBase(E.recetas, E.area).filter(r => !archivada(r) || M.num(st.masas[r.id])), prods = productosBol().filter(r => !archivada(r) || M.num(st.productos[r.id]));
   const m = E.metas[M.sumarDias(M.lunesDe(f), 7)] || {}, idx = M.indiceDia(f);
   const sel = (id, lista, valor) => `<select id="${id}">${lista.map(r => `<option value="${esc(r.id)}" ${r.id === valor ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select>`;
   const num = (id, etiqueta, v, ayuda) => `<div class="fila-aj"><label for="${id}">${esc(etiqueta)}${ayuda ? `<small>${esc(ayuda)}</small>` : ''}</label><input id="${id}" inputmode="numeric" value="${v === '' || v === undefined ? '' : esc(String(v))}"><span class="gr"></span></div>`;
@@ -1374,7 +1381,7 @@ function dialogoAnotar(tipo) {
 // ── Cierre del viernes: congelado (de la bitácora) + qué hornear el sábado y qué descongelar el domingo (lo deciden ellas) ──
 function dialogoCierre() {
   const d = $('dialogo'), f = E.fecha, st = CG.stock(E.diasArea, f), lunes = M.lunesDe(f);
-  const masas = B.masasBase(E.recetas, E.area), prods = productosBol();
+  const masas = B.masasBase(E.recetas, E.area).filter(r => !archivada(r) || M.num(st.masas[r.id])), prods = productosBol().filter(r => !archivada(r) || M.num(st.productos[r.id]));   // v0.17.3
   const m = E.metas[lunes] || {}, hor = B.horneado(E.diasArea, lunes), previo = ((E.diasArea[f] || {}).cierre) || {};
   // Sugerencia para el sábado: lo que falta de la meta, sin pasar de lo congelado
   const dejarW = dejarEfectivo(lunes);
@@ -1446,16 +1453,18 @@ function vistaPlan() {
   const hoyIdx = lunes === M.lunesDe(M.hoyTxt()) ? M.indiceDia(M.hoyTxt()) : -1;
   const disponibles = E.recetas.filter(r => r.area === E.area && r.estado === 'consolidada' && r.tipo !== 'sub_receta' && !ids.includes(r.id)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const totDia = M.DIAS_CORTOS.map((_, i) => lista.reduce((s, x) => s + M.num((filas[x.id] || {})['d' + i]), 0));
-  const enRevision = lista.filter(x => x.r && x.r.estado !== 'consolidada');
+  const enRevision = lista.filter(x => x.r && x.r.estado !== 'consolidada' && !archivada(x.r));
+  const archivadas = lista.filter(x => archivada(x.r));   // v0.17.3
   // "Deshacer la copia" se ofrece 3 días después de copiar; después ya hubo cambios que no conviene perder
   const deshacer = plan.antesDeCopiar && plan.antesDeCopiar.filas && Date.now() - new Date(plan.antesDeCopiar.en).getTime() < 3 * 864e5 ? plan.antesDeCopiar : null;
   return nav + `
     ${enRevision.length ? `<div class="nota ojo">${ic('alerta')}<span>${esc(enRevision.map(x => x.nombre).join(', '))}: la receta no está aprobada ahora (${esc(enRevision.map(x => ESTADOS[x.r.estado] || x.r.estado).join(', '))}). Su plan se mantiene.</span></div>` : ''}
+    ${archivadas.length ? `<div class="nota ojo" id="nota-archivada">${ic('alerta')}<span>${esc(archivadas.map(x => x.nombre).join(', '))}: receta archivada (Administración, en Sistema Fën). Su plan se mantiene; no se puede agregar a otra semana.</span></div>` : ''}
     <div class="tabla-caja">
       <table class="plan">
         <thead><tr><th scope="col">Receta</th>${M.DIAS_CORTOS.map((d, i) => `<th scope="col" class="${i === hoyIdx ? 'hoy-col' : ''}">${d} ${Number(M.sumarDias(lunes, i).slice(8))}</th>`).join('')}<th scope="col">Total</th></tr></thead>
         <tbody>${lista.length ? lista.map(x => `<tr>
-            <td class="nombre">${esc(x.nombre)}</td>
+            <td class="nombre">${esc(x.nombre)}${archivada(x.r) ? ' <span class="estado">receta archivada</span>' : ''}</td>
             ${M.DIAS_CORTOS.map((d, i) => { const v = M.num((filas[x.id] || {})['d' + i]); const idc = `c-${x.id}-${i}`, mala = E.celdasMalas[lunes + '|' + idc]; return `<td class="${i === hoyIdx ? 'hoy-col' : ''}"><label class="sr" for="${esc(idc)}">${esc(x.nombre)} ${d}</label><input id="${esc(idc)}" inputmode="numeric" data-celda="${esc(x.id)}" data-d="${i}" value="${mala !== undefined ? esc(mala) : (v || '')}" class="${mala !== undefined ? 'error-celda' : ''}" autocomplete="off"></td>`; }).join('')}
             <td class="num"><b>${M.miles(M.DIAS_CORTOS.reduce((s, _, i) => s + M.num((filas[x.id] || {})['d' + i]), 0))}</b></td>
           </tr>`).join('') : `<tr><td colspan="9" style="text-align:left;color:var(--suave);padding:18px 10px">Esta semana no tiene recetas planificadas. Agrega una abajo o copia otra semana.</td></tr>`}</tbody>
@@ -1579,16 +1588,20 @@ function vistaRecetas() {
   // v0.16.3: las que tienen un cambio devuelto, arriba; después las consolidadas; las anuladas al final
   const dev = r => { const p = ED.propuestaAbierta(r.id); return p && p.estado === 'devuelta' ? 0 : 1; };
   const orden = r => r.estado === 'consolidada' ? 0 : r.estado === 'anulada' ? 2 : 1;
-  const lista = E.recetas.filter(r => r.area === E.area && (!q || r.nombre.toLowerCase().includes(q)))
+  const todas = E.recetas.filter(r => r.area === E.area && (!q || r.nombre.toLowerCase().includes(q)))
     .sort((a, b) => dev(a) - dev(b) || orden(a) - orden(b) || a.nombre.localeCompare(b.nombre, 'es'));
-  return `${ED.vistaPropuestas()}${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
-    <div class="campo"><label for="buscar-receta">Buscar</label><input id="buscar-receta" value="${esc(E.buscar)}" placeholder="Nombre de la receta" autocomplete="off"></div>
-    ${ED.AREAS_EDITAN.includes(E.area) ? '<h2 class="titulo">Recetas</h2>' : ''}
-    <div class="lista-recetas">${lista.map(r => `<button type="button" class="item-receta" data-receta="${esc(r.id)}">
+  // v0.17.3: las archivadas (Sistema Fën → Catálogo) van abajo, en "Archivadas (N)" cerrado
+  const lista = todas.filter(r => !archivada(r)), arch = todas.filter(archivada);
+  const item = r => `<button type="button" class="item-receta" data-receta="${esc(r.id)}">
         <b>${esc(r.nombre)}</b>
         <small>${r.tipo === 'sub_receta' ? 'Sub receta · ' : ''}rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}</small>
         ${chipsReceta(r)}
-      </button>`).join('') || '<p class="ayuda">No hay recetas con ese nombre.</p>'}</div>`;
+      </button>`;
+  return `${ED.vistaPropuestas()}${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
+    <div class="campo"><label for="buscar-receta">Buscar</label><input id="buscar-receta" value="${esc(E.buscar)}" placeholder="Nombre de la receta" autocomplete="off"></div>
+    ${ED.AREAS_EDITAN.includes(E.area) ? '<h2 class="titulo">Recetas</h2>' : ''}
+    <div class="lista-recetas">${lista.map(item).join('') || (arch.length ? '' : '<p class="ayuda">No hay recetas con ese nombre.</p>')}</div>
+    ${arch.length ? `<details class="desp archivadas" id="recetas-archivadas"><summary>Archivadas (${arch.length})</summary><p class="ayuda">Administración las archivó en Sistema Fën (Catálogo): no se usan en la planificación. Se pueden consultar.</p><div class="lista-recetas">${arch.map(item).join('')}</div></details>` : ''}`;
 }
 // v0.16.3: chip del estado de la receta + el de su propuesta abierta ("Consolidada" + "Cambio en revisión") y, si la devolvieron, el comentario
 function chipsReceta(r) {
@@ -1601,7 +1614,7 @@ function detalleReceta(r) {
   const pasos = (r.pasos || []).filter(Boolean);
   return `<div class="nav-fecha"><button type="button" class="btn-flecha" data-volver="1" aria-label="Volver a la lista">${ic('izq')}</button><h2>${esc(r.nombre)}</h2>
       ${chipsReceta(r)}
-      ${ED.AREAS_EDITAN.includes(E.area) && r.area === E.area ? `<button type="button" class="btn-sec" data-ed-editar="${esc(r.id)}">${ic('libro')}${ED.propuestaAbierta(r.id) ? 'Ver la propuesta abierta' : 'Editar (nueva versión)'}</button>` : ''}</div>
+      ${ED.AREAS_EDITAN.includes(E.area) && r.area === E.area && !archivada(r) ? `<button type="button" class="btn-sec" data-ed-editar="${esc(r.id)}">${ic('libro')}${ED.propuestaAbierta(r.id) ? 'Ver la propuesta abierta' : 'Editar (nueva versión)'}</button>` : ''}</div>
     <div class="caja">
       <div class="campo" style="max-width:260px"><label for="cant-receta">Cantidad (${r.unidad === 'g' ? 'gramos' : 'unidades'})</label><input id="cant-receta" inputmode="decimal" value="${esc(M.unidades(cant))}"></div>
       <span class="ayuda">La receta base rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}${esPan && M.panadero(r).ajustable ? ` con ${M.gramos(M.panadero(r).harina)} de harina` : ''}.</span>
@@ -1947,7 +1960,7 @@ function vistaMerma() {
 // Lo que se puede anotar como merma en el área
 function itemsMerma() {
   const area = E.area;
-  const recetas = E.recetas.filter(r => r.area === area && r.estado !== 'anulada').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const recetas = E.recetas.filter(r => r.area === area && r.estado !== 'anulada' && !archivada(r)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const mps = E.mps.filter(m => ED.habilitada(m, area) && (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   return [
     ...recetas.filter(r => r.tipo !== 'sub_receta').map(r => ({ tipo: 'receta', x: r, grupo: 'Productos' })),
@@ -1960,7 +1973,7 @@ const DIAS_ATRAS_MERMA = CF.DIAS_ATRAS_MERMA;
 function dialogoMerma() {
   const d = $('dialogo'), items = itemsMerma(), conFecha = E.area === 'CAF', hoyM = M.hoyTxt(), minM = M.sumarDias(hoyM, -DIAS_ATRAS_MERMA);
   // Bollería: qué se puede perder congelado (masas base y productos que van al congelador)
-  const masas = E.area === 'BOL' ? B.masasBase(E.recetas, E.area).map(r => r.id) : [];
+  const masas = E.area === 'BOL' ? B.masasBase(E.recetas, E.area).filter(r => !archivada(r)).map(r => r.id) : [];
   const congelables = E.area === 'BOL' ? productosBol().map(r => r.id) : [];
   let elegido = null, motivo = 'derrame_error';
   const lista = filtro => {
@@ -2114,7 +2127,7 @@ function dialogoCalibracion() {
 // receta (motivo "Derrame o error", derramado: true): Sistema Fën la valoriza y la bodega descuenta la preparación entera.
 function dialogoDerramado() {
   const d = $('dialogo'), hoy = M.hoyTxt();
-  const items = E.recetas.filter(r => r.area === 'CAF' && r.estado !== 'anulada').sort((a, b) => (a.tipo === 'sub_receta') - (b.tipo === 'sub_receta') || a.nombre.localeCompare(b.nombre, 'es'));
+  const items = E.recetas.filter(r => r.area === 'CAF' && r.estado !== 'anulada' && !archivada(r)).sort((a, b) => (a.tipo === 'sub_receta') - (b.tipo === 'sub_receta') || a.nombre.localeCompare(b.nombre, 'es'));
   const personas = personasDelArea(), yo = E.persona || {};
   const opciones = personas.some(p => p.id === yo.email) ? personas : [{ id: yo.email || '', nombre: yo.nombre || '' }, ...personas];
   const elegidos = [];   // [{ r, cant }]

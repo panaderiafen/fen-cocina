@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.16.3
+//  fën · Cocina — formulario de recetas y propuestas (P3)  v0.17.3
+//  v0.17.3: las sub recetas archivadas (Sistema Fën → Catálogo) no se ofrecen en el buscador de ingredientes; chip "Archivada".
 //  v0.16.3: chip de estado (chipEstado) en la lista, las propuestas (devueltas arriba) y el formulario.
 //  v0.5.0: Pastelería también crea y edita recetas aquí. v0.8.0: Cafetería también; v0.15.0: textos propios de
 //  Cafetería (se vende en la caja, un tamaño = una receta, café en gramos por shot, vasos y tapas como insumos).
@@ -31,7 +32,8 @@ const CHIP = {
   en_revision: ['revision', 'En revisión', 'Cambio en revisión'], aprobando: ['revision', 'En revisión', 'Cambio en revisión'],
   'pendiente_aprobación': ['revision', 'En revisión', 'Cambio en revisión'], pendiente_aprobacion: ['revision', 'En revisión', 'Cambio en revisión'],
   consolidada: ['consolidada', 'Consolidada', 'Cambio consolidado'], aprobada: ['consolidada', 'Consolidada', 'Cambio consolidado'], vigente: ['consolidada', 'Consolidada', 'Cambio consolidado'],
-  anulada: ['anulada', 'Anulada', 'Cambio anulado'], devuelta: ['devuelta', 'Devuelta', 'Cambio devuelto']
+  anulada: ['anulada', 'Anulada', 'Cambio anulado'], devuelta: ['devuelta', 'Devuelta', 'Cambio devuelto'],
+  archivada: ['anulada', 'Archivada', 'Cambio archivado']   // v0.17.3: archivada en Sistema Fën (Catálogo): se ve como una anulada
 };
 // cambio = true: la propuesta abierta de una receta ya consolidada ("Cambio en revisión")
 export function chipEstado(estado, cambio = false) {
@@ -160,9 +162,11 @@ function cambiarEstado(pid, nuevo, comentario = '') {
 // ── Lo que se puede elegir como ingrediente o insumo (habilitado para el área) ──
 // Habilitada para el área: como en la app actual, "áreas habilitadas" vacío = sirve para todas
 export const habilitada = (m, area) => !(m.areas || []).length || (m.areas || []).map(a => String(a).trim().toUpperCase()).includes(area);
+// v0.17.3: una sub receta archivada (su receta tiene estado 'archivada') no se ofrece
+const subArchivada = (m, E) => (m.tipo === 'sub_receta' || /^SR/.test(m.id)) && (E.recetas || []).some(r => r.mpId === m.id && r.estado === 'archivada');
 function opciones(insumo) {
   const E = A.E;
-  return (E.mps || []).filter(m => (m.estado || 'activa') === 'activa' && habilitada(m, E.area) && (insumo ? m.tipo === 'insumo' : m.tipo !== 'insumo'))
+  return (E.mps || []).filter(m => (m.estado || 'activa') === 'activa' && habilitada(m, E.area) && (insumo ? m.tipo === 'insumo' : m.tipo !== 'insumo') && !subArchivada(m, E))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 // Sugerencias mientras se escribe (por parte del nombre, sin importar tildes)

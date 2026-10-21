@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.2
+# fën · Cocina · v0.17.3
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3: 21 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,24 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - la planilla de Producción recibe una copia automática del plan semanal.
+
+## Novedades v0.17.3 · Recetas archivadas (Sistema Fën v0.72.0 → Catálogo, "Qué está vivo")
+Solo cambian `app.js` y `editor.js` (y la versión en `index.html` y `config.js`). Los módulos compartidos (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`, `fermentacion.js`) **no cambian** y siguen iguales a las copias de Sistema Fën. **Las reglas siguen las v1.8.0** (no hay que publicar nada en Firebase) y el script tampoco cambia.
+
+- **Dónde va:** repo **fen-cocina**, raíz. Sube todos los archivos del zip `fen-cocina-v0.17.3.zip` → **Commit changes** → en cada tablet, cierra y abre la app (o recarga).
+- Administración ahora puede **archivar** recetas desde Sistema Fën (estado `archivada`; se deshace con "Reactivar"). En Cocina una receta archivada se trata como una anulada:
+  - **Recetas:** no está en la lista; queda abajo, en **"Archivadas (N)"** cerrado, para consultarla (sin "Editar").
+  - **Editor:** una sub receta archivada no aparece en el buscador de ingredientes.
+  - **Planificación y Metas:** no se puede agregar. Un plan que **ya la tiene conserva sus números** y dice **"receta archivada"** (con una nota arriba, como la de "no está aprobada ahora"); en Metas sale con su chip "Archivada".
+  - **Merma** y **Derramado** (Cafetería): no se ofrece.
+  - **Bollería, inventario y cierre:** una masa o un producto archivado aparece solo si todavía queda en el congelador.
+  - Lo que ya pasó (bodega, lo hecho, el historial) sigue contando igual.
+- **Lecturas y escrituras:** sin cambios (todo sale de las recetas que ya se escuchan).
+
+### Lista de verificación v0.17.3
+- [ ] Abajo dice **Cocina v0.17.3**.
+- [ ] Archiva una receta de prueba en Sistema Fën → Catálogo: en Recetas pasa a "Archivadas (1)" y no aparece para agregar al plan.
+- [ ] Reactívala: vuelve a la lista.
 
 ## Novedades v0.17.2 · Panadería: terminada por tanda · Bollería: marcas en el inventario de la Bitácora (pedido de Emmanuel, 19-oct)
 Solo cambia Cocina. **Sistema Fën no cambia** (sigue en v0.70.0), **las reglas siguen las v1.8.0** (no hay que publicar nada en Firebase) y el script tampoco cambia.
