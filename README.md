@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.5
+# fën · Cocina · v0.17.6
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 y v0.17.4: 21 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.6: 21 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -8,6 +8,22 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 - cada número se guarda por separado (nunca "borrar la semana y reescribir");
 - si algo no se guardó, lo dice;
 - desde la v0.17.5 ya no se copia nada a la planilla de Producción (Sistema Fën lee todo de la base).
+
+
+## Novedades de la v0.17.6: pedir materias primas sin trabas
+
+- **Arreglo:** al pedir una materia prima "nueva" que ya existía, la app decía "ya existe, pide que la habiliten", pero en "Una que existe en otra área" no aparecía. Pasaba con las materias primas **inactivas** (no se ofrecían para habilitar) y con las que ya estaban disponibles para el área (había que buscarlas en Ingredientes o Insumos).
+- **Ahora:**
+  - "Una que existe en otra área" también muestra las inactivas, con la marca "(inactiva)". Al habilitarla, Administración la reactiva.
+  - Si piden como "nueva" una que existe en otra área o inactiva, la app cambia sola a "Una que existe" con esa elegida: solo falta tocar Pedir.
+  - Si ya está disponible para el área, dice dónde buscarla (Ingredientes o Insumos). Si es una sub receta, lo dice.
+- **Dónde va:** repo **fen-cocina**, raíz. Cambian `editor.js`, `app.js` (la versión de editor), `config.js` e `index.html`. Los módulos compartidos no cambian.
+- **Reglas:** sin cambios. Va junto con Sistema Fën v0.75.1 (que reactiva la inactiva al habilitarla).
+
+### Lista de verificación v0.17.6
+- [ ] Abajo dice **v0.17.6**.
+- [ ] Receta nueva → Falta una materia prima → "Una que existe en otra área": aparecen también las inactivas.
+- [ ] Escribe como "nueva" el nombre de una que ya existe: queda elegida en "Una que existe".
 
 ## Novedades v0.17.5 · Sin copias a la planilla de Producción (Etapa 2b, 21-oct)
 Va con **Sistema Fën v0.75.0**. **Reglas: las mismas v1.8.0** (no hay que publicar nada). **El script no cambia.**

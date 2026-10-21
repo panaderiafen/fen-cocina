@@ -435,7 +435,13 @@ export function alInput(t) {
 // ── Pedir una materia prima (nueva o habilitar una que existe en otra área) ──
 function dialogoPedir() {
   const E = A.E, esc = A.esc, d = A.$('dialogo'), ed = E.editor;
-  const otras = (E.mps || []).filter(m => (m.estado || 'activa') === 'activa' && m.tipo !== 'sub_receta' && !/^SR/.test(m.id) && !habilitada(m, E.area)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  // v0.17.6: también las inactivas (Administración las reactiva al habilitarlas); antes una inactiva no aparecía aquí,
+  // pero sí bloqueaba pedirla como nueva ("ya existe").
+  const esSR = m => m.tipo === 'sub_receta' || /^SR/.test(m.id);
+  const activa = m => (m.estado || 'activa') === 'activa';
+  const usable = m => activa(m) && habilitada(m, E.area);
+  const otras = (E.mps || []).filter(m => !esSR(m) && !usable(m) && m.estado !== 'reemplazada').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const etiqueta = m => m.nombre + (activa(m) ? '' : ' (inactiva)');
   let modo = 'nueva';
   d.innerHTML = `<form method="dialog" class="dlg">
       <h2>Falta una materia prima</h2>
@@ -451,7 +457,7 @@ function dialogoPedir() {
           <div class="campo"><label for="pm-unidad">Se compra por</label><input id="pm-unidad" placeholder="kg, 25kg, lt, un, 10un…" maxlength="20"></div>
         </div>
       </div>
-      <div id="pm-habilitar" class="oculto"><div class="campo"><label for="pm-existente">Materia prima</label><select id="pm-existente">${otras.map(m => `<option value="${esc(m.id)}">${esc(m.nombre)}</option>`).join('')}</select></div></div>
+      <div id="pm-habilitar" class="oculto"><div class="campo"><label for="pm-existente">Materia prima</label><select id="pm-existente">${otras.map(m => `<option value="${esc(m.id)}">${esc(etiqueta(m))}</option>`).join('')}</select></div></div>
       <div class="campo"><label for="pm-nota">Nota (opcional)</label><input id="pm-nota" maxlength="200" placeholder="Marca, proveedor, para qué es…"></div>
       <div class="error" id="pm-error" role="alert"></div>
       <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">Pedir</button></div>
@@ -471,7 +477,21 @@ function dialogoPedir() {
     else {
       const nombre = A.$('pm-nombre').value.trim();
       if (!nombre) { A.$('pm-error').textContent = 'Escribe el nombre.'; return; }
-      if ((E.mps || []).some(m => norm(m.nombre) === norm(nombre))) { A.$('pm-error').textContent = 'Ya existe una con ese nombre: elige "Una que existe en otra área" o búscala en la lista.'; return; }
+      // v0.17.6: decir exactamente dónde está la que ya existe
+      const igual = (E.mps || []).find(m => norm(m.nombre) === norm(nombre));
+      if (igual) {
+        if (esSR(igual)) { A.$('pm-error').textContent = `"${igual.nombre}" es una sub receta: búscala en los ingredientes.`; return; }
+        if (usable(igual)) { A.$('pm-error').textContent = `"${igual.nombre}" ya está disponible para tu área: búscala en ${igual.tipo === 'insumo' ? 'Insumos' : 'Ingredientes'}.`; return; }
+        if (otras.some(m => m.id === igual.id)) {
+          // Pasa sola a "Una que existe" con esa elegida: solo falta tocar Pedir
+          d.querySelector('input[name="pm-modo"][value="habilitar"]').checked = true; modo = 'habilitar';
+          A.$('pm-nueva').classList.add('oculto'); A.$('pm-habilitar').classList.remove('oculto');
+          A.$('pm-existente').value = igual.id; A.$('pm-existente').dispatchEvent(new Event('change', { bubbles: true }));
+          A.$('pm-error').textContent = `"${igual.nombre}" ya existe${activa(igual) ? ' en otra área' : ', pero está inactiva'}: la dejé elegida para pedir que la habiliten. Toca Pedir.`;
+          return;
+        }
+        A.$('pm-error').textContent = `Ya existe "${igual.nombre}" (${igual.id}), pero está reemplazada por otra: búscala en la lista.`; return;
+      }
       s = { ...base, tipo: 'nueva', nombre: nombre.slice(0, 80), esInsumo: A.$('pm-tipo').value === 'insumo', unidadCompra: A.$('pm-unidad').value.trim().toLowerCase().slice(0, 20) };
     }
     d.close();

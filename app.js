@@ -97,7 +97,7 @@ import {
 } from './firebase.js?v=0.17.1';
 import * as M from './modelo.js?v=0.17.4';
 import * as B from './bolleria.js?v=0.17.4';
-import * as ED from './editor.js?v=0.17.4';
+import * as ED from './editor.js?v=0.17.6';
 import * as R from './registros.js?v=0.17.4';
 import * as K from './consumo.js?v=0.17.4';
 import * as CG from './congelado.js?v=0.17.4';
