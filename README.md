@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.9
+# fën · Cocina · v0.17.10
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.7: 21 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.9: 21 de octubre; v0.17.10: 22 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -11,6 +11,16 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 
 
 
+
+## Novedades de la v0.17.10: las materias primas archivadas no se ofrecen
+
+- Desde Sistema Fën v0.76.0 la administración puede **archivar** una materia prima o insumo. Una archivada no aparece al elegir ingredientes o insumos (como antes) y ahora **tampoco en "Falta una materia prima" → "Una que existe en otra área"**. Si escriben su nombre como nueva, la app dice: "existe, pero Administración la archivó. Si la necesitas, pídele que la reactive en Sistema Fën." Las inactivas se siguen pudiendo pedir para habilitar (como en la v0.17.6).
+- Los nombres nuevos o cambiados en Sistema Fën se ven solos (la marca de cambio avisa a las tablets).
+- **Dónde va:** repo **fen-cocina**, raíz. Cambian `editor.js`, `app.js`, `config.js`, `index.html` y este README. **Los módulos compartidos no cambian** (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`, `fermentacion.js` siguen idénticos a los de Sistema Fën v0.76.0). Reglas sin cambios (fen-produccion v1.8.0).
+
+### Lista de verificación v0.17.10
+- [ ] Abajo dice **v0.17.10**.
+- [ ] Una materia prima archivada en Sistema Fën no aparece al agregar un ingrediente ni en "Falta una materia prima".
 
 ## Novedades de la v0.17.9: Masas del día más simple
 

@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
 //  fën · Cocina — formulario de recetas y propuestas (P3)  v0.17.3
+//  v0.17.10: "Falta una materia prima" no ofrece las materias primas archivadas (Sistema Fën v0.76.0); si escriben su nombre, dice que está archivada.
 //  v0.17.3: las sub recetas archivadas (Sistema Fën → Catálogo) no se ofrecen en el buscador de ingredientes; chip "Archivada".
 //  v0.16.3: chip de estado (chipEstado) en la lista, las propuestas (devueltas arriba) y el formulario.
 //  v0.5.0: Pastelería también crea y edita recetas aquí. v0.8.0: Cafetería también; v0.15.0: textos propios de
@@ -440,7 +441,8 @@ function dialogoPedir() {
   const esSR = m => m.tipo === 'sub_receta' || /^SR/.test(m.id);
   const activa = m => (m.estado || 'activa') === 'activa';
   const usable = m => activa(m) && habilitada(m, E.area);
-  const otras = (E.mps || []).filter(m => !esSR(m) && !usable(m) && m.estado !== 'reemplazada').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  // v0.17.10: las archivadas en Sistema Fën (estado 'archivada') no se ofrecen para habilitar: Administración las sacó a propósito
+  const otras = (E.mps || []).filter(m => !esSR(m) && !usable(m) && m.estado !== 'reemplazada' && m.estado !== 'archivada').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const etiqueta = m => m.nombre + (activa(m) ? '' : ' (inactiva)');
   let modo = 'nueva';
   d.innerHTML = `<form method="dialog" class="dlg">
@@ -490,6 +492,7 @@ function dialogoPedir() {
           A.$('pm-error').textContent = `"${igual.nombre}" ya existe${activa(igual) ? ' en otra área' : ', pero está inactiva'}: la dejé elegida para pedir que la habiliten. Toca Pedir.`;
           return;
         }
+        if (igual.estado === 'archivada') { A.$('pm-error').textContent = `"${igual.nombre}" existe, pero Administración la archivó. Si la necesitas, pídele que la reactive en Sistema Fën.`; return; }
         A.$('pm-error').textContent = `Ya existe "${igual.nombre}" (${igual.id}), pero está reemplazada por otra: búscala en la lista.`; return;
       }
       s = { ...base, tipo: 'nueva', nombre: nombre.slice(0, 80), esInsumo: A.$('pm-tipo').value === 'insumo', unidadCompra: A.$('pm-unidad').value.trim().toLowerCase().slice(0, 20) };

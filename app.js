@@ -6,6 +6,7 @@
 //  congelado ahora, qué descongelar el domingo para el lunes (cierre del viernes + la semana de la meta) y qué revisar
 //  (empastes, poolish). Vista previa; "Enviar PDF" (Compartir en celular/tablet; en el PC baja el PDF y abre WhatsApp),
 //  "Enviar como mensaje" y "Copiar texto". Cero lecturas nuevas (todo sale de lo que ya se escucha); sin costos.
+//  v0.17.10: "Falta una materia prima" no ofrece las archivadas en Sistema Fën (v0.76.0) para habilitar (editor.js).
 //  v0.17.6: pedir materias primas sin trabas (editor.js).
 //  v0.17.5: SIN COPIAS A LA PLANILLA DE PRODUCCIÓN (Etapa 2b, Sistema Fën v0.75.0). Los planes, la merma, la bitácora, la bodega
 //  y la bitácora de turno quedan solo en Firestore (fen-produccion), que es lo que leen Sistema Fën y la bodega. Ya no se llama al
@@ -104,7 +105,7 @@ import {
 } from './firebase.js?v=0.17.1';
 import * as M from './modelo.js?v=0.17.4';
 import * as B from './bolleria.js?v=0.17.4';
-import * as ED from './editor.js?v=0.17.6';
+import * as ED from './editor.js?v=0.17.10';
 import * as R from './registros.js?v=0.17.4';
 import * as K from './consumo.js?v=0.17.4';
 import * as CG from './congelado.js?v=0.17.4';
