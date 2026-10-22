@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.10
+# fën · Cocina · v0.17.11
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.9: 21 de octubre; v0.17.10: 22 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.9: 21 de octubre; v0.17.10 y v0.17.11: 22 de octubre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -11,6 +11,30 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 
 
 
+
+## Novedades de la v0.17.11: Recetas ordenada en grupos
+
+- **"Consolidada" ahora se dice "Aprobada"** en toda la app (chips de la lista, del detalle y del formulario; "Cambio consolidado" → "Cambio aprobado"). Lo guardado no cambia (el estado sigue siendo `consolidada`).
+- **Ya no hay bloque "Propuestas".** La pantalla Recetas va en grupos, cada uno con su número y plegable (toca el título para abrir o cerrar; cada tablet o celular se acuerda de cómo lo dejaste):
+  1. **Para trabajar**: recetas nuevas ("Receta nueva") y cambios a recetas aprobadas ("Cambio a …") en borrador, en prueba o devueltos. Los devueltos van primero, con el comentario de Administración. Al tocar, se abre el formulario como antes.
+  2. **Esperando aprobación**: lo enviado a revisión. Se puede abrir para mirar, sin editar.
+  3. **Aprobadas**: las versiones oficiales, en **Productos** y **Masas y sub recetas**, por nombre. Si alguien la está cambiando, un chip chico "Cambio en camino · en prueba" (o en borrador, en revisión, devuelto).
+  4. **Sin aprobar (antiguas)**: las de la app antigua que nunca se aprobaron (en prueba, borrador, pendiente de aprobación). Cerrado; no se pueden planificar y Administración las puede archivar en Sistema Fën → Catálogo.
+  5. **Archivadas** (y anuladas): cerrado, como antes.
+  6. **Materias primas pedidas**: al final; abierto solo si hay algo pedido o resuelto en los últimos 7 días.
+- Arriba: **Nueva receta**, el título **Recetas** con un **(i)** que explica las dos etiquetas (la de la receta y la del cambio), píldoras **Para trabajar · Esperando aprobación · Aprobadas** con su número (llevan al grupo) y **Buscar**, que busca en todos los grupos (sin importar tildes) y esconde los que quedan vacíos.
+- **Dónde va:** repo **fen-cocina**, raíz. Cambian `app.js`, `editor.js`, `estilos.css`, `config.js`, `index.html` y este README. **Los módulos compartidos no cambian** (`modelo.js`, `bolleria.js`, `registros.js`, `consumo.js`, `fermentacion.js` siguen idénticos a los de Sistema Fën v0.76.0). **Reglas sin cambios** (fen-produccion v1.8.0). Sistema Fën no cambia.
+
+### Lista de verificación v0.17.11
+- [ ] Abajo dice **v0.17.11**.
+- [ ] En Recetas no aparece la palabra "Consolidada": las oficiales dicen **Aprobada**.
+- [ ] No hay bloque "Propuestas"; se ven los grupos Para trabajar, Esperando aprobación, Aprobadas (Productos / Masas y sub recetas), Sin aprobar (antiguas) y Archivadas cerrados, y Materias primas pedidas al final.
+- [ ] Un cambio devuelto sale primero en "Para trabajar", con el comentario; la receta en Aprobadas muestra "Cambio en camino · devuelto".
+- [ ] El (i) junto a "Recetas" explica Aprobada / En prueba / Borrador / Archivada y el camino del cambio.
+- [ ] Cierra un grupo, recarga: sigue cerrado. Las píldoras abren y llevan al grupo.
+- [ ] Buscar un nombre muestra solo los grupos que lo tienen.
+- [ ] Tocar una propuesta abre el formulario; tocar una receta abre su detalle (igual que antes).
+- [ ] En el celular no hay que deslizar hacia el lado.
 
 ## Novedades de la v0.17.10: las materias primas archivadas no se ofrecen
 

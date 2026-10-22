@@ -515,7 +515,7 @@ input { text-overflow: ellipsis; }
 .chip-est.est-devuelta { background: var(--est-devuelta-fondo); color: var(--est-devuelta); border-color: var(--est-devuelta-fondo); }
 .linea-devuelta { font-size: 13px; line-height: 1.4; color: var(--est-devuelta-texto); font-weight: 600; overflow-wrap: anywhere; }
 .nav-fecha .linea-devuelta { flex-basis: 100%; }
-.item-receta:has(.est-devuelta) { border-color: var(--est-devuelta-fondo); border-width: 1.5px; }
+.item-receta:has(.est-devuelta:not(.chip-mini)) { border-color: var(--est-devuelta-fondo); border-width: 1.5px; }
 
 /* v0.16.3 · Pie de masa madre en Hoy (Panadería): borde azul y el nombre en un chip azul, como el de "Hoy" */
 .caja.caja-pie { border: 2px solid var(--pie); }
@@ -626,3 +626,27 @@ input { text-overflow: ellipsis; }
   .acciones-hoy { width: 100%; justify-content: space-between; }
 }
 .inf-nav [hidden] { display: none; }
+
+/* v0.17.11 · Recetas en grupos (Para trabajar · Esperando aprobación · Aprobadas · Sin aprobar · Archivadas · Materias primas pedidas) */
+.titulo-rec { display: flex; align-items: center; gap: 2px; margin-top: 4px; }
+.titulo-rec h2.titulo { margin: 0; }
+#rec-info { margin: 2px 0 10px; }
+#rec-info p { margin: 0 0 6px; }
+#rec-info p:last-child { margin: 0; }
+.pills-grupo { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+.pill-grupo { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--tinte-borde); background: #fff; color: var(--acento-texto); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.pill-grupo .g-num { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--tinte); font-size: 13px; }
+.pill-grupo:disabled { color: var(--suave); border-color: var(--linea); cursor: default; opacity: .75; }
+.pill-grupo:disabled .g-num { background: var(--suave-fondo); }
+details.grupo-rec { margin: 14px 0 0; padding-top: 4px; border-top: 1px solid var(--linea); scroll-margin-top: 72px; }
+details.grupo-rec > summary { display: flex; align-items: center; gap: 6px; min-height: 48px; cursor: pointer; list-style: none; font-size: 18px; font-weight: 600; color: var(--texto); }
+details.grupo-rec > summary::-webkit-details-marker { display: none; }
+details.grupo-rec > summary svg.ic { width: 20px; height: 20px; flex: none; color: var(--acento-texto); transition: transform .15s; }
+details.grupo-rec[open] > summary svg.ic { transform: rotate(90deg); }
+details.grupo-rec > summary .g-num { color: var(--suave); font-weight: 500; }
+details.grupo-rec .g-ayuda { margin: 0 0 10px; }
+details.grupo-rec.g-antiguas > summary, details.grupo-rec.g-archivadas > summary, details.grupo-rec.g-pedidas > summary { font-size: 16px; color: var(--suave); }
+h3.subgrupo { margin: 12px 0 8px; font-size: 15px; font-weight: 600; color: var(--suave); }
+h3.subgrupo .g-num { font-weight: 500; }
+.chip-est.chip-mini { font-size: 11px; font-weight: 600; padding: 1px 8px; white-space: normal; }
+.item-receta.item-prop.devuelta { border-color: var(--est-devuelta-fondo); border-width: 1.5px; }

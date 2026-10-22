@@ -1,5 +1,9 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.7
+//  fën · Cocina — la app de las jefas  v0.17.11
+//  v0.17.11: RECETAS EN GRUPOS. Sin el bloque "Propuestas": Para trabajar (borrador, en prueba, devueltas primero) · Esperando
+//  aprobación · Aprobadas (Productos / Masas y sub recetas) · Sin aprobar (antiguas) · Archivadas · Materias primas pedidas;
+//  cada grupo con su número, plegable (se recuerda en el equipo), píldoras arriba y (i) que explica las dos etiquetas.
+//  "Consolidada" se dice "Aprobada" (el valor guardado no cambia).
 //  v0.17.7: COMPARTIR INFORMES (PDF o mensaje de WhatsApp; informes.js). Panadería → Hoy → "Compartir masas del día": las masas
 //  del día con su cantidad, sus tandas, hora de inicio (cuando se marcó la tanda terminada) y hora de formado (inicio + f.b.);
 //  lo pendiente dice "pendiente"; el ajuste de sábado y los ajustes del día. Bollería → Bitácora → "Informe del viernes":
@@ -105,7 +109,7 @@ import {
 } from './firebase.js?v=0.17.1';
 import * as M from './modelo.js?v=0.17.4';
 import * as B from './bolleria.js?v=0.17.4';
-import * as ED from './editor.js?v=0.17.10';
+import * as ED from './editor.js?v=0.17.11';
 import * as R from './registros.js?v=0.17.4';
 import * as K from './consumo.js?v=0.17.4';
 import * as CG from './congelado.js?v=0.17.4';
@@ -1695,29 +1699,92 @@ function deshacerCopia() {
 // v0.17.5: la copia de los planes a la planilla (para Looker y la app antigua) está apagada: nada llama al script cocina_planilla.
 
 // ── Recetas (consulta) ──
+// v0.17.11: la pantalla en grupos (Para trabajar · Esperando aprobación · Aprobadas · Sin aprobar (antiguas) · Archivadas ·
+// Materias primas pedidas), cada uno con su número y plegable; lo abierto/cerrado se recuerda en el equipo (por área).
+const K_GRUPOS_REC = 'fen_cocina_grupos_recetas';
+const INFO_RECETAS = [
+  'Cada receta puede tener dos etiquetas.',
+  '<b>La receta.</b> <b>Aprobada</b>: la versión oficial, la que se usa en la planificación y en Hoy. <b>En prueba</b> o <b>Borrador</b>: nunca se aprobó (viene de la app antigua) y no se puede planificar. <b>Archivada</b>: Administración la sacó de uso.',
+  '<b>El cambio</b>, si alguien la está cambiando: Cambio en borrador → Cambio en prueba → Cambio en revisión. Después Administración lo aprueba (la receta queda Aprobada, con la versión nueva) o te lo devuelve con un comentario (<b>Cambio devuelto</b>).',
+  'Mientras un cambio está en camino, se sigue usando la receta aprobada tal como está.'
+];
+const GRUPOS_REC = {
+  trabajar: ['Para trabajar', 'Recetas nuevas y cambios que puedes seguir editando. Los devueltos van primero, con el comentario de Administración.', true],
+  esperando: ['Esperando aprobación', 'Ya los enviaste: Administración los revisa en Sistema Fën. Mientras tanto no se editan.', true],
+  aprobadas: ['Aprobadas', 'Las versiones oficiales: son las que se planifican y salen en Hoy.', true],
+  antiguas: ['Sin aprobar (antiguas)', 'Vienen de la app antigua y nunca se aprobaron: no se pueden planificar. Si ya no se usan, Administración las puede archivar en Sistema Fën → Catálogo.', false],
+  archivadas: ['Archivadas', 'Administración las archivó en Sistema Fën (Catálogo) o se anularon: no se usan en la planificación. Se pueden consultar.', false],
+  pedidas: ['Materias primas pedidas', 'Lo que pidieron con "Falta una materia prima". Administración las crea o habilita en Sistema Fën.', false]
+};
+const ID_GRUPO = g => g === 'archivadas' ? 'recetas-archivadas' : 'grupo-' + g;
+const grupoAbierto = (g, def) => { const v = (leerLS(K_GRUPOS_REC, {})[E.area] || {})[g]; return typeof v === 'boolean' ? v : def; };
+function guardarGrupo(g, abierto) {
+  const t = leerLS(K_GRUPOS_REC, {}); const o = t && typeof t === 'object' ? t : {};
+  o[E.area] = { ...(o[E.area] || {}), [g]: !!abierto }; guardarLS(K_GRUPOS_REC, o);
+}
+const normB = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const esSubLista = r => r.tipo === 'sub_receta' || ['masa_base', 'relleno'].includes(r.clasificacion);
+const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
+function itemReceta(r) {
+  const p = ED.AREAS_EDITAN.includes(E.area) ? ED.propuestaAbierta(r.id) : null;
+  return `<button type="button" class="item-receta" data-receta="${esc(r.id)}">
+        <b>${esc(r.nombre)}</b>
+        <small>${r.tipo === 'sub_receta' ? 'Sub receta · ' : ''}rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}</small>
+        <span class="chips-est">${ED.chipEstado(r.estado || 'borrador')}${ED.chipCambio(p)}</span>
+      </button>`;
+}
 function vistaRecetas() {
   if (!E.cargado.recetas) return '<div class="vacio">Cargando…</div>';
   if (E.recetaVista) return detalleReceta(E.recetas.find(r => r.id === E.recetaVista));
-  const q = E.buscar.trim().toLowerCase();
-  // v0.16.3: las que tienen un cambio devuelto, arriba; después las consolidadas; las anuladas al final
-  const dev = r => { const p = ED.propuestaAbierta(r.id); return p && p.estado === 'devuelta' ? 0 : 1; };
-  const orden = r => r.estado === 'consolidada' ? 0 : r.estado === 'anulada' ? 2 : 1;
-  const todas = E.recetas.filter(r => r.area === E.area && (!q || r.nombre.toLowerCase().includes(q)))
-    .sort((a, b) => dev(a) - dev(b) || orden(a) - orden(b) || a.nombre.localeCompare(b.nombre, 'es'));
-  // v0.17.3: las archivadas (Sistema Fën → Catálogo) van abajo, en "Archivadas (N)" cerrado
-  const lista = todas.filter(r => !archivada(r)), arch = todas.filter(archivada);
-  const item = r => `<button type="button" class="item-receta" data-receta="${esc(r.id)}">
-        <b>${esc(r.nombre)}</b>
-        <small>${r.tipo === 'sub_receta' ? 'Sub receta · ' : ''}rinde ${M.unidades(M.porciones(r))} ${r.unidad === 'g' ? 'g' : 'un'}</small>
-        ${chipsReceta(r)}
-      </button>`;
-  return `${ED.vistaPropuestas()}${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
+  if (!ED.AREAS_EDITAN.includes(E.area)) return vistaRecetasConsulta();
+  const q = normB(E.buscar), hay = t => !q || normB(t).includes(q);
+  const recetas = E.recetas.filter(r => r.area === E.area && hay(r.nombre));
+  const props = ED.propuestasAbiertas().filter(p => hay(ED.nombrePropuesta(p)) || hay(ED.tituloPropuesta(p)));
+  const ordenP = p => ED.PARA_TRABAJAR.indexOf(p.estado);
+  const trabajar = props.filter(p => ED.PARA_TRABAJAR.includes(p.estado)).sort((a, b) => ordenP(a) - ordenP(b) || ED.tituloPropuesta(a).localeCompare(ED.tituloPropuesta(b), 'es'));
+  const esperando = props.filter(p => !ED.PARA_TRABAJAR.includes(p.estado)).sort((a, b) => ED.tituloPropuesta(a).localeCompare(ED.tituloPropuesta(b), 'es'));
+  const aprobadas = recetas.filter(r => r.estado === 'consolidada').sort(porNombre);
+  const productos = aprobadas.filter(r => !esSubLista(r)), subs = aprobadas.filter(esSubLista);
+  const arch = recetas.filter(r => archivada(r) || r.estado === 'anulada').sort(porNombre);
+  const antiguas = recetas.filter(r => r.estado !== 'consolidada' && !archivada(r) && r.estado !== 'anulada').sort(porNombre);
+  const sol = ED.solicitudesArea(), pedidas = sol.lista.filter(s => hay(s.nombre) || hay(s.receta));
+  const n = { trabajar: trabajar.length, esperando: esperando.length, aprobadas: aprobadas.length, antiguas: antiguas.length, archivadas: arch.length, pedidas: pedidas.length };
+  const grupo = (g, cuerpo, def) => {
+    if (!n[g]) return '';
+    const [nom, ayuda] = GRUPOS_REC[g], abierto = q ? true : grupoAbierto(g, def ?? GRUPOS_REC[g][2]);
+    return `<details class="grupo-rec g-${g}" id="${ID_GRUPO(g)}"${abierto ? ' open' : ''}><summary data-grupo="${g}">${ic('der')}<span class="g-nom">${esc(nom)}</span> <span class="g-num">(${n[g]})</span></summary>
+      <p class="ayuda g-ayuda">${esc(ayuda)}</p>${cuerpo}</details>`;
+  };
+  const lista = l => `<div class="lista-recetas">${l.join('')}</div>`;
+  const sub = (t, l) => l.length ? `<h3 class="subgrupo">${esc(t)} <span class="g-num">(${l.length})</span></h3>${lista(l.map(itemReceta))}` : '';
+  const pill = (g, t) => `<button type="button" class="pill-grupo" data-ir-grupo="${g}"${n[g] ? '' : ' disabled'}>${esc(t)} <span class="g-num">${n[g]}</span></button>`;
+  const total = n.trabajar + n.esperando + n.aprobadas + n.antiguas + n.archivadas + n.pedidas;
+  return `<div class="botones" style="justify-content:flex-start;margin-bottom:12px"><button type="button" class="btn" data-ed-nueva="1">${ic('libro')}Nueva receta</button></div>
+    ${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
+    <div class="titulo-rec"><h2 class="titulo">Recetas</h2><button type="button" class="btn-i" data-info-rec="1" aria-expanded="${E.infoRecetas ? 'true' : 'false'}" aria-controls="rec-info" aria-label="Qué significan las etiquetas">${ic('info')}</button></div>
+    <div class="ayuda info-texto" id="rec-info"${E.infoRecetas ? '' : ' hidden'}>${INFO_RECETAS.map(x => `<p>${x}</p>`).join('')}</div>
+    <div class="pills-grupo" role="group" aria-label="Ir a un grupo">${pill('trabajar', 'Para trabajar')}${pill('esperando', 'Esperando aprobación')}${pill('aprobadas', 'Aprobadas')}</div>
     <div class="campo"><label for="buscar-receta">Buscar</label><input id="buscar-receta" value="${esc(E.buscar)}" placeholder="Nombre de la receta" autocomplete="off"></div>
-    ${ED.AREAS_EDITAN.includes(E.area) ? '<h2 class="titulo">Recetas</h2>' : ''}
-    <div class="lista-recetas">${lista.map(item).join('') || (arch.length ? '' : '<p class="ayuda">No hay recetas con ese nombre.</p>')}</div>
-    ${arch.length ? `<details class="desp archivadas" id="recetas-archivadas"><summary>Archivadas (${arch.length})</summary><p class="ayuda">Administración las archivó en Sistema Fën (Catálogo): no se usan en la planificación. Se pueden consultar.</p><div class="lista-recetas">${arch.map(item).join('')}</div></details>` : ''}`;
+    ${grupo('trabajar', lista(trabajar.map(ED.itemPropuesta)))}
+    ${grupo('esperando', lista(esperando.map(ED.itemPropuesta)))}
+    ${grupo('aprobadas', sub('Productos', productos) + sub('Masas y sub recetas', subs))}
+    ${grupo('antiguas', lista(antiguas.map(itemReceta)))}
+    ${grupo('archivadas', lista(arch.map(itemReceta)))}
+    ${grupo('pedidas', ED.vistaPedidas(pedidas), sol.abiertaPorDefecto)}
+    ${total ? '' : `<p class="ayuda">${q ? 'No hay recetas con ese nombre.' : 'Todavía no hay recetas en esta área.'}</p>`}`;
 }
-// v0.16.3: chip del estado de la receta + el de su propuesta abierta ("Consolidada" + "Cambio en revisión") y, si la devolvieron, el comentario
+// Las áreas que no editan recetas: la lista de consulta de siempre (aprobadas primero, las archivadas abajo)
+function vistaRecetasConsulta() {
+  const q = E.buscar.trim().toLowerCase();
+  const orden = r => r.estado === 'consolidada' ? 0 : r.estado === 'anulada' ? 2 : 1;
+  const todas = E.recetas.filter(r => r.area === E.area && (!q || r.nombre.toLowerCase().includes(q))).sort((a, b) => orden(a) - orden(b) || porNombre(a, b));
+  const lista = todas.filter(r => !archivada(r)), arch = todas.filter(archivada);
+  return `${!AREAS[E.area].nueva ? `<div class="nota neutra">${ic('alerta')}<span>${esc(AREAS[E.area].nombre)} sigue planificando en la app actual por ahora. Aquí puedes consultar las recetas. <a href="${esc(C.APP_ANTIGUA)}">Abrir la app actual</a></span></div>` : ''}
+    <div class="campo"><label for="buscar-receta">Buscar</label><input id="buscar-receta" value="${esc(E.buscar)}" placeholder="Nombre de la receta" autocomplete="off"></div>
+    <div class="lista-recetas">${lista.map(itemReceta).join('') || (arch.length ? '' : '<p class="ayuda">No hay recetas con ese nombre.</p>')}</div>
+    ${arch.length ? `<details class="desp archivadas" id="recetas-archivadas"><summary>Archivadas (${arch.length})</summary><p class="ayuda">Administración las archivó en Sistema Fën (Catálogo): no se usan en la planificación. Se pueden consultar.</p><div class="lista-recetas">${arch.map(itemReceta).join('')}</div></details>` : ''}`;
+}
+// v0.16.3: chip del estado de la receta + el de su propuesta abierta ("Aprobada" + "Cambio en revisión") y, si la devolvieron, el comentario (detalle)
 function chipsReceta(r) {
   const p = ED.propuestaAbierta(r.id);
   return `<span class="chips-est">${ED.chipEstado(r.estado || 'borrador')}${p ? ED.chipEstado(p.estado, true) : ''}</span>${p ? ED.lineaDevuelta(p) : ''}`;
@@ -1831,7 +1898,18 @@ $('principal').addEventListener('click', async ev => {
   if (ds.accion === 'copiar') { dialogoCopiar(); return; }
   if (ds.accion === 'deshacer-copia') { deshacerCopia(); return; }
   if (ds.receta) { E.recetaVista = ds.receta; E.cantidadVista = null; pintar(); return; }
+  if (ds.infoRec) { E.infoRecetas = !E.infoRecetas; const p = $('rec-info'); p.hidden = !E.infoRecetas; b.setAttribute('aria-expanded', String(E.infoRecetas)); return; }
+  if (ds.irGrupo) {   // v0.17.11: las píldoras abren el grupo y lo traen a la vista
+    guardarGrupo(ds.irGrupo, true); pintar();
+    const g = $(ID_GRUPO(ds.irGrupo)); if (g) { g.open = true; g.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+    return;
+  }
   if (ds.volver) { E.recetaVista = null; pintar(); return; }
+});
+// v0.17.11: Recetas → abrir o cerrar un grupo: se recuerda en el equipo (no mientras se busca: ahí se abren solos los que tienen algo)
+$('principal').addEventListener('click', ev => {
+  const sm = ev.target.closest('summary[data-grupo]'); if (!sm || normB(E.buscar)) return;
+  guardarGrupo(sm.dataset.grupo, !sm.parentElement.open);
 });
 // Lo abierto de "Anuladas" se mantiene aunque la pantalla se repinte
 $('principal').addEventListener('toggle', ev => { if (ev.target.classList && ev.target.classList.contains('anuladas')) E.verAnuladas = ev.target.open; }, true);
