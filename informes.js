@@ -16,7 +16,7 @@
 // ═══════════════════════════════════════════════
 import * as M from './modelo.js?v=0.17.4';
 import * as B from './bolleria.js?v=0.17.4';
-import * as K from './consumo.js?v=0.17.4';
+import * as K from './consumo.js?v=0.17.12';
 import * as CG from './congelado.js?v=0.17.4';
 import * as FBQ from './fermentacion.js?v=0.17.2';
 

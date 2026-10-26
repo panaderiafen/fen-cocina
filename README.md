@@ -1,4 +1,4 @@
-# fën · Cocina · v0.17.11
+# fën · Cocina · v0.17.12
 
 **App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.9: 21 de octubre; v0.17.10 y v0.17.11: 22 de octubre)
 
@@ -11,6 +11,16 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 
 
 
+
+## Novedades de la v0.17.12: motivo "Regalo o consumo interno" en la merma
+
+- **Merma → motivo nuevo "Regalo o consumo interno"**: colaciones con producto propio, regalos y degustaciones. Se anota igual que la merma, solo la cantidad (sin precios). Sistema Fën lo saca de la merma y lo muestra en su propia línea del estado de resultados ("Producto regalado y consumo interno").
+- **Dónde va:** repo **fen-cocina**, raíz. Cambian `registros.js` (el motivo nuevo) y `consumo.js` (solo la versión con que carga `registros.js`): son módulos compartidos, y las mismas copias van en `sistema-fen/cocina/`, en el paquete de Sistema Fën v0.106.0. También `app.js`, `cafeteria.js` e `informes.js` (solo esas versiones), `config.js`, `index.html` y este README. Reglas sin cambios.
+
+### Lista de verificación v0.17.12
+- [ ] Abajo dice **v0.17.12** (abrir con Cmd + Shift + R).
+- [ ] Merma → anotar algo: entre los motivos aparece **Regalo o consumo interno**.
+- [ ] En el celular, los botones de motivo se ven completos (sin cortarse).
 
 ## Novedades de la v0.17.11: Recetas ordenada en grupos
 

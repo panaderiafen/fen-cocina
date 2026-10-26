@@ -7,7 +7,7 @@
 //  revisa la sesión de Firebase en cada pedido.
 // ═══════════════════════════════════════════════
 window.FEN_COCINA = {
-  VERSION: '0.17.11',
+  VERSION: '0.17.12',
   // Proyecto fen-produccion (no es secreto: solo dice cuál es el proyecto)
   firebase: {
     apiKey: 'AIzaSyC1Ea_zVHgPLu3Ij58JRcAQtWHnXIM6MeU',

@@ -8,7 +8,7 @@
 //  · Merma de Cafetería en otro día: hoy o hasta 7 días atrás, nunca en el futuro.
 // ═══════════════════════════════════════════════
 import * as M from './modelo.js?v=0.17.4';
-import * as R from './registros.js?v=0.17.4';
+import * as R from './registros.js?v=0.17.12';
 
 export const DIAS_ATRAS_MERMA = 7;
 const esFecha = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
