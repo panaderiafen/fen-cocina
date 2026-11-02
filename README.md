@@ -1,6 +1,6 @@
-# fën · Cocina · v0.17.12
+# fën · Cocina · v0.17.13
 
-**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.9: 21 de octubre; v0.17.10 y v0.17.11: 22 de octubre)
+**App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.9: 21 de octubre; v0.17.10 y v0.17.11: 22 de octubre; v0.17.13: 1 de noviembre)
 
 Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Firebase **fen-produccion**):
 - abre al tiro con lo guardado en el equipo;
@@ -11,6 +11,23 @@ Reemplaza de a poco a la app de Producción. Guarda directo en la base nueva (Fi
 
 
 
+
+## Novedades de la v0.17.13: Planificar sábado y domingo (Bollería) y recetas archivadas fuera de la grilla (Panadería)
+
+Pedido por Emmanuel el 1 nov.
+- **Bollería → Bitácora:** arriba queda **un solo botón, "Planificar sábado y domingo"**. Reemplaza a "Informe del viernes · compartir" (arriba) y a "Cierre del viernes (para imprimir)" (abajo), que hacían casi lo mismo.
+  - Abre la misma ventana del cierre del viernes: qué hornear el sábado (con la sugerencia de siempre) y qué descongelar el domingo para el lunes. Siempre es el viernes de la semana que se mira, aunque se abra otro día.
+  - El botón **"Guardar y compartir"** guarda y abre al tiro el informe del viernes con **Enviar como mensaje** (WhatsApp) y **Enviar PDF**. Ya no se imprime.
+  - El informe ahora tiene **"Hornear el sábado"** (2), antes de "Descongelar el domingo" (3) y "Revisar" (4).
+- **Panadería → Planificación:** las recetas **archivadas** en Sistema Fën ya no van en la grilla. Quedan abajo, plegadas, en **"Recetas archivadas (N)"**, con lo que tenían planificado. No cuentan en Hoy ni en "Masas del día", y "Copiar de otra semana" no las copia. Sus números quedan guardados (nada se borra).
+- **Dónde va:** repo **fen-cocina**, raíz. Cambian `app.js`, `informes.js`, `config.js`, `index.html` y este README. Los módulos compartidos con Sistema Fën (`modelo.js`, `bolleria.js`, `consumo.js`, `registros.js`) **no cambian**. Reglas sin cambios.
+
+### Lista de verificación v0.17.13
+- [ ] Abajo dice **v0.17.13** (abrir con Cmd + Shift + R).
+- [ ] Bollería → Bitácora: arriba está "Planificar sábado y domingo" y abajo ya no está "Cierre del viernes (para imprimir)".
+- [ ] Tocarlo: aparece la ventana con el sábado y el domingo. "Guardar y compartir" abre el informe; probar "Enviar como mensaje" y "Enviar PDF".
+- [ ] En el informe aparece "2 · Hornear el sábado" con lo anotado.
+- [ ] Panadería → Planificación: una receta archivada ya no está en la grilla; aparece abajo en "Recetas archivadas (N)".
 
 ## Novedades de la v0.17.12: motivo "Regalo o consumo interno" en la merma
 

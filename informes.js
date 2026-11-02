@@ -145,6 +145,8 @@ export function informeBol(e) {
     masas: Object.entries(cierre.domingo.masas || {}).filter(([, n]) => n0(n) > 0).map(([id, n]) => ({ id, nombre: nombre(id), n: n0(n) })).sort(porNombre),
     productos: Object.entries(cierre.domingo.productos || {}).filter(([, n]) => n0(n) > 0).map(([id, n]) => ({ id, nombre: nombre(id), n: n0(n) })).sort(porNombre)
   } : null;
+  // v0.17.13: lo que se hornea el sábado (también del cierre del viernes)
+  const sabado = cierre && cierre.sabado ? Object.entries(cierre.sabado).filter(([, n]) => n0(n) > 0).map(([id, n]) => ({ id, nombre: nombre(id), n: n0(n) })).sort(porNombre) : null;
   const yaDomingo = Object.entries(descDom).filter(([, n]) => n > 0).map(([id, n]) => ({ id, nombre: nombre(id), n })).sort(porNombre);
   // (c) Revisar: empastes de la semana (congelado.js → empastesSemana) y lo que llevan las masas del lunes (PEM)
   const emp = CG.empastesSemana(dias, W, plan, c, hoy);
@@ -176,14 +178,14 @@ export function informeBol(e) {
     : { estado: 'falta', titulo: `${p.nombre}: hay que hacer ${M.gramos(p.gramos)}`, detalle: `Para ${paraMasas} del lunes (PEM).` }));
   semana.filter(x => x.faltan > 0).forEach(x => revisar.push({ estado: 'falta', titulo: `${x.nombre}: faltan ${plural(x.faltan, 'masa', 'masas')} en el congelador para la semana`, detalle: `Hay ${M.miles(x.congeladas)} congeladas y quedan ${M.miles(x.porDescongelar)} por descongelar.` }));
   // Lo que no sale de los datos de la app: a mano
-  if (!domingo) revisar.push({ estado: 'revisar', titulo: 'Cuánto descongelar el domingo para el lunes', detalle: 'La meta es de la semana: la app no sabe cuánto se forma el lunes. Decídanlo y anótenlo en Bitácora → Cierre del viernes (así sale en este informe).' });
+  if (!domingo) revisar.push({ estado: 'revisar', titulo: 'Cuánto descongelar el domingo para el lunes', detalle: 'La meta es de la semana: la app no sabe cuánto se forma el lunes. Decídanlo y anótenlo en Bitácora → Planificar sábado y domingo (así sale en este informe).' });
   if (!st.conInventario) revisar.push({ estado: 'revisar', titulo: 'Sin inventario del congelador', detalle: 'Cuenten el congelador (Bitácora → Inventario del congelador): sin eso el stock no es real.' });
   if (negativos.length) revisar.push({ estado: 'revisar', titulo: 'Quedan en negativo: ' + negativos.join(', '), detalle: 'Revisen las anotaciones o hagan un inventario.' });
   if (!conMeta) revisar.push({ estado: 'revisar', titulo: `Sin meta para la semana del ${M.etiquetaSemana(W)}`, detalle: 'Pónganla en Metas para saber qué formar y qué descongelar.' });
   return {
     tipo: 'bol', area: 'Bollería', titulo: 'Informe del viernes', lunes: W, lunesTxt: M.fechaLarga(W), fecha: hoy, fechaTxt: M.fechaLarga(hoy), quien: e.quien || '', hora: horaDe(e.generado),
     stock: { hasta, hastaTxt: fechaMedia(hasta), conInventario: st.conInventario, ultimoInv, ultimoInvTxt: ultimoInv ? fechaMedia(ultimoInv) : '', masas: stockMasas, productos: stockProd },
-    semana, conMeta, semanaTxt: M.etiquetaSemana(W), domingo, domingoTxt: fechaMedia(dom), yaDomingo, empastes, masasLunes: masasLunes.map(x => ({ id: x.rs.id, nombre: x.rs.nombre, n: x.n })), previas, revisar
+    semana, conMeta, semanaTxt: M.etiquetaSemana(W), sabado, sabadoTxt: fechaMedia(M.sumarDias(W, -2)), domingo, domingoTxt: fechaMedia(dom), yaDomingo, empastes, masasLunes: masasLunes.map(x => ({ id: x.rs.id, nombre: x.rs.nombre, n: x.n })), previas, revisar
   };
 }
 
@@ -211,13 +213,17 @@ export function texto(inf) {
   if (!s.masas.length && !s.productos.length) L.push('- Nada congelado');
   s.masas.forEach(m => L.push(`- ${m.nombre}: ${plural(m.masas, 'masa', 'masas')} · ${M.unidades(m.empastes)} empastes en el refri`));
   s.productos.forEach(p => L.push(`- ${p.nombre}: ${M.miles(p.n)}${p.cajas !== null ? ` (${plural(p.cajas, 'caja', 'cajas')})` : ''}`));
-  L.push('', `*2. Descongelar el domingo ${inf.domingoTxt} para el lunes*`);
+  // v0.17.13: el sábado, del mismo cierre
+  L.push('', `*2. Hornear el sábado ${inf.sabadoTxt}*`);
+  if (inf.sabado) { if (!inf.sabado.length) L.push('- Nada'); inf.sabado.forEach(p => L.push(`- ${p.nombre}: ${M.miles(p.n)}`)); }
+  else L.push('Falta decidirlo: anótenlo en Bitácora → Planificar sábado y domingo.');
+  L.push('', `*3. Descongelar el domingo ${inf.domingoTxt} para el lunes*`);
   if (inf.domingo) {
     L.push(`Del cierre del viernes${inf.domingo.por ? ` (${inf.domingo.por})` : ''}:`);
     if (!inf.domingo.masas.length && !inf.domingo.productos.length) L.push('- Nada');
     inf.domingo.masas.forEach(m => L.push(`- ${m.nombre}: ${plural(m.n, 'masa', 'masas')} · el lunes laminar con ${plural(m.n, 'empaste', 'empastes')}`));
     inf.domingo.productos.forEach(p => L.push(`- ${p.nombre}: ${M.miles(p.n)}`));
-  } else L.push('Falta decidirlo: anótenlo en Bitácora → Cierre del viernes.');
+  } else L.push('Falta decidirlo: anótenlo en Bitácora → Planificar sábado y domingo.');
   if (inf.yaDomingo.length) L.push(`Ya anotado el domingo: ${inf.yaDomingo.map(x => `${x.nombre} ${plural(x.n, 'masa', 'masas')}`).join(', ')}`);
   L.push('', `Semana del ${inf.semanaTxt} (meta):`);
   if (!inf.semana.length) L.push('- Sin piezas para formar');
@@ -225,7 +231,7 @@ export function texto(inf) {
     L.push(`- ${x.nombre}: ${plural(x.necesarias, 'masa', 'masas')} para formar · descongeladas ${M.miles(x.descongeladas)} · por descongelar ${M.miles(x.porDescongelar)} · congeladas ${M.miles(x.congeladas)}${x.faltan ? ` · faltan ${M.miles(x.faltan)}` : ''}`);
     x.productos.forEach(p => L.push(`  ${p.nombre}: ${M.miles(p.piezas)} piezas (1 masa rinde ${M.unidades(p.rinde)})`));
   });
-  L.push('', '*3. Revisar*');
+  L.push('', '*4. Revisar*');
   inf.revisar.forEach(r => L.push(`- ${r.estado === 'ok' ? 'Listo' : r.estado === 'falta' ? 'Falta' : 'Revisar'}: ${r.titulo}. ${r.detalle}`));
   return L.join('\n');
 }
@@ -278,7 +284,10 @@ export function html(inf) {
     ...s.productos.map(p => fila(esc(p.nombre), `${M.miles(p.n)}${p.cajas !== null ? ` · ${plural(p.cajas, 'caja', 'cajas')}` : ''}`))].join('') || fila('Nada congelado', '');
   const dom = inf.domingo
     ? ([...inf.domingo.masas.map(m => fila(esc(m.nombre), `${plural(m.n, 'masa', 'masas')} · laminar con ${plural(m.n, 'empaste', 'empastes')}`)), ...inf.domingo.productos.map(p => fila(esc(p.nombre), M.miles(p.n)))].join('') || fila('Nada', ''))
-    : `<p class="inf-nota inf-bloque">${icono('caja', COL.ojo)}<span>Falta decidirlo: anótenlo en Bitácora → Cierre del viernes (así sale aquí).</span></p>`;
+    : `<p class="inf-nota inf-bloque">${icono('caja', COL.ojo)}<span>Falta decidirlo: anótenlo en Bitácora → Planificar sábado y domingo (así sale aquí).</span></p>`;
+  const sab = inf.sabado
+    ? (inf.sabado.map(p => fila(esc(p.nombre), M.miles(p.n))).join('') || fila('Nada', ''))
+    : `<p class="inf-nota inf-bloque">${icono('caja', COL.ojo)}<span>Falta decidirlo: anótenlo en Bitácora → Planificar sábado y domingo (así sale aquí).</span></p>`;
   const semana = inf.semana.map(x => `<div class="inf-grupo inf-bloque">
       <div class="inf-fila"><span class="inf-n"><b>${esc(x.nombre)}</b></span><span class="inf-v"><b>${plural(x.necesarias, 'masa', 'masas')}</b> para formar</span></div>
       <div class="inf-sub">Descongeladas ${M.miles(x.descongeladas)} · por descongelar ${M.miles(x.porDescongelar)} · congeladas ${M.miles(x.congeladas)}${x.faltan ? ` · <b class="inf-ojo">faltan ${M.miles(x.faltan)}</b>` : ''}</div>
@@ -289,13 +298,15 @@ export function html(inf) {
     <div class="inf-sec inf-bloque">${icono('copo', COL.texto)}1 · Congelado ahora</div>
     <div class="inf-sub inf-bloque">Al cierre del ${esc(s.hastaTxt)} · ${s.ultimoInv ? `último inventario ${esc(s.ultimoInvTxt)}` : 'sin inventario del congelador'}</div>
     <div class="inf-caja">${stock}</div>
-    <div class="inf-sec inf-bloque">${icono('reloj', COL.texto)}2 · Descongelar el domingo ${esc(inf.domingoTxt)} para el lunes</div>
+    <div class="inf-sec inf-bloque">${icono('reloj', COL.texto)}2 · Hornear el sábado ${esc(inf.sabadoTxt)}</div>
+    <div class="inf-caja">${sab}</div>
+    <div class="inf-sec inf-bloque">${icono('reloj', COL.texto)}3 · Descongelar el domingo ${esc(inf.domingoTxt)} para el lunes</div>
     ${inf.domingo ? `<div class="inf-sub inf-bloque">Del cierre del viernes${inf.domingo.por ? ` · ${esc(inf.domingo.por)}` : ''}</div>` : ''}
     <div class="inf-caja">${dom}</div>
     ${inf.yaDomingo.length ? `<div class="inf-sub inf-bloque">Ya anotado el domingo: ${esc(inf.yaDomingo.map(x => `${x.nombre} ${plural(x.n, 'masa', 'masas')}`).join(', '))}</div>` : ''}
     <div class="inf-sub inf-bloque"><b>Semana del ${esc(inf.semanaTxt)}</b> · lo que hay que formar (meta − stock inicial + dejar) y sus masas</div>
     <div class="inf-caja">${semana}</div>
-    <div class="inf-sec inf-bloque">${icono('check', COL.texto)}3 · Revisar</div>
+    <div class="inf-sec inf-bloque">${icono('check', COL.texto)}4 · Revisar</div>
     <div class="inf-revs">${rev}</div>
     <div class="inf-pie inf-bloque">Fën · Cocina · Bollería · informe interno (sin costos)</div></div>`;
 }

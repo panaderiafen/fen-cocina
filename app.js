@@ -1,5 +1,11 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.11
+//  fën · Cocina — la app de las jefas  v0.17.13
+//  v0.17.13: BOLLERÍA → Bitácora: arriba un solo botón, "Planificar sábado y domingo" (antes "Informe del viernes · compartir"
+//  arriba y "Cierre del viernes (para imprimir)" abajo). Abre el cierre del viernes de la semana (qué hornear el sábado y qué
+//  descongelar el domingo para el lunes); "Guardar y compartir" lo guarda y abre el informe del viernes para enviarlo como
+//  mensaje de WhatsApp o en PDF (ya no se imprime). El informe suma "Hornear el sábado". PANADERÍA → Planificación: las recetas
+//  archivadas en Sistema Fën no van en la grilla ni se copian de otra semana; quedan abajo, plegadas, en "Recetas archivadas (N)",
+//  y no cuentan en Hoy ni en los informes (sus números quedan guardados).
 //  v0.17.11: RECETAS EN GRUPOS. Sin el bloque "Propuestas": Para trabajar (borrador, en prueba, devueltas primero) · Esperando
 //  aprobación · Aprobadas (Productos / Masas y sub recetas) · Sin aprobar (antiguas) · Archivadas · Materias primas pedidas;
 //  cada grupo con su número, plegable (se recuerda en el equipo), píldoras arriba y (i) que explica las dos etiquetas.
@@ -115,7 +121,7 @@ import * as K from './consumo.js?v=0.17.12';
 import * as CG from './congelado.js?v=0.17.4';
 import * as CF from './cafeteria.js?v=0.17.4';
 import * as FBQ from './fermentacion.js?v=0.17.2';
-import * as I from './informes.js?v=0.17.9';
+import * as I from './informes.js?v=0.17.13';
 
 const C = window.FEN_COCINA;
 const AREAS = {
@@ -127,6 +133,8 @@ const AREAS = {
 const ESTADOS = { consolidada: 'Aprobada', en_prueba: 'En prueba', borrador: 'Borrador', 'pendiente_aprobación': 'En revisión', pendiente_aprobacion: 'En revisión', archivada: 'Archivada' };
 // v0.17.3: archivada en Sistema Fën (Catálogo): como una anulada (no se lista ni se elige; lo planificado se mantiene)
 const archivada = r => !!r && r.estado === 'archivada';
+// v0.17.13: el plan sin las recetas archivadas (no se hacen: no cuentan en Hoy ni en los informes; sus números quedan guardados)
+const sinArchivadas = plan => (!plan || !plan.filas) ? plan : { ...plan, filas: Object.fromEntries(Object.entries(plan.filas).filter(([id]) => !archivada(E.recetas.find(r => r.id === id)))) };
 const K_PERSONA = 'fen_cocina_persona', K_AREA = 'fen_cocina_area';
 // Secciones de cada área (las que no están, solo Recetas)
 const SECCIONES = {
@@ -538,7 +546,7 @@ function vistaHoy() {
   const nav = navDia(f);
   if (!plan) return nav + '<div class="vacio">Cargando el plan…</div>';
   const c = ctx(), ajHoy = ajustesDe(f), hechos = dia.hechos || {};
-  const planDia = M.planDelDia(plan, f, E.recetas);
+  const planDia = M.planDelDia(sinArchivadas(plan), f, E.recetas);
   if (!planDia.length) return nav + `<div class="vacio">${ic('plan')}<b>Sin producción planificada para este día</b><a href="#plan">Ir a Planificación</a></div>`;
   const pie = M.pieMasaMadre(f, E.planes, ajustesDe, c);
   const el = M.elaboracionesDia(planDia, ajHoy, c);
@@ -780,7 +788,7 @@ function subRecetasSemana(lunes) {
   const plan = E.planes[lunes], vistas = {};
   if (!plan) return [];
   for (let i = 0; i < 7; i++) {
-    const f = M.sumarDias(lunes, i), pd = M.planDelDia(plan, f, E.recetas);
+    const f = M.sumarDias(lunes, i), pd = M.planDelDia(sinArchivadas(plan), f, E.recetas);
     if (pd.length) M.elaboracionesDia(pd, ajustesDe(f), ctx()).subRecetas.forEach(s => { if (!vistas[s.id]) vistas[s.id] = { id: s.id, nombre: s.nombre }; });
   }
   return Object.values(vistas).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
@@ -826,7 +834,7 @@ function entradaPan(f) {
   if (!E.cargado.recetas || !E.cargado.mps || !plan || !dia) return null;
   const c = ctx(), ajHoy = ajustesDe(f), hechos = dia.hechos || {};
   const hecho = k => hechos[k] && hechos[k].por ? hechos[k] : null;
-  const planDia = M.planDelDia(plan, f, E.recetas), el = M.elaboracionesDia(planDia, ajHoy, c);
+  const planDia = M.planDelDia(sinArchivadas(plan), f, E.recetas), el = M.elaboracionesDia(planDia, ajHoy, c);
   // Las mismas tandas y marcas de la tarjeta (tandasHoy, marcasTandas)
   const item = o => {
     const T = tandasHoy(o.clave, o.total, o.rid, o.unidad === 'g', dia, null), h = hecho(o.claveHecho);
@@ -855,9 +863,9 @@ function informeActual() {
   const e = INF.tipo === 'pan' ? entradaPan(E.fecha) : entradaBol(INF.lunes);
   return e ? (INF.tipo === 'pan' ? I.informePan(e) : I.informeBol(e)) : null;
 }
-function dialogoInforme(tipo) {
+function dialogoInforme(tipo, lunes) {
   INF.tipo = tipo; INF.archivo = null;
-  if (tipo === 'bol') INF.lunes = proxLunes();
+  if (tipo === 'bol') INF.lunes = lunes || proxLunes();
   I.ponerEstilos();
   const d = $('dialogo'), pan = tipo === 'pan';
   d.classList.add('dialogo-informe');
@@ -865,7 +873,7 @@ function dialogoInforme(tipo) {
       <div class="dlg-cab-i"><h2>${pan ? 'Compartir · Masas del día' : 'Informe del viernes'}</h2><button type="button" class="btn-i" data-info-inf="1" aria-expanded="false" aria-controls="inf-info" aria-label="Qué es esto">${ic('info')}</button></div>
       <div class="ayuda info-texto" id="inf-info" hidden>${pan
         ? `<p>Las masas de hoy con su cantidad, sus tandas y las horas. <b>Hora de inicio</b>: cuando se marcó la tanda terminada (fin del amasado = empieza la fermentación en bloque). <b>Hora de formado</b>: inicio + la fermentación en bloque de esa receta (la que configura Administración en Sistema Fën, según la temporada). Una tanda sin marcar dice "pendiente". Si hay ajuste de sábado o de harina / agua, también va.</p>`
-        : `<p>Se puede pedir cualquier día; parte con el lunes que viene. <b>Congelado ahora</b>: de la Bitácora (último inventario + lo anotado después). <b>Descongelar el domingo</b>: lo que anotaron en el Cierre del viernes; abajo, la semana del lunes según Metas (meta − stock inicial + dejar), en masas como el PEM. <b>Revisar</b>: los empastes (como el panel Empastes), el poolish y lo que llevan las masas del lunes (PEM). Lo que la app no sabe queda como "Revisar", para hacerlo a mano.</p>`}
+        : `<p>Se puede pedir cualquier día; parte con el lunes que viene. <b>Congelado ahora</b>: de la Bitácora (último inventario + lo anotado después). <b>Hornear el sábado</b> y <b>descongelar el domingo</b>: lo que anotaron en "Planificar sábado y domingo"; abajo, la semana del lunes según Metas (meta − stock inicial + dejar), en masas como el PEM. <b>Revisar</b>: los empastes (como el panel Empastes), el poolish y lo que llevan las masas del lunes (PEM). Lo que la app no sabe queda como "Revisar", para hacerlo a mano.</p>`}
         <p><b>Enviar PDF</b>: en el celular o la tablet se abre Compartir con el PDF (eliges el chat o el grupo); en el computador se descarga el PDF y se abre WhatsApp para adjuntarlo. <b>Enviar como mensaje</b>: el mismo informe en texto. Sin costos.</p></div>
       ${pan ? '' : `<div class="inf-nav"><button type="button" class="btn-flecha" data-inf-lunes="-7" aria-label="Lunes anterior">${ic('izq')}</button><h3 id="inf-lunes"></h3><button type="button" class="btn-flecha" data-inf-lunes="7" aria-label="Lunes siguiente">${ic('der')}</button><button type="button" class="btn-sec" data-inf-lunes="prox" id="inf-prox">El lunes que viene</button></div>`}
       <span class="rotulo">Vista previa</span>
@@ -1432,12 +1440,11 @@ function vistaBitacora() {
     return `<div class="fila sub"><span>${esc(nombreDe(id))}</span><span>${M.miles(x.masas)} masas descongeladas → piezas para ${M.unidades(x.esperadas)} masas${Math.abs(dif) >= 0.05 ? ` (${dif > 0 ? '+' : ''}${M.unidades(dif)})` : ''}</span></div>`;
   }).join('');
   return nav + `
-    <div class="fila-informe"><button type="button" class="btn-sec btn-compartir" data-informe="bol">${ic('compartir')}Informe del viernes · compartir</button></div>
+    <div class="fila-informe"><button type="button" class="btn btn-fuerte btn-compartir" data-cierre="1">${ic('compartir')}Planificar sábado y domingo</button></div>
     <div class="botones-bit">${botones}</div>
     <h2 class="titulo">Anotaciones del día</h2>${lista}
     <section class="resumen" style="margin-top:16px">${congelado}${avance}</section>
-    ${cajaRend ? `<div class="caja" style="margin-top:14px"><span class="rotulo">Rendimiento real de la semana</span><div class="lista-mini">${cajaRend}</div><span class="ayuda">Las piezas formadas, pasadas a masas según lo que rinde cada receta, contra las masas descongeladas para esta semana (del domingo antes al sábado). Si salen menos piezas que masas descongeladas, la diferencia es merma o rendimiento menor.</span></div>` : ''}
-    <div class="botones" style="margin-top:16px"><button type="button" class="btn-sec" data-cierre="1">${ic('imprimir')}Cierre del viernes (para imprimir)</button></div>`;
+    ${cajaRend ? `<div class="caja" style="margin-top:14px"><span class="rotulo">Rendimiento real de la semana</span><div class="lista-mini">${cajaRend}</div><span class="ayuda">Las piezas formadas, pasadas a masas según lo que rinde cada receta, contra las masas descongeladas para esta semana (del domingo antes al sábado). Si salen menos piezas que masas descongeladas, la diferencia es merma o rendimiento menor.</span></div>` : ''}`;
 }
 
 // ── Diálogo: anotar en la bitácora ──
@@ -1519,7 +1526,8 @@ function dialogoAnotar(tipo) {
 
 // ── Cierre del viernes: congelado (de la bitácora) + qué hornear el sábado y qué descongelar el domingo (lo deciden ellas) ──
 function dialogoCierre() {
-  const d = $('dialogo'), f = E.fecha, st = CG.stock(E.diasArea, f), lunes = M.lunesDe(f);
+  // v0.17.13: siempre el viernes de la semana que se mira (así el informe del lunes siguiente lo encuentra)
+  const d = $('dialogo'), f = M.sumarDias(M.lunesDe(E.fecha), 4), st = CG.stock(E.diasArea, f), lunes = M.lunesDe(f);
   const masas = B.masasBase(E.recetas, E.area).filter(r => !archivada(r) || M.num(st.masas[r.id])), prods = productosBol().filter(r => !archivada(r) || M.num(st.productos[r.id]));   // v0.17.3
   const m = E.metas[lunes] || {}, hor = B.horneado(E.diasArea, lunes), previo = ((E.diasArea[f] || {}).cierre) || {};
   // Sugerencia para el sábado: lo que falta de la meta, sin pasar de lo congelado
@@ -1528,15 +1536,15 @@ function dialogoCierre() {
   const val = (o, id, def) => o && o[id] !== undefined ? o[id] : def;
   const fila = (id, etiqueta, v, ayuda) => `<div class="fila-aj"><label for="${id}">${esc(etiqueta)}${ayuda ? `<small>${esc(ayuda)}</small>` : ''}</label><input id="${id}" inputmode="numeric" value="${M.num(v) || ''}"><span class="gr"></span></div>`;
   d.innerHTML = `<form method="dialog" class="dlg dlg-ancho">
-      <h2>Cierre del ${esc(M.fechaLarga(f))}</h2>
-      <p class="ayuda">El congelado sale de la bitácora. Lo del sábado y el domingo lo deciden ustedes (para el sábado se sugiere lo que falta de la meta, sin tocar lo que quieren dejar para la próxima semana).</p>
+      <h2>Planificar el sábado ${esc(M.fechaCorta(M.sumarDias(f, 1)))} y el domingo ${esc(M.fechaCorta(M.sumarDias(f, 2)))}</h2>
+      <p class="ayuda">Cierre del ${esc(M.fechaLarga(f))}. El congelado sale de la bitácora. Lo del sábado y el domingo lo deciden ustedes (para el sábado se sugiere lo que falta de la meta, sin tocar lo que quieren dejar para la próxima semana). Al guardar se abre el informe para compartirlo por WhatsApp.</p>
       <h3 class="rotulo">Hornear el sábado ${esc(M.fechaCorta(M.sumarDias(f, 1)))}</h3>
       <div class="filas-aj">${prods.map(r => fila('ci-s-' + r.id, r.nombre, val(previo.sabado, r.id, sugSab(r)), `Congelado: ${M.miles(st.productos[r.id] || 0)}${M.num(dejarW[r.id]) ? ` · dejar ${M.miles(dejarW[r.id])}` : ''}`)).join('')}</div>
       <h3 class="rotulo">Descongelar el domingo ${esc(M.fechaCorta(M.sumarDias(f, 2)))} para el lunes</h3>
       <div class="filas-aj">${masas.map(r => fila('ci-dm-' + r.id, r.nombre + ' (masas)', val((previo.domingo || {}).masas, r.id, 0), `Congeladas: ${M.miles(st.masas[r.id] || 0)}`)).join('')}
         ${prods.map(r => fila('ci-dp-' + r.id, r.nombre, val((previo.domingo || {}).productos, r.id, 0), '')).join('')}</div>
       <div class="error" id="ci-error" role="alert"></div>
-      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">${ic('imprimir')}Guardar e imprimir</button></div>
+      <div class="dlg-pie"><button type="button" class="btn-sec" data-cerrar="1">Cancelar</button><button type="button" class="btn btn-fuerte" data-guardar="1">${ic('compartir')}Guardar y compartir</button></div>
     </form>`;
   d.showModal();
   d.onsubmit = ev => ev.preventDefault();
@@ -1551,29 +1559,10 @@ function dialogoCierre() {
     for (const r of masas) { const x = leer('ci-dm-' + r.id); if (isNaN(x)) { $('ci-error').textContent = 'Escribe números enteros.'; return; } cierre.domingo.masas[r.id] = x; }
     d.close();
     guardarSinEsperar(guardarDia(f, { cierre }));
-    imprimirCierre(f, st, cierre, masas, prods);
+    // v0.17.13: en vez de imprimir, el informe del viernes para el lunes siguiente (mensaje de WhatsApp o PDF)
+    dialogoInforme('bol', M.sumarDias(f, 3));
   };
 }
-function imprimirCierre(f, st, cierre, masas, prods) {
-  const filas = (lista, fn) => lista.map(fn).filter(Boolean).join('') || '<tr><td colspan="2">—</td></tr>';
-  let el = $('impresion'); if (!el) { el = document.createElement('div'); el.id = 'impresion'; document.body.appendChild(el); }
-  el.innerHTML = `<h1>Bollería · cierre del ${esc(M.fechaLarga(f))}</h1>
-    <p>Hecho por ${esc(quien())} · ${esc(new Date().toLocaleString('es-CL'))}</p>
-    <h2>Congelado al cierre</h2>
-    <table><tbody>
-      ${filas(masas, r => (M.num(st.masas[r.id]) || M.num(st.empastes[r.id])) ? `<tr><td>${esc(r.nombre)}</td><td>${M.miles(st.masas[r.id] || 0)} masas · ${M.unidades(st.empastes[r.id] || 0)} empastes en el refri</td></tr>` : '')}
-      ${filas(prods, r => M.num(st.productos[r.id]) ? `<tr><td>${esc(r.nombre)}</td><td>${M.miles(st.productos[r.id])}${B.cajas(st.productos[r.id], r.unidadesPorCaja) !== null ? ` (${B.cajas(st.productos[r.id], r.unidadesPorCaja)} cajas)` : ''}</td></tr>` : '')}
-    </tbody></table>
-    <h2>Hornear el sábado ${esc(M.fechaCorta(M.sumarDias(f, 1)))}</h2>
-    <table><tbody>${filas(prods, r => cierre.sabado[r.id] ? `<tr><td>${esc(r.nombre)}</td><td>${M.miles(cierre.sabado[r.id])}</td></tr>` : '')}</tbody></table>
-    <h2>Descongelar el domingo ${esc(M.fechaCorta(M.sumarDias(f, 2)))} para el lunes</h2>
-    <table><tbody>
-      ${filas(masas, r => cierre.domingo.masas[r.id] ? `<tr><td>${esc(r.nombre)}</td><td>${M.miles(cierre.domingo.masas[r.id])} masas · el lunes laminar con ${M.miles(cierre.domingo.masas[r.id])} empastes</td></tr>` : '')}
-      ${filas(prods, r => cierre.domingo.productos[r.id] ? `<tr><td>${esc(r.nombre)}</td><td>${M.miles(cierre.domingo.productos[r.id])}</td></tr>` : '')}
-    </tbody></table>`;
-  setTimeout(() => window.print(), 50);
-}
-
 // ── Planificación ──
 function vistaPlan() {
   if (!E.cargado.recetas) return '<div class="vacio">Cargando…</div>';
@@ -1588,28 +1577,31 @@ function vistaPlan() {
   const filas = plan.filas || {}, nuevas = E.filasNuevas[lunes] || [];
   const ids = [...new Set([...Object.keys(filas).filter(id => Object.values(filas[id] || {}).some(v => M.num(v) > 0)), ...nuevas])];
   const receta = id => E.recetas.find(r => r.id === id);
-  const lista = ids.map(id => ({ id, r: receta(id), nombre: (receta(id) || {}).nombre || (plan.nombres || {})[id] || id })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const todas = ids.map(id => ({ id, r: receta(id), nombre: (receta(id) || {}).nombre || (plan.nombres || {})[id] || id })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  // v0.17.13: las archivadas no van en la grilla: abajo, plegadas
+  const lista = todas.filter(x => !archivada(x.r)), archivadas = todas.filter(x => archivada(x.r));
   const hoyIdx = lunes === M.lunesDe(M.hoyTxt()) ? M.indiceDia(M.hoyTxt()) : -1;
   const disponibles = E.recetas.filter(r => r.area === E.area && r.estado === 'consolidada' && r.tipo !== 'sub_receta' && !ids.includes(r.id)).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   const totDia = M.DIAS_CORTOS.map((_, i) => lista.reduce((s, x) => s + M.num((filas[x.id] || {})['d' + i]), 0));
   const enRevision = lista.filter(x => x.r && x.r.estado !== 'consolidada' && !archivada(x.r));
-  const archivadas = lista.filter(x => archivada(x.r));   // v0.17.3
   // "Deshacer la copia" se ofrece 3 días después de copiar; después ya hubo cambios que no conviene perder
   const deshacer = plan.antesDeCopiar && plan.antesDeCopiar.filas && Date.now() - new Date(plan.antesDeCopiar.en).getTime() < 3 * 864e5 ? plan.antesDeCopiar : null;
   return nav + `
     ${enRevision.length ? `<div class="nota ojo">${ic('alerta')}<span>${esc(enRevision.map(x => x.nombre).join(', '))}: la receta no está aprobada ahora (${esc(enRevision.map(x => ESTADOS[x.r.estado] || x.r.estado).join(', '))}). Su plan se mantiene.</span></div>` : ''}
-    ${archivadas.length ? `<div class="nota ojo" id="nota-archivada">${ic('alerta')}<span>${esc(archivadas.map(x => x.nombre).join(', '))}: receta archivada (Administración, en Sistema Fën). Su plan se mantiene; no se puede agregar a otra semana.</span></div>` : ''}
     <div class="tabla-caja">
       <table class="plan">
         <thead><tr><th scope="col">Receta</th>${M.DIAS_CORTOS.map((d, i) => `<th scope="col" class="${i === hoyIdx ? 'hoy-col' : ''}">${d} ${Number(M.sumarDias(lunes, i).slice(8))}</th>`).join('')}<th scope="col">Total</th></tr></thead>
         <tbody>${lista.length ? lista.map(x => `<tr>
-            <td class="nombre">${esc(x.nombre)}${archivada(x.r) ? ' <span class="estado">receta archivada</span>' : ''}</td>
+            <td class="nombre">${esc(x.nombre)}</td>
             ${M.DIAS_CORTOS.map((d, i) => { const v = M.num((filas[x.id] || {})['d' + i]); const idc = `c-${x.id}-${i}`, mala = E.celdasMalas[lunes + '|' + idc]; return `<td class="${i === hoyIdx ? 'hoy-col' : ''}"><label class="sr" for="${esc(idc)}">${esc(x.nombre)} ${d}</label><input id="${esc(idc)}" inputmode="numeric" data-celda="${esc(x.id)}" data-d="${i}" value="${mala !== undefined ? esc(mala) : (v || '')}" class="${mala !== undefined ? 'error-celda' : ''}" autocomplete="off"></td>`; }).join('')}
             <td class="num"><b>${M.miles(M.DIAS_CORTOS.reduce((s, _, i) => s + M.num((filas[x.id] || {})['d' + i]), 0))}</b></td>
           </tr>`).join('') : `<tr><td colspan="9" style="text-align:left;color:var(--suave);padding:18px 10px">Esta semana no tiene recetas planificadas. Agrega una abajo o copia otra semana.</td></tr>`}</tbody>
         ${lista.length ? `<tfoot><tr><td>Total</td>${totDia.map((t, i) => `<td class="num ${i === hoyIdx ? 'hoy-col' : ''}">${M.miles(t)}</td>`).join('')}<td class="num">${M.miles(totDia.reduce((s, x) => s + x, 0))}</td></tr></tfoot>` : ''}
       </table>
     </div>
+    ${archivadas.length ? `<details class="desp archivadas" id="plan-archivadas"><summary>Recetas archivadas (${archivadas.length})</summary>
+      <p class="ayuda">Administración las archivó en Sistema Fën (Catálogo): ya no se hacen. No van en la grilla, no cuentan en Hoy ni en los informes y no se copian a otra semana. Lo que se había planificado queda guardado.</p>
+      <div class="lista-mini">${archivadas.map(x => `<div class="fila sub"><span>${esc(x.nombre)}</span><span>${M.miles(M.DIAS_CORTOS.reduce((s, _, i) => s + M.num((filas[x.id] || {})['d' + i]), 0))} planificadas</span></div>`).join('')}</div></details>` : ''}
     <div class="agregar">
       <div class="campo"><label for="agregar-receta">Agregar receta a esta semana</label>
         <select id="agregar-receta"><option value="">Elige una receta aprobada…</option>${disponibles.map(r => `<option value="${esc(r.id)}">${esc(r.nombre)}</option>`).join('')}</select></div>
@@ -1677,7 +1669,8 @@ function copiarSemana(lunes, desde, filasPrev, prev) {
   // Celda por celda: lo de esta semana que no estaba en la otra queda en 0
   const filas = {};
   new Set([...Object.keys(actual.filas || {}), ...Object.keys(filasPrev)]).forEach(id => {
-    filas[id] = {}; for (let i = 0; i < 7; i++) filas[id]['d' + i] = M.num(((filasPrev[id] || {})['d' + i]) || 0);
+    const arch = archivada(E.recetas.find(x => x.id === id));   // v0.17.13: una archivada no se copia (queda en 0)
+    filas[id] = {}; for (let i = 0; i < 7; i++) filas[id]['d' + i] = arch ? M.num(((actual.filas || {})[id] || {})['d' + i]) : M.num(((filasPrev[id] || {})['d' + i]) || 0);
   });
   const nombres = {}; Object.keys(filas).forEach(id => { const r = E.recetas.find(x => x.id === id); nombres[id] = r ? r.nombre : (((prev || {}).nombres || {})[id] || (actual.nombres || {})[id] || id); });
   const antes = { filas: JSON.stringify(filasConNumeros(actual.filas)), desde, por: quien(), en: ahoraIso() };
