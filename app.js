@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.13
+//  fën · Cocina — la app de las jefas  v0.17.14
+//  v0.17.14: el botón "Planificar sábado y domingo" con letra clara (estilos.css); sin otros cambios
 //  v0.17.13: BOLLERÍA → Bitácora: arriba un solo botón, "Planificar sábado y domingo" (antes "Informe del viernes · compartir"
 //  arriba y "Cierre del viernes (para imprimir)" abajo). Abre el cierre del viernes de la semana (qué hornear el sábado y qué
 //  descongelar el domingo para el lunes); "Guardar y compartir" lo guarda y abre el informe del viernes para enviarlo como

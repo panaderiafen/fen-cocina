@@ -605,6 +605,9 @@ input { text-overflow: ellipsis; }
 /* v0.17.7 · Compartir informes (Panadería: Masas del día; Bollería: Informe del viernes). El informe en sí (.inf) trae sus estilos (informes.js) */
 .acciones-hoy { display: inline-flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
 .btn-compartir { color: var(--acento-texto); border-color: var(--tinte-borde); white-space: normal; text-align: left; padding-top: 8px; padding-bottom: 8px; }
+/* v0.17.14: el botón fuerte de compartir ("Planificar sábado y domingo") lleva letra clara */
+.btn-fuerte.btn-compartir { color: #fff; border-color: var(--acento-texto); }
+.btn-fuerte.btn-compartir .ic, .btn-fuerte.btn-compartir svg { color: #fff; stroke: currentColor; }
 .fila-informe { display: flex; justify-content: flex-end; margin: 4px 0 14px; }
 .dialogo.dialogo-informe { width: min(780px, calc(100vw - 32px)); }
 .dlg-informe .info-texto p { margin: 0 0 6px; }

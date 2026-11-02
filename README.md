@@ -1,3 +1,10 @@
+## v0.17.14 · Botón con letra clara
+
+- Bollería → Bitácora: el botón "Planificar sábado y domingo" ahora tiene la letra y el ícono en blanco sobre el fondo morado (antes la letra quedaba del mismo color que el fondo).
+- Archivos: estilos.css, app.js (solo el comentario de versión), config.js, index.html, README.md.
+
+**Revisar:** en el celular y el computador, Bollería → Bitácora: el texto del botón se lee claro. La versión dice 0.17.14.
+
 # fën · Cocina · v0.17.13
 
 **App nueva de las jefas** · repo `fen-cocina` · dirección: `https://panaderiafen.github.io/fen-cocina/` · 10 de octubre de 2026 (v0.1.1 y v0.1.2: 10–11 de octubre; v0.2.0 a v0.13.1: 11 de octubre; v0.14.0 a v0.16.1: 12 de octubre; v0.16.2 a v0.16.4: 13 de octubre; v0.17.0: 14 de octubre; v0.17.1: 15 de octubre; v0.17.2: 19 de octubre; v0.17.3 a v0.17.9: 21 de octubre; v0.17.10 y v0.17.11: 22 de octubre; v0.17.13: 1 de noviembre)
