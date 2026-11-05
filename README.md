@@ -1,3 +1,20 @@
+## v0.17.15 · Panadería → Hoy: horarios de las masas y receta con su masa (5 nov)
+
+- **Arriba, "Horarios de las masas":** una fila por tanda: producto, **inicio** (cuando se marcó la tanda terminada) y **formado** (inicio + la fermentación en bloque de Sistema Fën → Configuración de Producción). Las que faltan dicen "pendiente".
+- **La hora de inicio se corrige** tocándola (por si se marcó tarde): el formado se recalcula. Queda "corregida"; la marca original, la bodega y el historial no cambian. "Volver a la hora marcada" la deshace.
+- **Compartir:** "Imagen" o "Texto" abren el menú de compartir del equipo (WhatsApp está ahí). Solo lo que ya empezó: "Ciabatta · T1: 09:30 – 11:30". Sin otra información.
+- **La receta y su masa en una sola tarjeta:** "Ciabatta · 210 unidades · Peso total 41,58 kg" con la masa, sus tandas y su ajuste adentro. Una masa para varios productos es un solo amasado: "Ciabatta 210 · Ciabatta aceituna 30".
+  - El producto que es solo masa (Ciabatta) queda terminado junto con la masa (con su última tanda). Deshacer la masa lo deshace.
+  - El que lleva algo más (aceitunas) dice cuánta masa apartar y cuánto de lo demás, y tiene su botón "… lista" (descuenta lo suyo de la bodega).
+- Las líneas "Terminada" ya no dicen "f.b. hasta…" (está en Horarios). Se quitó "Compartir masas del día".
+- **Insumos del día** pasa al final, plegado, con la harina a la vista.
+- Solo Panadería; las otras áreas no cambian.
+- Archivos: app.js, estilos.css, config.js, index.html, README.md. Reglas de Firestore: sin cambios.
+
+**Revisar (Panadería → Hoy, en la tablet y el celular):** dice v0.17.15; arriba los horarios; al marcar una tanda aparece su hora; tocar la hora y cambiarla; compartir texto por WhatsApp.
+
+**Pruebas (datos ficticios):** `pruebas/cocina/cocina-v01715.test.js` (390 y 1180 px): filas por tanda en orden, tarjeta junta (dos productos, apartar masa + aceitunas), sin tarjetas sueltas, insumos al final; terminar la última tanda termina la Ciabatta y no la de aceituna; corregir la hora recalcula el formado sin tocar la marca; el texto para compartir; deshacer.
+
 ## v0.17.14 · Botón con letra clara
 
 - Bollería → Bitácora: el botón "Planificar sábado y domingo" ahora tiene la letra y el ícono en blanco sobre el fondo morado (antes la letra quedaba del mismo color que el fondo).

@@ -1,5 +1,8 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.14
+//  fën · Cocina — la app de las jefas  v0.17.15
+//  v0.17.15: Panadería → Hoy: "Horarios de las masas" arriba (por tanda, inicio corregible, compartir imagen o texto); la receta y su
+//  masa en una sola tarjeta (una masa para varios productos: un solo amasado; el producto que es solo masa se termina con ella);
+//  sin "f.b. hasta" en las líneas; sin "Compartir masas del día"; Insumos del día al final, plegado.
 //  v0.17.14: el botón "Planificar sábado y domingo" con letra clara (estilos.css); sin otros cambios
 //  v0.17.13: BOLLERÍA → Bitácora: arriba un solo botón, "Planificar sábado y domingo" (antes "Informe del viernes · compartir"
 //  arriba y "Cierre del viernes (para imprimir)" abajo). Abre el cierre del viernes de la semana (qué hornear el sábado y qué
@@ -569,7 +572,11 @@ function vistaHoy() {
   // v0.16.4: las masas elegidas van en Recetas del día (primero); el resto sigue en Elaboraciones previas
   const masasDia = el.subRecetas.filter(vaEnRecetasDia), previas = el.subRecetas.filter(s => !vaEnRecetasDia(s));
   const elabs = previas.map(s => tarjetaElab(s, s.recetaId ? ajHoy[s.recetaId] : null, dia, hecho, c)).join('');
-  const masasHtml = masasDia.map(s => tarjetaElab(s, s.recetaId ? ajHoy[s.recetaId] : null, dia, hecho, c, planDia)).join('');
+  // v0.17.15: Panadería → receta y masa juntas (gruposMasa); los productos juntos no van solos más abajo
+  const GM = E.area === 'PAN' ? gruposMasa(masasDia, planDia, c) : {};
+  E.ligados = {}; Object.entries(GM).forEach(([sid, g]) => { if (g.puros.length) E.ligados['sub_' + sid] = g.puros.map(x => 'rec_' + x.receta.id); });
+  const juntos = new Set(Object.values(GM).flatMap(g => g.prods.map(x => x.receta.id)));
+  const masasHtml = masasDia.map(s => tarjetaElab(s, s.recetaId ? ajHoy[s.recetaId] : null, dia, hecho, c, planDia, GM[s.id] || null)).join('');
   const enDia = new Set(masasDia.map(s => s.id));
   const ins = Object.entries(el.insumos).filter(([, g]) => g > 0.5).sort((a, b) => b[1] - a[1]);
   const harina = M.harinaDe(el.insumos);
@@ -579,16 +586,22 @@ function vistaHoy() {
       <span class="ayuda">${harina ? 'de harina en total' : esc(ins[0][0])}</span>
       <details class="desp"><summary>Ver todos (${ins.length})</summary><div class="lista-mini">${ins.map(([n, g]) => `<div class="fila sub"><span>${esc(n)}</span><span>${M.gramos(g)}</span></div>`).join('')}</div></details>
     </div>` : '';
-  const recetas = planDia.map(x => tarjetaReceta(x, ajHoy[x.receta.id], dia, hecho, enDia)).join('');
+  const planSolo = planDia.filter(x => !juntos.has(x.receta.id));
+  const recetas = planSolo.map(x => tarjetaReceta(x, ajHoy[x.receta.id], dia, hecho, enDia)).join('');
+  const esPanHoy = E.area === 'PAN';
   const notas = dia.notas || {};
   // Lo que falta marcar del día: recetas y elaboraciones previas (las recetas descuentan la bodega)
   const pendientes = [...masasDia.map(s => 'sub_' + s.id), ...planDia.map(x => 'rec_' + x.receta.id), ...previas.map(s => 'sub_' + s.id)].filter(k => !hecho(k));
   const avisoHecho = `<div class="nota neutra aviso-hecho">${ic('alerta')}<span><b>Marcar terminada descuenta la bodega</b> (las materias primas de esa receta). Al cerrar el día, que todo lo hecho quede marcado.</span>
       ${pendientes.length ? `<button type="button" class="btn-sec" data-todo-hecho="${esc(pendientes.join(','))}">${ic('check')}Marcar todo como hecho (${pendientes.length})</button>` : `<span class="chip-ok">${ic('ok')}Todo marcado</span>`}</div>`;
+  // v0.17.15: Panadería → arriba "Horarios de las masas" y los insumos al final (plegados, con la harina a la vista)
+  const insFinal = esPanHoy && ins.length ? `<details class="caja ins-final"><summary><span class="rotulo">Insumos del día</span><span class="ins-harina"><b class="num">${harina ? esc(M.enSacos(harina, C.KG_SACO)) : M.gramos(ins[0][1])}</b> <span class="ayuda">${harina ? 'de harina en total' : esc(ins[0][0])}</span></span></summary>
+      <div class="lista-mini">${ins.map(([n, g]) => `<div class="fila sub"><span>${esc(n)}</span><span>${M.gramos(g)}</span></div>`).join('')}</div></details>` : '';
+  const resumen = esPanHoy ? `${cajaPie}${horariosHtml(f)}` : `${cajaPie}${cajaIns}`;
   return nav + `
-    <section class="resumen" aria-label="Antes de empezar">${cajaPie}${cajaIns}</section>
+    <section class="resumen${esPanHoy ? ' resumen-pan' : ''}" aria-label="Antes de empezar">${resumen}</section>
     ${elabs ? `<h2 class="titulo">Elaboraciones previas · ${previas.length}</h2>${elabs}` : ''}
-    <div class="titulo-fila-hoy"><h2 class="titulo">Recetas del día · ${planDia.length + masasDia.length}</h2><span class="acciones-hoy"><button type="button" class="btn-sec btn-compartir" data-informe="pan">${ic('compartir')}Compartir masas del día</button>${subRecetasSemana(lunes).length ? `<button type="button" class="btn-link" data-ordenar-hoy="1">${ic('ajuste')}Ordenar Hoy</button>` : ''}</span></div>
+    <div class="titulo-fila-hoy"><h2 class="titulo">Recetas del día · ${planSolo.length + masasDia.length}</h2><span class="acciones-hoy">${esPanHoy ? '' : `<button type="button" class="btn-sec btn-compartir" data-informe="pan">${ic('compartir')}Compartir masas del día</button>`}${subRecetasSemana(lunes).length ? `<button type="button" class="btn-link" data-ordenar-hoy="1">${ic('ajuste')}Ordenar Hoy</button>` : ''}</span></div>
     ${avisoHecho}
     ${masasHtml}
     ${recetas}
@@ -596,7 +609,8 @@ function vistaHoy() {
       <label class="rotulo" for="notas-dia">Notas del día (las ve la dupla)</label>
       <textarea id="notas-dia" rows="3" style="font: inherit; border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; background: var(--suave-fondo)">${esc(notas.texto || '')}</textarea>
       ${notas.por ? `<span class="ayuda">Última nota de ${esc(notas.por)}</span>` : ''}
-    </section>`;
+    </section>
+    ${insFinal}`;
 }
 
 function textoAjuste(r, a) {
@@ -648,6 +662,7 @@ function tarjeta(o) {
   }).join('');
   const pasos = o.receta ? (o.receta.pasos || []).filter(Boolean) : [], proc = o.receta && o.receta.procedimiento;
   return `<article class="receta ${o.elab ? 'elab' : ''} ${o.clase || ''} ${h ? 'terminada' : ''}" ${o.attr || (o.elab ? 'data-elab-card' : 'data-receta-card')}="${esc(o.idCard)}">
+      ${o.cabecera || ''}
       <div class="receta-cab">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
           ${o.rotulo || o.elab ? `<span class="rotulo">${esc(o.rotulo || 'Elaboración previa')}</span>` : ''}
@@ -663,6 +678,7 @@ function tarjeta(o) {
       ${T.descuadre ? `<div class="nota ojo" style="margin:12px 20px 0">${ic('alerta')}<span>El plan cambió a ${fmt(o.total)}: las tandas guardadas (${T.descuadre.map(fmt).join(' + ')}) ya no suman eso. Vuelve a dividir.</span></div>` : ''}
       <div class="tandas">${columnas}</div>
       ${pasos.length || proc ? `<details class="desp" style="padding:0 20px"><summary>${ic('pasos')}&nbsp;Pasos</summary>${pasos.length ? `<ol class="pasos">${pasos.map(p => `<li>${esc(p)}</li>`).join('')}</ol>` : `<p class="texto-proc">${esc(proc)}</p>`}</details>` : ''}
+      ${o.extra || ''}
       <div class="receta-pie">
         ${o.ajustable ? `<button type="button" class="btn-sec" data-ajustar="${esc(o.rid)}">${ic('ajuste')}Ajustar harina / agua</button>${botonesSabado(o.rid)}` : o.ajusteEn ? `<span class="ayuda">${esc(o.ajusteEn)}</span>` : ''}
         <button type="button" class="btn-sec" data-tandas="${esc(o.clave)}">${ic('capas')}Tandas</button>
@@ -677,7 +693,7 @@ function tarjeta(o) {
 // "· f.b. hasta 13:00" o, el día de hoy y ya cumplida, "· f.b. lista desde las 13:00" (destacada: ícono, texto y borde).
 // Otro día: solo las horas. data-fb-fin: revisarFB() (cada minuto) repinta cuando llega la hora.
 function lineaHechoHtml(h, ids, antes = '') {
-  const esHoy = E.fecha === M.hoyTxt(), min = FBQ.minutosFB(E.config, ids);
+  const esHoy = E.fecha === M.hoyTxt(), min = E.area === 'PAN' ? null : FBQ.minutosFB(E.config, ids);   // v0.17.15: Panadería, sin "f.b. hasta" (está en Horarios de las masas)
   const l = FBQ.lineaHecho(h, min, esHoy ? Date.now() : null); if (!l) return '';
   return `<span class="linea-hecho${l.lista ? ' fb-lista' : ''}"${l.fb && esHoy && !l.lista ? ` data-fb-fin="${l.fb.fin}"` : ''}>${ic(l.lista ? 'reloj' : 'check')}<span>${esc(antes + l.texto)}</span></span>`;
 }
@@ -713,7 +729,7 @@ function completarReceta(claveHecho, marcas) {
   const k = E.area + '_' + E.fecha + '|' + claveHecho; if (completadas.has(k)) return;
   completadas.add(k);
   const u = ultimaMarca(marcas), f = E.fecha;
-  setTimeout(() => guardarSinEsperar(guardarDia(f, { hechos: { [claveHecho]: { por: u.por, en: u.en } } })), 0);
+  setTimeout(() => guardarSinEsperar(guardarDia(f, { hechos: conLigados({ [claveHecho]: { por: u.por, en: u.en } }) })), 0);
 }
 // Marcar / deshacer una tanda (un solo guardado en el día)
 function cambiosTanda(T, i, marcar) {
@@ -750,7 +766,7 @@ function tarjetaReceta({ receta: r, unidades }, aj, dia, hecho, enDia) {
     ajustable: esPan && P.ajustable, ajusteEn: esPan && !P.ajustable && masas.length ? `Harina y agua: se ajustan en ${masas.join(', ')} (${dondeAj})` : '' });
 }
 
-function tarjetaElab(s, aj, dia, hecho, c, planDia) {
+function tarjetaElab(s, aj, dia, hecho, c, planDia, G = null) {
   const rs = s.recetaId ? E.recetas.find(r => r.id === s.recetaId) : null, P = rs ? M.panadero(rs) : null;
   const total = s.porUnidades ? s.unidades : Math.round(s.gramos);
   const para = [...new Set(s.usan.map(u => u.nombre))];
@@ -758,9 +774,61 @@ function tarjetaElab(s, aj, dia, hecho, c, planDia) {
   const enDia = !!planDia;
   return tarjeta({ clave: 'sub_' + s.id, idCard: s.id, elab: true, rid: rs ? rs.id : null, receta: rs, nombre: s.nombre, unidad: s.porUnidades ? 'un' : 'g', total, dia, hecho,
     claveHecho: 'sub_' + s.id, fbIds: [s.id, s.recetaId], aj, escalar: t => M.escalarSub(s, t, aj, c), conPct: E.area === 'PAN',
-    rotulo: enDia ? 'Masa · sub receta' : '', clase: enDia ? 'masa-dia' : '',
+    rotulo: enDia ? 'Masa · sub receta' : '', clase: enDia ? 'masa-dia' + (G ? ' masa-junta' : '') : '',
     detalle: s.porUnidades ? `${M.unidades(s.unidades)} un · ${M.gramos(s.gramos)}` : M.gramos(s.gramos),
-    para: enDia ? esc(paraLinea(s, planDia)) : `Para ${esc(para.join(', '))}`, ajustable: E.area === 'PAN' && !!(P && P.ajustable) });
+    para: G ? '' : enDia ? esc(paraLinea(s, planDia)) : `Para ${esc(para.join(', '))}`, ajustable: E.area === 'PAN' && !!(P && P.ajustable),
+    cabecera: G ? cabeceraJunta(G, s) : '', extra: G ? extrasJunta(G, s, hecho, c) : '' });
+}
+
+// ── v0.17.15 · Panadería: la receta y su masa en una sola tarjeta (pedido de Emmanuel, 5 nov) ──
+// Un producto va junto a su masa cuando esa masa es la única sub receta que usa (sin contar el pie de masa madre).
+// Varios productos de la misma masa (Ciabatta y Ciabatta aceituna) van en la misma tarjeta: es un solo amasado.
+//  · El producto que es solo masa (Ciabatta) se termina con la masa: al marcarla (o su última tanda) se marca también
+//    rec_{producto} con la misma hora y persona (E.ligados). Deshacer la masa lo deshace.
+//  · El que lleva algo más (aceitunas) dice cuánta masa apartar y cuánto de lo demás, y tiene su propio "… lista"
+//    (descuenta lo suyo de la bodega, como hoy).
+// La masa compartida con un producto que usa otra masa más se queda como antes.
+const esPieIng = i => M.esPieMM(i.nombre);
+function gruposMasa(masasDia, planDia, c) {
+  const G = {};
+  masasDia.forEach(s => {
+    const prods = planDia.filter(x => {
+      const subs = (x.receta.ingredientes || []).filter(i => M.esSub(i, c) && !esPieIng(i));
+      return subs.length === 1 && subs[0].id === s.id;
+    });
+    if (!prods.length) return;
+    const extrasDe = x => (x.receta.ingredientes || []).filter(i => !M.esSub(i, c) && !esPieIng(i) && M.num(i.gramos) > 0);
+    G[s.id] = { prods, puros: prods.filter(x => !extrasDe(x).length), conExtras: prods.filter(x => extrasDe(x).length) };
+  });
+  return G;
+}
+const nombreMasaCorto = n => { const t = String(n || '').replace(/^\s*masa\s+(de\s+)?/i, '').trim(); return t ? t.charAt(0).toUpperCase() + t.slice(1) : String(n || ''); };
+const nombreHorario = (G, s) => (G && G.prods.length === 1 ? G.prods[0].receta.nombre : nombreMasaCorto(s.nombre));
+function cabeceraJunta(G, s) {
+  const un = x => x.receta.unidad === 'g' ? `${M.gramos(x.unidades)}` : `${M.unidades(x.unidades)} ${G.prods.length === 1 ? 'unidades' : ''}`.trim();
+  const titulo = G.prods.length === 1 ? `${G.prods[0].receta.nombre} · ${un(G.prods[0])}` : G.prods.map(x => `${x.receta.nombre} ${un(x)}`).join(' · ');
+  return `<div class="junta-cab"><b>${esc(titulo)}</b><span>Peso total ${esc(M.gramos(s.gramos))}</span></div>`;
+}
+function extrasJunta(G, s, hecho, c) {
+  if (!G.conExtras.length) return '';
+  const aj = ajustesDe(E.fecha);
+  return `<div class="junta-extras">${G.conExtras.map(x => {
+    const e = M.escalar(x.receta, x.unidades, aj[x.receta.id], c), filas = e.filas || [];
+    const masa = filas.find(f => f.id === s.id), otros = filas.filter(f => f.id !== s.id && !M.esPieMM(f.nombre));
+    const k = 'rec_' + x.receta.id, h = hecho(k);
+    return `<div class="junta-extra${h ? ' hecha' : ''}"><div class="txt"><b>${esc(x.receta.nombre)} · ${esc(M.unidades(x.unidades))} un</b>
+        <span>Apartar ${esc(M.gramos(masa ? masa.gramos : 0))} de masa${otros.length ? ' + ' + otros.map(f => `${esc(f.nombre)} ${esc(M.gramos(f.gramos))}`).join(' + ') : ''}</span>
+        ${h ? lineaHechoHtml(h, [x.receta.id]) : ''}</div>
+      ${h ? `<button type="button" class="btn-sec btn-hecho" data-hecho="${esc(k)}" data-valor="0">${ic('check')}Lista · deshacer</button>` : `<button type="button" class="btn-sec" data-hecho="${esc(k)}" data-valor="1">${ic('check')}${esc(x.receta.nombre)} lista</button>`}</div>`;
+  }).join('')}</div>`;
+}
+// Los productos que se terminan con su masa: { 'sub_{masa}': ['rec_{producto}', …] }
+E.ligados = {};
+function conLigados(hechos) {
+  if (!hechos) return hechos;
+  const out = { ...hechos };
+  Object.entries(hechos).forEach(([k, v]) => (E.ligados[k] || []).forEach(r => { out[r] = v ? { por: v.por, en: v.en } : null; }));
+  return out;
 }
 
 // ── v0.16.4 · Sub recetas que van en "Recetas del día" (por área) ──
@@ -840,18 +908,111 @@ function entradaPan(f) {
   const item = o => {
     const T = tandasHoy(o.clave, o.total, o.rid, o.unidad === 'g', dia, null), h = hecho(o.claveHecho);
     const marcas = E.area === 'PAN' && T.tandas.length > 1 ? marcasTandas(dia, o.claveHecho, T.tandas.length, h).marcas : [h];
-    return { nombre: o.nombre, tipo: o.tipo, unidad: o.unidad, un: 'un', total: o.total, receta: o.receta, aj: o.aj, para: o.para || '', fbMin: FBQ.minutosFB(E.config, o.fbIds),
+    return { nombre: o.nombre, horNombre: o.horNombre || o.nombre, claveHecho: o.claveHecho, tipo: o.tipo, unidad: o.unidad, un: 'un', total: o.total, receta: o.receta, aj: o.aj, para: o.para || '', fbMin: FBQ.minutosFB(E.config, o.fbIds),
       tandas: T.tandas.map((t, i) => ({ cantidad: t, gramos: o.escalar(t).total, marca: marcas[i] || null })) };
   };
-  const masas = el.subRecetas.filter(s => vaEnRecetasDia(s) || masaPorDefecto(s.nombre)).map(s => {
+  const masasSel = el.subRecetas.filter(s => vaEnRecetasDia(s) || masaPorDefecto(s.nombre)), GM = gruposMasa(masasSel, planDia, c);
+  const masas = masasSel.map(s => {
     const rs = s.recetaId ? recetaPorId(s.recetaId) : null, aj = s.recetaId ? ajHoy[s.recetaId] : null;
-    return item({ clave: 'sub_' + s.id, claveHecho: 'sub_' + s.id, rid: rs ? rs.id : null, nombre: s.nombre, tipo: 'masa', unidad: s.porUnidades ? 'un' : 'g',
+    return item({ clave: 'sub_' + s.id, claveHecho: 'sub_' + s.id, rid: rs ? rs.id : null, nombre: s.nombre, horNombre: nombreHorario(GM[s.id], s), tipo: 'masa', unidad: s.porUnidades ? 'un' : 'g',
       total: s.porUnidades ? s.unidades : Math.round(s.gramos), receta: rs, aj, fbIds: [s.id, s.recetaId], escalar: t => M.escalarSub(s, t, aj, c), para: paraLinea(s, planDia) });
   });
   const recetas = planDia.filter(x => M.panadero(x.receta).ajustable).map(x => item({ clave: x.receta.id, claveHecho: 'rec_' + x.receta.id, rid: x.receta.id, nombre: x.receta.nombre, tipo: 'receta',
     unidad: x.receta.unidad === 'g' ? 'g' : 'un', total: x.unidades, receta: x.receta, aj: ajHoy[x.receta.id], fbIds: [x.receta.id], escalar: t => M.escalar(x.receta, t, ajHoy[x.receta.id], c) }));
-  return { fecha: f, quien: quien(), generado: Date.now(), items: [...masas, ...recetas], notas: (dia.notas || {}).texto || '' };
+  return { fecha: f, quien: quien(), generado: Date.now(), items: [...masas, ...recetas], notas: (dia.notas || {}).texto || '', dia };
 }
+// ── v0.17.15 · Panadería → "Horarios de las masas" (pedido de Emmanuel, 5 nov) ──
+// Una fila por tanda: producto (o la masa sin "Masa"), inicio = cuando se marcó terminada (o la hora corregida) y
+// formado = inicio + la fermentación en bloque de Sistema Fën (config/PAN.fermentacionBloque).
+// La hora corregida se guarda en dias/PAN_{fecha}.horaInicio = { 'sub_{id}|t1': 'HH:MM' } (no cambia la marca ni la bodega).
+const isoDeHora = (f, hhmm) => { const d = new Date(`${f}T${hhmm}:00`); return isNaN(d.getTime()) ? null : d.toISOString(); };
+function horarios(f) {
+  const e = entradaPan(f); if (!e) return null;
+  const corr = (e.dia && e.dia.horaInicio) || {}, filas = [];
+  e.items.forEach(it => {
+    const fb = Number(it.fbMin) > 0 ? Number(it.fbMin) : null, n = it.tandas.length;
+    it.tandas.forEach((t, i) => {
+      const m = t.marca && t.marca.por ? t.marca : null, k = `${it.claveHecho}|t${i + 1}`, ov = /^\d{2}:\d{2}$/.test(corr[k] || '') ? corr[k] : null;
+      const en = m ? (ov ? isoDeHora(f, ov) : m.en) : null, est = en && fb ? FBQ.estadoFB(en, fb, Date.now()) : null;
+      filas.push({ k, nombre: it.horNombre + (n > 1 ? ` · T${i + 1}` : ''), pendiente: !m, inicio: en ? FBQ.hora(en) : '', marcada: m ? FBQ.hora(m.en) : '', corregida: !!ov,
+        formado: est ? est.hasta : '', sig: !!(est && est.diaSiguiente), fin: est ? est.fin : null, fb, tIni: en ? new Date(en).getTime() : Infinity });
+    });
+  });
+  filas.sort((a, b) => (a.pendiente - b.pendiente) || ((a.fin ?? a.tIni) - (b.fin ?? b.tIni)));
+  return { fecha: f, filas };
+}
+function horariosHtml(f) {
+  const H = horarios(f); if (!H || !H.filas.length) return '';
+  const esHoy = f === M.hoyTxt(), ahora = Date.now(), hay = H.filas.some(x => !x.pendiente);
+  return `<div class="caja horarios" id="horarios-masas">
+      <div class="hor-cab"><span class="rotulo">Horarios de las masas</span>
+        <span class="hor-acc"><button type="button" class="btn-sec" data-hor-compartir="imagen" ${hay ? '' : 'disabled'}>${ic('compartir')}Imagen</button><button type="button" class="btn-sec" data-hor-compartir="texto" ${hay ? '' : 'disabled'}>${ic('compartir')}Texto</button></span></div>
+      <div class="hor-tabla" role="table" aria-label="Horarios de las masas">
+        <div class="hor-fila hor-tit" role="row"><span role="columnheader">Producto</span><span role="columnheader">Inicio</span><span role="columnheader">Formado</span></div>
+        ${H.filas.map(x => `<div class="hor-fila${x.pendiente ? ' pend' : ''}${esHoy && x.fin && ahora >= x.fin ? ' toca' : ''}" role="row"${esHoy && x.fin && ahora < x.fin ? ` data-fb-fin="${x.fin}"` : ''}>
+          <b role="cell">${esc(x.nombre)}</b>
+          <span role="cell">${x.pendiente ? 'pendiente' : `<button type="button" class="btn-hora" data-hora-ini="${esc(x.k)}" aria-label="Cambiar la hora de inicio de ${esc(x.nombre)}">${esc(x.inicio)}</button>${x.corregida ? '<span class="hor-corr">corregida</span>' : ''}`}</span>
+          <b role="cell">${x.pendiente ? '—' : x.formado ? esc(x.formado) + (x.sig ? ' (día sig.)' : '') : '<span class="ayuda">sin tiempo</span>'}</b></div>`).join('')}
+      </div>
+      <span class="ayuda">Inicio: cuando se marcó la tanda terminada. Si se marcó tarde, toque la hora y corríjala; el formado se recalcula con el tiempo de fermentación de Sistema Fën.</span>
+    </div>`;
+}
+function dialogoHoraInicio(k) {
+  const H = horarios(E.fecha), x = H && H.filas.find(y => y.k === k); if (!x || x.pendiente) return;
+  const d = $('dialogo');
+  d.innerHTML = `<form method="dialog" class="dlg">
+      <h2>Hora de inicio · ${esc(x.nombre)}</h2>
+      <p class="ayuda">Se marcó terminada a las ${esc(x.marcada)}. Si en realidad terminó a otra hora, corríjala.</p>
+      <label class="rotulo" for="hi-hora">Inicio</label>
+      <input id="hi-hora" type="time" value="${esc(x.inicio)}" required style="font-size:20px;padding:10px;border:1.5px solid var(--borde);border-radius:10px">
+      <p class="nota neutra" id="hi-form">${x.fb ? `Formado: <b>${esc(x.formado)}</b> (${esc(FBQ.aHHMM(x.fb))} de fermentación)` : 'Esta masa no tiene tiempo de fermentación en Sistema Fën.'}</p>
+      <div class="dlg-pie">${x.corregida ? '<button type="button" class="btn-link" id="hi-quitar">Volver a la hora marcada</button>' : ''}<button type="button" class="btn-sec" id="hi-no">Cancelar</button><button type="submit" class="btn" id="hi-si">Guardar</button></div>
+    </form>`;
+  const inp = d.querySelector('#hi-hora'), pinta = () => { if (!x.fb) return; const en = isoDeHora(E.fecha, inp.value); const e = en ? FBQ.estadoFB(en, x.fb) : null; d.querySelector('#hi-form').innerHTML = `Formado: <b>${esc(e ? e.hasta + (e.diaSiguiente ? ' (día sig.)' : '') : '—')}</b> (${esc(FBQ.aHHMM(x.fb))} de fermentación)`; };
+  inp.addEventListener('input', pinta);
+  const guardar = v => { d.close(); guardarSinEsperar(guardarDia(E.fecha, { horaInicio: { [k]: v } }), v ? 'Hora corregida.' : 'Vuelve a la hora marcada.'); };
+  d.querySelector('#hi-no').addEventListener('click', () => d.close());
+  const q = d.querySelector('#hi-quitar'); if (q) q.addEventListener('click', () => guardar(null));
+  d.querySelector('form').addEventListener('submit', ev => { ev.preventDefault(); if (!/^\d{2}:\d{2}$/.test(inp.value)) { inp.focus(); return; } guardar(inp.value === x.marcada ? null : inp.value); });
+  d.showModal(); inp.focus();
+}
+// Compartir: solo lo que ya empezó, "Producto: inicio – formado". Texto o imagen (menú de compartir del equipo; WhatsApp está ahí)
+function textoHorarios(H) {
+  const filas = H.filas.filter(x => !x.pendiente);
+  return [`Masas · ${M.fechaLarga(H.fecha)}`, ...filas.map(x => `${x.nombre}: ${x.inicio} – ${x.formado ? x.formado + (x.sig ? ' (día sig.)' : '') : '—'}`)].join('\n');
+}
+function imagenHorarios(H) {
+  const filas = H.filas.filter(x => !x.pendiente), esc2 = 2, W = 720, fila = 64, alto = 120 + filas.length * fila + 30;
+  const cv = document.createElement('canvas'); cv.width = W * esc2; cv.height = alto * esc2;
+  const g = cv.getContext('2d'); g.scale(esc2, esc2);
+  g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, W, alto);
+  g.fillStyle = '#2B2622'; g.font = '700 34px system-ui, sans-serif'; g.fillText(`Masas · ${M.fechaLarga(H.fecha)}`, 36, 70);
+  filas.forEach((x, i) => {
+    const y = 120 + i * fila;
+    g.strokeStyle = '#ECE6DE'; g.lineWidth = 2; g.beginPath(); g.moveTo(36, y - 8); g.lineTo(W - 36, y - 8); g.stroke();
+    g.fillStyle = '#2B2622'; g.font = '700 30px system-ui, sans-serif'; g.fillText(x.nombre, 36, y + 34);
+    g.font = '500 30px system-ui, sans-serif'; const t = `${x.inicio} – ${x.formado || '—'}${x.sig ? ' *' : ''}`; g.fillText(t, W - 36 - g.measureText(t).width, y + 34);
+  });
+  return new Promise(res => cv.toBlob(b => res(b), 'image/png'));
+}
+async function compartirHorarios(como) {
+  const H = horarios(E.fecha); if (!H || !H.filas.some(x => !x.pendiente)) { avisar('Todavía no hay masas empezadas.', true); return; }
+  const txt = textoHorarios(H);
+  try {
+    if (como === 'imagen') {
+      const blob = await imagenHorarios(H), archivo = new File([blob], `Fen_Masas_${H.fecha}.png`, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [archivo] })) { await navigator.share({ files: [archivo], title: 'Masas' }); return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = archivo.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000); avisar('Imagen descargada: adjúntela en WhatsApp.');
+      return;
+    }
+    if (navigator.share) { await navigator.share({ text: txt }); return; }
+    window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank', 'noopener');
+  } catch (e) { if (e && e.name === 'AbortError') return; try { await navigator.clipboard.writeText(txt); avisar('Texto copiado: péguelo en WhatsApp.'); } catch (e2) { avisar('No se pudo compartir.', true); } }
+}
+window.__horarios = f => horarios(f || E.fecha);   // para las pruebas
+window.__textoHorarios = f => { const H = horarios(f || E.fecha); return H ? textoHorarios(H) : ''; };
+
 // Bollería: las metas de 3 semanas antes (stock inicial y "dejar"), la del lunes y la siguiente (su PEM: las masas del lunes)
 function entradaBol(W) {
   const ls = [-21, -14, -7, 0, 7].map(d => M.sumarDias(W, d)), metas = {};
@@ -1818,7 +1979,7 @@ $('principal').addEventListener('click', async ev => {
   if (ds.semana) { E.lunesPlan = ds.semana === 'hoy' ? M.lunesDe(M.hoyTxt()) : M.sumarDias(E.lunesPlan, Number(ds.semana)); pintar(); return; }
   if (ds.hecho) {
     b.disabled = true;
-    const cambios = { hechos: { [ds.hecho]: ds.valor === '1' ? { por: quien(), en: ahoraIso() } : null } };
+    const cambios = { hechos: conLigados({ [ds.hecho]: ds.valor === '1' ? { por: quien(), en: ahoraIso() } : null }) };
     // Bollería: terminar una masa del día la anota en la bitácora (+masas congeladas; v0.14.0: sin empastes); deshacer la anula
     if (E.area === 'BOL' && ds.hecho.startsWith('masa_')) {
       const rid = ds.hecho.slice(5), T = (E.tarjetas || {})['masa_' + rid];
@@ -1831,7 +1992,8 @@ $('principal').addEventListener('click', async ev => {
     const [clave, iTxt] = ds.tandaHecho.split('|'), T = (E.tarjetas || {})[clave], i = Number(iTxt);
     if (!T || !T.marcas || !(i >= 0 && i < T.marcas.length)) return;
     b.disabled = true;
-    guardarSinEsperar(guardarDia(E.fecha, cambiosTanda(T, i, ds.valor === '1')));
+    const ct = cambiosTanda(T, i, ds.valor === '1'); if (ct.hechos) ct.hechos = conLigados(ct.hechos);
+    guardarSinEsperar(guardarDia(E.fecha, ct));
     return;
   }
   if (ds.anotar) { dialogoAnotar(ds.anotar); return; }
@@ -1839,7 +2001,7 @@ $('principal').addEventListener('click', async ev => {
   if (ds.todoHecho) {
     const ks = ds.todoHecho.split(',').filter(Boolean);
     if (!confirm(`¿Marcar como hecho todo lo que falta hoy (${ks.length})? ${E.area === 'BOL' ? 'Las masas pasan al congelador (Bitácora) y se descuentan de la bodega.' : 'Las recetas se descuentan de la bodega.'} Se puede deshacer una por una.`)) return;
-    const h = {}, en = ahoraIso(), bit = {}; ks.forEach(k => { h[k] = { por: quien(), en }; });
+    let h = {}; const en = ahoraIso(), bit = {}; ks.forEach(k => { h[k] = { por: quien(), en }; }); h = conLigados(h);
     // Bollería: cada masa terminada se anota en la bitácora, igual que con "Marcar terminada"
     if (E.area === 'BOL') ks.filter(k => k.startsWith('masa_')).forEach(k => {
       const rid = k.slice(5), T = (E.tarjetas || {})[k];
@@ -1875,6 +2037,8 @@ $('principal').addEventListener('click', async ev => {
   }
   if (ds.cierre) { dialogoCierre(); return; }
   if (ds.informe) { dialogoInforme(ds.informe); return; }   // v0.17.7
+  if (ds.horaIni) { dialogoHoraInicio(ds.horaIni); return; }   // v0.17.15
+  if (ds.horCompartir) { compartirHorarios(ds.horCompartir); return; }
   if (ds.tandas) { dialogoTandas(ds.tandas); return; }
   if (ds.ordenarHoy) { dialogoOrdenarHoy(); return; }
   if (ds.ajustar) { dialogoAjuste(ds.ajustar); return; }

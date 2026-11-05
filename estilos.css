@@ -653,3 +653,28 @@ h3.subgrupo { margin: 12px 0 8px; font-size: 15px; font-weight: 600; color: var(
 h3.subgrupo .g-num { font-weight: 500; }
 .chip-est.chip-mini { font-size: 11px; font-weight: 600; padding: 1px 8px; white-space: normal; }
 .item-receta.item-prop.devuelta { border-color: var(--est-devuelta-fondo); border-width: 1.5px; }
+
+/* v0.17.15 · Panadería: horarios de las masas, receta y masa juntas, insumos al final */
+.resumen-pan .horarios { grid-column: 1 / -1; }
+.horarios { gap: 10px; border: 1.5px solid var(--acento); }
+.hor-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hor-acc { display: flex; gap: 8px; }
+.hor-tabla { display: flex; flex-direction: column; }
+.hor-fila { display: grid; grid-template-columns: minmax(0, 1fr) 130px 120px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--linea); font-size: 1.05rem; }
+.hor-tit { border-top: 0; font-size: .8rem; font-weight: 700; color: var(--suave); padding: 2px 0; }
+.hor-fila.pend { color: var(--suave); }
+.hor-fila.toca b:last-child { color: var(--ok); }
+.btn-hora { font: inherit; font-weight: 700; border: 1.5px solid var(--borde); background: var(--suave-fondo); border-radius: 9px; padding: 6px 12px; min-height: 40px; cursor: pointer; }
+.hor-corr { display: block; font-size: .72rem; color: var(--acento-texto); }
+.junta-cab { display: flex; flex-direction: column; gap: 2px; padding: 16px 20px 4px; }
+.junta-cab b { font-size: 1.2rem; }
+.junta-cab span { color: var(--suave); }
+.masa-junta .receta-cab { background: var(--tinte); }
+.junta-extras { display: flex; flex-direction: column; gap: 8px; padding: 10px 20px 0; }
+.junta-extra { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--linea); border-radius: 12px; padding: 10px 14px; }
+.junta-extra .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.junta-extra.hecha { background: var(--ok-fondo); border-color: var(--ok-borde); }
+.ins-final > summary { cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 44px; list-style: none; }
+.ins-final > summary::-webkit-details-marker { display: none; }
+.ins-final .lista-mini { margin-top: 8px; }
+@media (max-width: 560px) { .hor-fila { grid-template-columns: minmax(0, 1fr) 96px 86px; font-size: .98rem; } }
