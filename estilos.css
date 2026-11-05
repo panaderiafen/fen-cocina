@@ -678,3 +678,12 @@ h3.subgrupo .g-num { font-weight: 500; }
 .ins-final > summary::-webkit-details-marker { display: none; }
 .ins-final .lista-mini { margin-top: 8px; }
 @media (max-width: 560px) { .hor-fila { grid-template-columns: minmax(0, 1fr) 96px 86px; font-size: .98rem; } }
+
+/* v0.17.16 · Horarios de las masas plegable */
+.hor-sum { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; min-height: 44px; flex-wrap: wrap; }
+.hor-sum::-webkit-details-marker { display: none; }
+.hor-flecha { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; color: var(--acento-texto); font-size: 18px; line-height: 1; }
+.hor-flecha::before { content: '▸'; }
+.horarios[open] .hor-flecha::before { content: '▾'; }
+.hor-cuenta { margin-left: auto; }
+.horarios:not([open]) { gap: 0; }

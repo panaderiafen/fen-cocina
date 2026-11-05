@@ -1,3 +1,11 @@
+## v0.17.16 · Horarios de las masas plegable (5 nov)
+
+- Panadería → Hoy: "Horarios de las masas" se pliega y despliega con una flechita (▸ / ▾). Plegado muestra cuántas tandas van empezadas ("2 de 3 empezadas"). Se recuerda en ese equipo; parte abierto.
+- Incluye la v0.17.15 (abajo): suba esta directamente.
+- Archivos: app.js, estilos.css, config.js, index.html, README.md.
+
+**Revisar:** dice v0.17.16; tocar la flechita pliega los horarios y al recargar siguen plegados.
+
 ## v0.17.15 · Panadería → Hoy: horarios de las masas y receta con su masa (5 nov)
 
 - **Arriba, "Horarios de las masas":** una fila por tanda: producto, **inicio** (cuando se marcó la tanda terminada) y **formado** (inicio + la fermentación en bloque de Sistema Fën → Configuración de Producción). Las que faltan dicen "pendiente".

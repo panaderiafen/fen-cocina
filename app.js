@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════
-//  fën · Cocina — la app de las jefas  v0.17.15
+//  fën · Cocina — la app de las jefas  v0.17.16
+//  v0.17.16: Panadería → "Horarios de las masas" plegable con una flechita (se recuerda abierto o cerrado en el equipo).
 //  v0.17.15: Panadería → Hoy: "Horarios de las masas" arriba (por tanda, inicio corregible, compartir imagen o texto); la receta y su
 //  masa en una sola tarjeta (una masa para varios productos: un solo amasado; el producto que es solo masa se termina con ella);
 //  sin "f.b. hasta" en las líneas; sin "Compartir masas del día"; Insumos del día al final, plegado.
@@ -944,9 +945,11 @@ function horarios(f) {
 function horariosHtml(f) {
   const H = horarios(f); if (!H || !H.filas.length) return '';
   const esHoy = f === M.hoyTxt(), ahora = Date.now(), hay = H.filas.some(x => !x.pendiente);
-  return `<div class="caja horarios" id="horarios-masas">
-      <div class="hor-cab"><span class="rotulo">Horarios de las masas</span>
-        <span class="hor-acc"><button type="button" class="btn-sec" data-hor-compartir="imagen" ${hay ? '' : 'disabled'}>${ic('compartir')}Imagen</button><button type="button" class="btn-sec" data-hor-compartir="texto" ${hay ? '' : 'disabled'}>${ic('compartir')}Texto</button></span></div>
+  // v0.17.16: plegable (flechita); se recuerda en el equipo si quedó abierto o cerrado (abierto si nunca se tocó)
+  const abierto = leerLS(K_HOR, true) !== false, empezadas = H.filas.filter(x => !x.pendiente).length;
+  return `<details class="caja horarios" id="horarios-masas" ${abierto ? 'open' : ''}>
+      <summary class="hor-sum"><span class="hor-flecha" aria-hidden="true"></span><span class="rotulo">Horarios de las masas</span><span class="ayuda hor-cuenta">${empezadas} de ${H.filas.length} empezadas</span></summary>
+      <div class="hor-cab"><span class="hor-acc"><button type="button" class="btn-sec" data-hor-compartir="imagen" ${hay ? '' : 'disabled'}>${ic('compartir')}Imagen</button><button type="button" class="btn-sec" data-hor-compartir="texto" ${hay ? '' : 'disabled'}>${ic('compartir')}Texto</button></span></div>
       <div class="hor-tabla" role="table" aria-label="Horarios de las masas">
         <div class="hor-fila hor-tit" role="row"><span role="columnheader">Producto</span><span role="columnheader">Inicio</span><span role="columnheader">Formado</span></div>
         ${H.filas.map(x => `<div class="hor-fila${x.pendiente ? ' pend' : ''}${esHoy && x.fin && ahora >= x.fin ? ' toca' : ''}" role="row"${esHoy && x.fin && ahora < x.fin ? ` data-fb-fin="${x.fin}"` : ''}>
@@ -955,8 +958,10 @@ function horariosHtml(f) {
           <b role="cell">${x.pendiente ? '—' : x.formado ? esc(x.formado) + (x.sig ? ' (día sig.)' : '') : '<span class="ayuda">sin tiempo</span>'}</b></div>`).join('')}
       </div>
       <span class="ayuda">Inicio: cuando se marcó la tanda terminada. Si se marcó tarde, toque la hora y corríjala; el formado se recalcula con el tiempo de fermentación de Sistema Fën.</span>
-    </div>`;
+    </details>`;
 }
+const K_HOR = 'fen_cocina_horarios_abierto';
+$('principal').addEventListener('toggle', ev => { if (ev.target && ev.target.id === 'horarios-masas') guardarLS(K_HOR, ev.target.open); }, true);
 function dialogoHoraInicio(k) {
   const H = horarios(E.fecha), x = H && H.filas.find(y => y.k === k); if (!x || x.pendiente) return;
   const d = $('dialogo');
